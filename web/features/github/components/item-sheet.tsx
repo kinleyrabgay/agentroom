@@ -60,8 +60,7 @@ export function ItemSheet({ goalFor }: { goalFor: (itemId: string) => Goal | und
       <SheetContent
         className={cn(
           "flex w-full flex-col gap-0 overflow-hidden p-0",
-          // Floating panel, matching the floating sidebar.
-          "data-[side=right]:inset-y-2 data-[side=right]:right-2 data-[side=right]:h-auto data-[side=right]:rounded-2xl data-[side=right]:border data-[side=right]:sm:max-w-2xl"
+          "data-[side=right]:sm:max-w-2xl"
         )}
       >
         {item && (

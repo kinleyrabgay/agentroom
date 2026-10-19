@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Security Auditor bot and `security-review` skill.
+- Security phase in goal runs (`securing`, between Build and Test), controlled by `settings.security.review` or per goal.
+- Diff scanner for secrets and risky code, dependency guard with typosquat detection, and a findings store (open, approved, dismissed, fixed).
+- Goal risk score (0–100) with low/medium/high levels; high-risk goals pause for approval before Test.
+- Publish gate: commits, pushes and PRs wait while blocking findings are open.
+- Prompt-injection guard: untrusted content is labeled, and instruction-like text is flagged.
+- File attachments in chat and new goals: images, PDFs, text, and other files by path.
+- Run ledger, append-only audit log, settings page, and Security and Audit pages in the UI.
+- `security_finding` host tool and `/api/security/*`, `/api/uploads`, `/api/settings`, `/api/audit`, `/api/ledger` routes.
+
+### Changed
+
+- Setting a phase's model in `settings.json` replaces the stored choice instead of merging, so a phase can be reset.
+
 ## [0.1.0] - 2026-10-19
 
 Initial release.

@@ -179,6 +179,19 @@ export const RiskLevel = {
 } as const;
 export type RiskLevel = ValueOf<typeof RiskLevel>;
 
+/** How an attachment reaches the model. */
+export const AttachmentKind = {
+  /** Sent as an image block (png, jpeg, gif, webp). */
+  Image: 'image',
+  /** Sent as a document block (PDF). */
+  Pdf: 'pdf',
+  /** Small text files, inlined as text. */
+  Text: 'text',
+  /** Anything else: saved to disk; the bot gets the path to read it with tools. */
+  File: 'file',
+} as const;
+export type AttachmentKind = ValueOf<typeof AttachmentKind>;
+
 /** How much a bot may do without asking the human. */
 export const PermissionMode = {
   /** Every tool call needs approval. */

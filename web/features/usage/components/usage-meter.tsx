@@ -4,7 +4,11 @@ import { useMemo } from "react"
 import { ProviderId, totalTokens } from "@shared"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/lib/store/app-store"
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { isClaude } from "../constants"
 import { compact, titleCase, usd } from "../lib/format"
 import { limitSeverity, percentSeverity, worstLimit } from "../lib/severity"
@@ -21,10 +25,18 @@ export function UsageMeter() {
   const providerName = claude ? "Claude" : titleCase(provider)
 
   const ring = useMemo(() => {
-    const top = account?.windows.slice().sort((a, b) => b.percent - a.percent)[0]
-    if (top) return { value: top.percent / 100, severity: percentSeverity(top.percent) }
+    const top = account?.windows
+      .slice()
+      .sort((a, b) => b.percent - a.percent)[0]
+    if (top)
+      return {
+        value: top.percent / 100,
+        severity: percentSeverity(top.percent),
+      }
     const worst = worstLimit(Object.values(usage.limits))
-    return worst?.utilization !== undefined ? { value: worst.utilization, severity: limitSeverity(worst) } : null
+    return worst?.utilization !== undefined
+      ? { value: worst.utilization, severity: limitSeverity(worst) }
+      : null
   }, [account, usage.limits])
 
   return (
@@ -34,19 +46,41 @@ export function UsageMeter() {
           aria-label="Token usage"
           className={cn(
             "usage-viz group flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs transition-colors",
-            claude ? "border-[var(--claude-ring)] bg-[var(--claude-wash)] hover:bg-[var(--claude-wash-strong)]" : "bg-muted/40 hover:bg-muted"
+            claude
+              ? "border-(--claude-ring) bg-(--claude-wash) hover:bg-(--claude-wash-strong)"
+              : "bg-muted/40 hover:bg-muted"
           )}
         >
           <ProviderMark provider={provider} className="size-3.5" />
-          <span className="font-medium tabular-nums">{compact(totalTokens(usage.totals))}</span>
+          <span className="font-medium tabular-nums">
+            {compact(totalTokens(usage.totals))}
+          </span>
           <span className="text-muted-foreground">tokens</span>
           <span className="h-3 w-px bg-border" />
-          <span className="font-mono text-muted-foreground tabular-nums">{usd(usage.totals.costUsd)}</span>
-          {ring && <MiniRing value={ring.value} severity={ring.severity} claude={claude} />}
+          <span className="font-mono text-muted-foreground tabular-nums">
+            {usd(usage.totals.costUsd)}
+          </span>
+          {ring && (
+            <MiniRing
+              value={ring.value}
+              severity={ring.severity}
+              claude={claude}
+            />
+          )}
         </button>
       </HoverCardTrigger>
-      <HoverCardContent align="end" sideOffset={8} className="usage-viz w-[380px] overflow-hidden p-0">
-        <UsageCard usage={usage} account={account} provider={provider} providerName={providerName} claude={claude} />
+      <HoverCardContent
+        align="end"
+        sideOffset={8}
+        className="usage-viz w-95 overflow-hidden p-0"
+      >
+        <UsageCard
+          usage={usage}
+          account={account}
+          provider={provider}
+          providerName={providerName}
+          claude={claude}
+        />
       </HoverCardContent>
     </HoverCard>
   )

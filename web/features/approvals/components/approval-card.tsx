@@ -12,12 +12,19 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { Diff } from "@/components/shared/diff"
 import { describeRequest } from "../lib/describe"
+import { gateFindings, SecurityGateCard } from "./security-gate-card"
 
 /** Server marks dangerous commands with this reason; they can't be session-allowed. */
 const STICKY_MARKER = "always requires"
 const WRITE_PREVIEW_LIMIT = 3000
 
 export function ApprovalCard({ request: p }: { request: PermissionRequest }) {
+  const findings = gateFindings(p)
+  if (findings.length) return <SecurityGateCard request={p} findings={findings} />
+  return <ToolApprovalCard request={p} />
+}
+
+function ToolApprovalCard({ request: p }: { request: PermissionRequest }) {
   const bot = useAppStore((s) => s.bots.find((b) => b.id === p.botId))
   const select = useAppStore((s) => s.select)
   const input = (p.input ?? {}) as Record<string, unknown>

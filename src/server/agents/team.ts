@@ -11,6 +11,8 @@ import type { PermissionGate } from './permission-gate.js';
 import type { SessionStore } from './session-store.js';
 import { buildHostTools } from './tools/index.js';
 import { expandSkillCommands } from './skill-commands.js';
+import type { SecurityService } from '../security/security.service.js';
+import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
 
 export interface TeamDeps {
   project: Project;
@@ -24,13 +26,20 @@ export interface TeamDeps {
   boardChanged: () => void;
   /** Records one row per finished run. */
   ledger?: LedgerService;
+  /** Security layer (findings tool, untrusted-content guard). */
+  security?: SecurityService;
+  /** Files the human attached to messages. */
+  uploads?: UploadStore;
 }
 
 /**
  * What a run is part of: the goal (task_create defaults to it; events are stamped with it),
  * the task, and the workflow phase (selects the phase's model/effort from settings).
  */
-export type DispatchOptions = RunContext;
+export type DispatchOptions = RunContext & {
+  /** Upload ids attached to this message (images, PDFs, files). */
+  attachments?: readonly string[];
+};
 
 /** Outcome of one bot run. */
 export interface RunOutcome {
@@ -49,16 +58,25 @@ export class Team {
   constructor(private readonly deps: TeamDeps) {}
 
   /** Queue a message for a bot. Resolves with the bot's final answer. Runs are serialized per bot. */
-  async send(botId: string, text: string, from = HUMAN): Promise<string> {
-    return (await this.dispatch(botId, text, from)).text;
+  async send(botId: string, text: string, from = HUMAN, opts: DispatchOptions = {}): Promise<string> {
+    return (await this.dispatch(botId, text, from, opts)).text;
   }
 
   /** Like send, but reports whether the run succeeded or was stopped. */
   dispatch(botId: string, text: string, from = HUMAN, opts: DispatchOptions = {}): Promise<RunOutcome> {
     const bot = this.deps.project.bots.get(botId);
     if (!bot) return Promise.reject(new Error(`unknown bot "${botId}"`));
+    let attachments: ResolvedAttachment[] = [];
+    if (opts.attachments?.length) {
+      if (!this.deps.uploads) return Promise.reject(new Error('Attachments are not available.'));
+      try {
+        attachments = this.deps.uploads.resolve(opts.attachments);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
     const prev = this.queues.get(botId) ?? Promise.resolve();
-    const run = prev.catch(() => {}).then(() => this.run(bot, text, from, opts));
+    const run = prev.catch(() => {}).then(() => this.run(bot, text, from, opts, attachments));
     this.queues.set(botId, run);
     return run;
   }
@@ -77,19 +95,25 @@ export class Team {
     this.deps.sessions.clear(botId);
   }
 
-  private async run(bot: Bot, text: string, from: string, opts: DispatchOptions): Promise<RunOutcome> {
+  private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
     const { project, hub, provider, permissions, sessions, previews } = this.deps;
     const team = project.bots.list();
     const controller = new AbortController();
     this.controllers.set(bot.id, controller);
-    hub.setRunContext(bot.id, opts);
+    hub.setRunContext(bot.id, { goalId: opts.goalId, taskId: opts.taskId, phase: opts.phase });
     const { model, effort } = this.modelFor(bot, opts);
     const tally = new RunTally(bot.id, model, opts);
     const finish = (out: RunOutcome): RunOutcome => {
       this.deps.ledger?.record(tally.finish({ ok: out.ok, aborted: out.aborted, error: out.ok ? undefined : out.text }));
       return out;
     };
-    hub.emit({ type: AgentEventType.UserMessage, botId: bot.id, text, from });
+    hub.emit({
+      type: AgentEventType.UserMessage,
+      botId: bot.id,
+      text,
+      from,
+      ...(attachments.length ? { attachments: attachments.map(toAttachment) } : {}),
+    });
     hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: BotStatus.Thinking });
 
     try {
@@ -98,6 +122,7 @@ export class Team {
       const res = await provider.run({
         bot,
         prompt,
+        ...(attachments.length ? { attachments } : {}),
         cwd: project.root,
         model,
         effort,
@@ -112,6 +137,7 @@ export class Team {
           notifications: this.deps.notifications,
           boardChanged: this.deps.boardChanged,
           goalId: opts.goalId,
+          security: this.deps.security,
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.
@@ -125,6 +151,9 @@ export class Team {
         },
         stream: (d) => hub.stream(bot.id, d),
         askPermission: (tool, input, signal) => permissions.ask(bot.id, tool, input, signal),
+        inspectToolOutput: this.deps.security
+          ? (tool, output) => this.deps.security!.inspect(output, tool === 'WebSearch' ? 'web search results' : 'a fetched web page', { botId: bot.id, goalId: opts.goalId, runKey: controller.signal })
+          : undefined,
       });
       if (res.sessionId) sessions.set(bot.id, res.sessionId);
       hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: res.ok ? BotStatus.Idle : BotStatus.Error });

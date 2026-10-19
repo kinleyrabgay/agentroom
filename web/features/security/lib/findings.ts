@@ -18,6 +18,7 @@ export const DEFAULT_FILTERS: FindingFilters = {
 }
 
 export function filterFindings(findings: SecurityFinding[], f: FindingFilters): SecurityFinding[] {
+  if (!Array.isArray(findings)) return []
   const q = f.search.trim().toLowerCase()
   return findings
     .filter(
@@ -44,6 +45,7 @@ export interface FindingCounts {
 
 export function countFindings(findings: SecurityFinding[], goalId?: string | null): FindingCounts {
   const c: FindingCounts = { openCritical: 0, openWarning: 0, approved: 0, dismissed: 0, fixed: 0 }
+  if (!Array.isArray(findings)) return c
   for (const f of findings) {
     if (goalId && f.goalId !== goalId) continue
     if (f.status === FindingStatus.Open) {

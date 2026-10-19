@@ -21,6 +21,10 @@ import { GoalHeader } from "./goal-header"
 import { QuickAddTask } from "./quick-add-task"
 import { TaskSheet } from "./task-sheet/task-sheet"
 import { NewGoalDialog } from "./new-goal-dialog"
+import { GoalTabs } from "./goal-tabs"
+import { GoalTab } from "@/lib/constants"
+import { ErrorBoundary } from "@/components/shared/error-boundary"
+import { GoalSecurityPanel } from "@/features/security/components/goal-security-panel"
 
 /** Tasks view: pick a goal, review its plan, and follow tasks from To do to Done. */
 export function TaskBoard() {
@@ -28,6 +32,7 @@ export function TaskBoard() {
   const tasks = useAppStore((s) => s.tasks)
   const selectedGoalId = useAppStore((s) => s.selectedGoalId)
   const selectGoal = useAppStore((s) => s.selectGoal)
+  const goalTab = useAppStore((s) => s.goalTab)
   const [creating, setCreating] = useState(false)
 
   const sortedGoals = useMemo(() => [...goals].sort(newestFirst), [goals])
@@ -97,19 +102,31 @@ export function TaskBoard() {
         {current && <GoalHeader goal={current} tasks={visible} />}
       </div>
 
-      <div className="flex items-center gap-2">
-        <QuickAddTask goalId={current?.id} nextOrder={nextOrder} />
-      </div>
+      {current && <GoalTabs goalId={current.id} />}
 
-      <div className="grid min-h-0 flex-1 auto-cols-[minmax(16rem,1fr)] grid-flow-col gap-3 overflow-x-auto">
-        {TASK_COLUMNS.map((col) => (
-          <TaskColumn
-            key={col.status}
-            {...col}
-            tasks={visible.filter((t) => t.status === col.status)}
-          />
-        ))}
-      </div>
+      {current && goalTab === GoalTab.Security ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ErrorBoundary label="Security" key={current.id}>
+            <GoalSecurityPanel goalId={current.id} />
+          </ErrorBoundary>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <QuickAddTask goalId={current?.id} nextOrder={nextOrder} />
+          </div>
+
+          <div className="grid min-h-0 flex-1 auto-cols-[minmax(16rem,1fr)] grid-flow-col gap-3 overflow-x-auto">
+            {TASK_COLUMNS.map((col) => (
+              <TaskColumn
+                key={col.status}
+                {...col}
+                tasks={visible.filter((t) => t.status === col.status)}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       <TaskSheet />
     </div>

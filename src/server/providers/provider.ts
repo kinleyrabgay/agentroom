@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { EffortLevel } from '../../shared/enums.js';
 import type { AccountUsage, AgentEvent, Bot, ModelOption, StreamDelta } from '../../shared/types/index.js';
+import type { ResolvedAttachment } from '../services/upload.store.js';
 
 /** A tool AgentRoom provides to bots (tasks, delegation, in-app browser), independent of provider. */
 export interface HostToolDef {
@@ -25,6 +26,8 @@ export interface SkillLocations {
 export interface RunRequest {
   bot: Bot;
   prompt: string;
+  /** Files the human attached (images, PDFs, text, other files). */
+  attachments?: ResolvedAttachment[];
   cwd: string;
   model: string;
   /** Reasoning effort; omitted to use the model's default. */
@@ -40,6 +43,11 @@ export interface RunRequest {
   /** Live token/tool progress for the UI. */
   stream: (delta: StreamDelta) => void;
   askPermission: AskPermission;
+  /**
+   * Called with the output of built-in tools that read the web (WebFetch, WebSearch); return a warning to
+   * show the model next to the output (e.g. possible prompt injection), or null.
+   */
+  inspectToolOutput?: (tool: string, output: string) => string | null;
 }
 
 export interface RunResult {

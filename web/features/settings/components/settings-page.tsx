@@ -9,6 +9,7 @@ import { AlertsSection } from "./alerts-section"
 import { DataSection } from "./data-section"
 import { GeneralSection } from "./general-section"
 import { IntegrationsSection } from "./integrations-section"
+import { SecuritySection } from "./security-section"
 
 /** Settings: section nav on the left (sticky), one card per section on the right. */
 export function SettingsPage() {
@@ -63,6 +64,7 @@ export function SettingsPage() {
           {loaded ? (
             <>
               <GeneralSection />
+              <SecuritySection />
               <AlertsSection />
               <IntegrationsSection />
               <DataSection />

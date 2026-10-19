@@ -15,9 +15,15 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit) {
   };
   app.get('/goals', (c) => c.json(goals.list()));
   app.post('/goals', async (c) => {
-    const { brief, title } = await body<{ brief?: string; title?: string }>(c);
+    const { brief, title, securityReview, attachments } = await body<{
+      brief?: string;
+      title?: string;
+      securityReview?: Goal['securityReview'];
+      attachments?: unknown;
+    }>(c);
     return respond(c, () => {
-      const goal = goals.start(String(brief ?? ''), title);
+      const ids = Array.isArray(attachments) ? attachments.map(String) : [];
+      const goal = goals.start(String(brief ?? ''), title, [], securityReview, ids);
       audit(AuditKind.Goal, `Started ${goal.id}: ${goal.title}`, { goalId: goal.id });
       return goal;
     });

@@ -72,6 +72,22 @@ export interface AppState {
   securityGoalId: string | null
 }
 
+/** Shared empty list so selectors and fallbacks never mint new arrays. */
+export const NO_FINDINGS: SecurityFinding[] = []
+
+let warnedFindings = false
+/** Store findings only if the server sent a list (older servers 404 or send `{error}`). */
+export function setFindings(value: unknown) {
+  if (Array.isArray(value)) {
+    useAppStore.setState({ findings: value as SecurityFinding[] })
+    return
+  }
+  if (!warnedFindings) {
+    warnedFindings = true
+    console.warn("[AgentRoom] Security findings unavailable from this server; showing none.")
+  }
+}
+
 /** Tasks-view selection meaning "tasks that don't belong to any goal". */
 export const ALL_TASKS = "__all__"
 
@@ -111,7 +127,7 @@ const initialState: AppState = {
   previews: {},
   consoles: {},
   live: {},
-  findings: [],
+  findings: NO_FINDINGS,
   settings: null,
   models: null,
   modelsStatus: LoadStatus.Idle,

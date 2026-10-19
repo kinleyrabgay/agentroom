@@ -1,4 +1,4 @@
-import { BellRingIcon, DatabaseIcon, PlugIcon, SlidersHorizontalIcon } from "lucide-react"
+import { BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
 export const AUTOSAVE_MS = 500
@@ -7,6 +7,7 @@ export const SAVED_VISIBLE_MS = 2000
 /** Settings sections, in page order. */
 export const SettingsSection = {
   General: "general",
+  Security: "security",
   Alerts: "alerts",
   Integrations: "integrations",
   Data: "data",
@@ -15,6 +16,7 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: typeof SlidersHorizontalIcon; description: string }[] = [
   { id: SettingsSection.General, label: "General", icon: SlidersHorizontalIcon, description: "Which model each workflow phase uses." },
+  { id: SettingsSection.Security, label: "Security", icon: ShieldIcon, description: "Security review, what blocks commits and PRs, and which paths count as sensitive." },
   { id: SettingsSection.Alerts, label: "Alerts", icon: BellRingIcon, description: "How AgentRoom reaches you when you're away. Personal to this machine." },
   { id: SettingsSection.Integrations, label: "Integrations", icon: PlugIcon, description: "Services AgentRoom connects to." },
   { id: SettingsSection.Data, label: "Data", icon: DatabaseIcon, description: "What AgentRoom keeps, where, and for how long." },

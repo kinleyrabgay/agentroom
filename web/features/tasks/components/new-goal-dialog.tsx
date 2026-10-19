@@ -2,6 +2,9 @@
 
 import { useState } from "react"
 import { RocketIcon } from "lucide-react"
+import { SecurityReviewMode } from "@shared"
+import { ReviewModeSelect } from "@/features/security/components/review-mode-select"
+import { REVIEW_MODE_META } from "@/features/security/constants"
 import { toast } from "sonner"
 import { goalApi } from "@/lib/api/endpoints"
 import { useAppStore } from "@/lib/store/app-store"
@@ -30,16 +33,21 @@ export function NewGoalDialog({
   const [brief, setBrief] = useState("")
   const [title, setTitle] = useState("")
   const [busy, setBusy] = useState(false)
+  // Starts from the team default in Settings → Security.
+  const teamDefault = useAppStore((s) => s.settings?.security.review) ?? SecurityReviewMode.Auto
+  const [review, setReview] = useState<SecurityReviewMode | null>(null)
+  const reviewMode = review ?? teamDefault
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!brief.trim()) return
     setBusy(true)
     try {
-      const goal = await goalApi.create(brief.trim(), title.trim() || undefined)
+      const goal = await goalApi.create(brief.trim(), title.trim() || undefined, reviewMode)
       showOnTasks({ goalId: goal.id })
       setBrief("")
       setTitle("")
+      setReview(null)
       onOpenChange(false)
       toast.success(`${goal.id} started`, {
         description: "The Planner is breaking it into tasks.",
@@ -89,6 +97,11 @@ export function NewGoalDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Generated from the brief if empty"
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="goal-security">Security review</Label>
+            <ReviewModeSelect id="goal-security" size="default" value={reviewMode} onChange={setReview} className="w-full" />
+            <p className="text-xs text-muted-foreground">{REVIEW_MODE_META[reviewMode].description}</p>
           </div>
           <DialogFooter>
             <Button

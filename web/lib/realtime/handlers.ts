@@ -9,11 +9,12 @@ import {
   type StateEvent,
 } from "@shared"
 import { MAX_CONSOLE_LINES } from "@/lib/constants"
-import { useAppStore, type AppState } from "@/lib/store/app-store"
+import { setFindings, useAppStore, type AppState } from "@/lib/store/app-store"
 import { applyDelta, EMPTY_LIVE, settleLive } from "@/lib/store/live-reply"
 import { getBridgeDispatcher } from "./bridge-dispatch"
 import { emitNotification } from "./notification-bus"
 import { send } from "./socket"
+import { normalizeGoals, normalizeTasks } from "./normalize"
 
 const set = useAppStore.setState
 
@@ -103,13 +104,13 @@ function applyState(ev: StateEvent) {
     case StateType.Skills:
       return set({ skills: ev.skills })
     case StateType.Tasks:
-      return set({ tasks: ev.tasks })
+      return set({ tasks: normalizeTasks(ev.tasks) })
     case StateType.Goals:
-      return set({ goals: ev.goals })
+      return set({ goals: normalizeGoals(ev.goals) })
     case StateType.Settings:
       return set({ settings: ev.settings })
     case StateType.Findings:
-      return set({ findings: ev.findings })
+      return setFindings(ev.findings)
     case StateType.Config:
       return set((s) => ({ info: s.info ? { ...s.info, config: ev.config, model: ev.config.model } : s.info }))
   }

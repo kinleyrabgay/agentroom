@@ -1,4 +1,4 @@
-import { AgentEventType, BotStatus, GoalStatus, NotificationKind, TaskKind, TaskStatus, WorkPhase } from '../../shared/enums.js';
+import { AgentEventType, AuditKind, ActorType, BotStatus, FindingCategory, FindingSeverity, FindingSource, GoalStatus, NotificationKind, RiskLevel, SecurityReviewMode, TaskKind, TaskStatus, WorkPhase } from '../../shared/enums.js';
 import type { Bot, Goal, GoalPatch, GoalSource, Task } from '../../shared/types/index.js';
 import type { Project } from '../../core/project.js';
 import type { RunOutcome, Team } from '../agents/team.js';
@@ -6,8 +6,12 @@ import { isFinished } from '../agents/tools/task.tools.js';
 import { GOAL_TITLE_MAX, MAX_FIX_ROUNDS } from '../config/constants.js';
 import type { Hub } from '../realtime/hub.js';
 import type { NotificationService } from '../services/notification.service.js';
-import { buildPrompt, planPrompt, reportPrompt, testPrompt } from './prompts.js';
-import { resolveLead, resolveRoles, type TeamRoles } from './roles.js';
+import { buildPrompt, planPrompt, reportPrompt, securityPrompt, testPrompt } from './prompts.js';
+import { resolveLead, resolveRoles, resolveSecurity, type TeamRoles } from './roles.js';
+import type { SecurityService } from '../security/security.service.js';
+import { SENSITIVE_FACTOR } from '../security/risk.js';
+import type { NewAuditEntry } from '../services/audit.service.js';
+import { attachmentLines, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
 
 export interface GoalRunnerDeps {
   project: Project;
@@ -16,7 +20,17 @@ export interface GoalRunnerDeps {
   notifications: NotificationService;
   /** Board written — push it to the UI now. */
   boardChanged: () => void;
+  /** Security layer: base commit, risk score, Security phase, high-risk gate. Without it those steps are skipped. */
+  security?: SecurityService;
+  audit?: (entry: NewAuditEntry) => void;
+  /** "Name <email>" of the human (for risk approvals). */
+  humanName?: () => string;
+  /** Files attached to goal briefs. */
+  uploads?: UploadStore;
 }
+
+/** Prefix of the pause reason used by the high-risk gate; resuming such a goal approves the risk. */
+const RISK_GATE = 'High risk';
 
 /** Per-goal runtime flags (not persisted). */
 interface Control {
@@ -31,7 +45,7 @@ interface Control {
 type StepResult = 'progress' | 'none' | 'aborted' | { blocked: string };
 
 /** Statuses in which the engine is (or should be) driving the goal. */
-const ACTIVE: Goal['status'][] = [GoalStatus.Planning, GoalStatus.Building, GoalStatus.Testing, GoalStatus.Reporting];
+const ACTIVE: Goal['status'][] = [GoalStatus.Planning, GoalStatus.Building, GoalStatus.Securing, GoalStatus.Testing, GoalStatus.Reporting];
 const FINAL: Goal['status'][] = [GoalStatus.Done, GoalStatus.Cancelled];
 const WORK_KINDS: Task['kind'][] = [TaskKind.Dev, TaskKind.Bug];
 const OPEN: Task['status'][] = [TaskStatus.Todo, TaskStatus.Doing];
@@ -53,14 +67,19 @@ export class GoalRunner {
     return this.deps.project.goals.list();
   }
 
-  start(brief: string, title?: string, sources: GoalSource[] = []): Goal {
+  start(brief: string, title?: string, sources: GoalSource[] = [], securityReview?: SecurityReviewMode, attachments: readonly string[] = []): Goal {
     const text = brief.trim();
     if (!text) throw new Error('Describe the goal first.');
+    if (attachments.length && !this.deps.uploads) throw new Error('Attachments are not available.');
+    // Validates the ids (throws on unknown ones) before the goal exists.
+    const files = attachments.length ? this.deps.uploads!.resolve(attachments).map((a) => a.id) : [];
     const firstLine = text.split('\n')[0].trim();
     const goal = this.deps.project.goals.create({
       title: (title?.trim() || firstLine).slice(0, GOAL_TITLE_MAX),
       brief: text,
       sources,
+      ...(securityReview ? { securityReview: checkReviewMode(securityReview) } : {}),
+      ...(files.length ? { attachments: files } : {}),
     });
     this.changed();
     this.kick(goal.id);
@@ -102,7 +121,8 @@ export class GoalRunner {
     const goal = this.require(id);
     if (goal.status !== GoalStatus.Paused && goal.status !== GoalStatus.Failed) throw new Error(`${id} isn't paused (it is ${goal.status}).`);
     if (this.isRunning(id)) throw new Error(`${id} is still finishing its current step.`);
-    const status = this.phaseFor(goal);
+    if (goal.reason?.startsWith(RISK_GATE) && goal.risk) this.approveRisk(goal);
+    const status = this.phaseFor(this.require(id));
     const next = this.set(id, { status, reason: null });
     if (status !== GoalStatus.AwaitingApproval) this.kick(id);
     else this.leadStatus(BotStatus.Waiting, `${id} · Waiting for your plan approval`);
@@ -125,6 +145,7 @@ export class GoalRunner {
     const clean: GoalPatch = {};
     if (typeof patch.title === 'string' && patch.title.trim()) clean.title = patch.title.trim().slice(0, GOAL_TITLE_MAX);
     if (typeof patch.plan === 'string') clean.plan = patch.plan;
+    if (patch.securityReview !== undefined) clean.securityReview = checkReviewMode(patch.securityReview);
     return this.set(id, clean);
   }
 
@@ -134,6 +155,13 @@ export class GoalRunner {
     this.deps.project.goals.delete(id);
     this.controls.delete(id);
     this.changed();
+  }
+
+  /** Re-scan a goal's diff (incl. dependencies) and update its risk score now. */
+  async refreshRisk(id: string): Promise<Goal> {
+    this.require(id);
+    await this.updateRisk(id, { dependencies: true });
+    return this.require(id);
   }
 
   /** Goals that were mid-flight when the server stopped can't continue silently. */
@@ -180,10 +208,18 @@ export class GoalRunner {
           await this.planPhase(goal, roles);
           return;
         case GoalStatus.Building: {
-          const r = await this.buildStep(goal, roles);
+          await this.ensureBase(goal);
+          const r = await this.buildStep(this.require(id), roles);
           if (this.interrupted(id, r === 'aborted')) return;
-          if (r === 'none') this.set(id, { status: GoalStatus.Testing });
-          else if (typeof r === 'object') return void this.block(id, r.blocked);
+          if (r === 'none') {
+            if (!(await this.afterBuilding(this.require(id)))) return;
+          } else if (typeof r === 'object') return void this.block(id, r.blocked);
+          break;
+        }
+        case GoalStatus.Securing: {
+          const out = await this.securityStep(goal, roles);
+          if (out === 'aborted' && this.interrupted(id, true)) return;
+          if (out === 'stop') return;
           break;
         }
         case GoalStatus.Testing: {
@@ -253,6 +289,7 @@ export class GoalRunner {
     });
     if (out.aborted) return 'aborted';
 
+    await this.updateRisk(goal.id);
     const after = repo.get(task.id);
     if (!after) return 'progress';
     if (after.blockedReason) return { blocked: `${after.id} is blocked: ${after.blockedReason}` };
@@ -318,6 +355,115 @@ export class GoalRunner {
     this.leadStatus(BotStatus.Idle);
   }
 
+  // ---------- security ----------
+
+  /** Remember the commit the goal's work starts from (diffs, risk and scans are relative to it). */
+  private async ensureBase(goal: Goal) {
+    if (goal.baseRef || !this.deps.security) return;
+    const head = await this.deps.security.head();
+    if (head) this.set(goal.id, { baseRef: head });
+  }
+
+  /** Re-scan the goal's diff and store its risk score. Scanner/risk problems never stop the goal. */
+  private async updateRisk(id: string, opts: { dependencies?: boolean } = { dependencies: false }) {
+    if (!this.deps.security) return;
+    try {
+      const a = await this.deps.security.assessGoal(this.require(id), opts);
+      this.set(id, { risk: a.risk });
+    } catch (err) {
+      console.warn(`[agentroom] risk assessment for ${id} failed:`, (err as Error).message);
+    }
+  }
+
+  /**
+   * Whether the goal gets a Security review: sensitive paths always; else the goal's mode
+   * (auto → the team default) — always / off / auto (medium or high risk).
+   */
+  private needsSecurity(goal: Goal): boolean {
+    if (!this.deps.security) return false;
+    if (goal.risk?.factors.some((f) => f.label.startsWith(SENSITIVE_FACTOR))) return true;
+    const mode = goal.securityReview !== SecurityReviewMode.Auto ? goal.securityReview : this.deps.project.settings.get().security.review;
+    if (mode === SecurityReviewMode.Always) return true;
+    if (mode === SecurityReviewMode.Off) return false;
+    return !!goal.risk && goal.risk.level !== RiskLevel.Low;
+  }
+
+  /** Building finished: full scan (incl. dependencies), then Security review or straight to Testing. Returns false if the goal stopped. */
+  private async afterBuilding(goal: Goal): Promise<boolean> {
+    await this.updateRisk(goal.id, { dependencies: true });
+    const fresh = this.require(goal.id);
+    if (this.needsSecurity(fresh) && fresh.securityReviewedRound !== fresh.round) {
+      this.set(goal.id, { status: GoalStatus.Securing });
+      return true;
+    }
+    return this.toTesting(fresh);
+  }
+
+  /** Enter Testing, unless a high-risk diff needs the human's approval first. Returns false when paused. */
+  private toTesting(goal: Goal): boolean {
+    const risk = goal.risk;
+    const gated = this.deps.security && risk?.level === RiskLevel.High && this.deps.project.settings.get().security.riskGates;
+    if (gated && !(goal.riskApproval && goal.riskApproval.score >= risk.score)) {
+      const top = risk.factors.slice().sort((a, b) => b.points - a.points).slice(0, 3).map((f) => f.label).join('; ');
+      this.block(goal.id, `${RISK_GATE} (score ${risk.score}): ${top}. Review the changes, then press Resume to approve and continue to testing.`, NotificationKind.Security);
+      return false;
+    }
+    this.set(goal.id, { status: GoalStatus.Testing });
+    return true;
+  }
+
+  /** The human resumed a goal held by the high-risk gate: that's their approval of this risk score. */
+  private approveRisk(goal: Goal) {
+    const by = this.deps.humanName?.() ?? 'human';
+    this.set(goal.id, { riskApproval: { score: goal.risk!.score, at: new Date().toISOString(), by } });
+    this.deps.audit?.({
+      kind: AuditKind.Security,
+      actor: { type: ActorType.Human, name: by },
+      goalId: goal.id,
+      summary: `Approved high-risk changes in ${goal.id} (score ${goal.risk!.score})`,
+      decision: 'allowed',
+      detail: { risk: goal.risk },
+    });
+  }
+
+  /** Security phase: the Security Auditor reviews the diff; must-fix issues become bug tasks (another build round). */
+  private async securityStep(goal: Goal, roles: TeamRoles): Promise<'next' | 'aborted' | 'stop'> {
+    const security = this.deps.security!;
+    const auditor = resolveSecurity(this.deps.project.bots.list());
+    if (!auditor) {
+      security.findings.record(
+        [{ severity: FindingSeverity.Info, category: FindingCategory.Other, source: FindingSource.Review, rule: 'review.skipped', title: 'Security review skipped', detail: 'No bot with the "security" role is on the team. Add a Security Auditor to review risky changes.' }],
+        { goalId: goal.id },
+      );
+    } else {
+      this.leadStatus(BotStatus.Working, `${goal.id} · Security review with ${auditor.name}`);
+      const assessment = await security.assessGoal(goal, { dependencies: false });
+      const prompt = securityPrompt(goal, assessment, this.tasksOf(goal.id), roles);
+      const out = await this.run(goal, roles, auditor, prompt, `Security review of ${goal.id}`, { phase: WorkPhase.Security });
+      if (out.aborted) return 'aborted';
+      if (this.interrupted(goal.id)) return 'stop';
+    }
+    this.set(goal.id, { securityReviewedRound: goal.round });
+    await this.updateRisk(goal.id);
+    const fresh = this.require(goal.id);
+
+    const bugs = this.tasksOf(goal.id).filter((t) => WORK_KINDS.includes(t.kind) && OPEN.includes(t.status));
+    if (bugs.length) {
+      if (fresh.round >= MAX_FIX_ROUNDS) {
+        this.block(goal.id, `Security review opened fixes (${bugs.map((t) => t.id).join(', ')}) but the fix-round limit is reached. Review them, then resume.`, NotificationKind.Security);
+        return 'stop';
+      }
+      this.set(goal.id, { status: GoalStatus.Building, round: fresh.round + 1 });
+      return 'next';
+    }
+    const critical = security.findings.openBlocking(goal.id, 'critical');
+    if (critical.length) {
+      this.block(goal.id, `Security review found ${critical.length} critical ${critical.length === 1 ? 'issue' : 'issues'}: ${critical.slice(0, 3).map((f) => f.title).join('; ')}. Approve or dismiss them on the Security page, or request changes.`, NotificationKind.Security);
+      return 'stop';
+    }
+    return this.toTesting(fresh) ? 'next' : 'stop';
+  }
+
   // ---------- helpers ----------
 
   /** Hand a prompt to a bot as the Team Lead and wait. Throws if the run fails (not when stopped). */
@@ -334,13 +480,29 @@ export class GoalRunner {
     const fromLead = bot.id !== roles.lead.id;
     if (fromLead) this.deps.hub.emit({ type: AgentEventType.Delegation, from: roles.lead.id, to: bot.id, instruction: label }, { goalId: goal.id });
     try {
-      const out = await this.deps.team.dispatch(bot.id, prompt, fromLead ? roles.lead.id : ENGINE, { goalId: goal.id, ...ctx });
+      // Files attached to the brief: the Planner gets them as content (images, PDFs…); every bot gets their paths.
+      const files = this.attachmentsOf(goal);
+      const fullPrompt = files.length ? `${prompt}\n\n## Files the human attached to this goal\n${attachmentLines(files)}` : prompt;
+      const out = await this.deps.team.dispatch(bot.id, fullPrompt, fromLead ? roles.lead.id : ENGINE, {
+        goalId: goal.id,
+        ...ctx,
+        ...(ctx.phase === WorkPhase.Planning && files.length ? { attachments: files.map((a) => a.id) } : {}),
+      });
       if (!out.ok && !out.aborted) throw new Error(`${bot.name} failed: ${clip(out.text, 300)}`);
       return out;
     } finally {
       ctl.currentBot = undefined;
       this.changed();
     }
+  }
+
+  /** The goal's attachments that still exist (uploads expire after the retention period). */
+  private attachmentsOf(goal: Goal): ResolvedAttachment[] {
+    if (!goal.attachments?.length || !this.deps.uploads) return [];
+    return goal.attachments.flatMap((id) => {
+      const a = this.deps.uploads!.get(id);
+      return a ? [a] : [];
+    });
   }
 
   /** After a step: stop driving if cancelled, paused, or the bot was stopped by the human. */
@@ -364,6 +526,7 @@ export class GoalRunner {
     const hasWork = tasks.some((t) => WORK_KINDS.includes(t.kind));
     if (!goal.approvedAt) return hasWork ? GoalStatus.AwaitingApproval : GoalStatus.Planning;
     if (tasks.some((t) => WORK_KINDS.includes(t.kind) && OPEN.includes(t.status))) return GoalStatus.Building;
+    if (this.needsSecurity(goal) && goal.securityReviewedRound !== goal.round) return GoalStatus.Securing;
     if (tasks.some((t) => t.kind === TaskKind.QA && t.status !== TaskStatus.Done)) return GoalStatus.Testing;
     return GoalStatus.Reporting;
   }
@@ -377,9 +540,9 @@ export class GoalRunner {
     return r;
   }
 
-  private block(id: string, reason: string) {
+  private block(id: string, reason: string, kind: NotificationKind = NotificationKind.Blocked) {
     const goal = this.set(id, { status: GoalStatus.Paused, reason });
-    this.deps.notifications.create({ kind: NotificationKind.Blocked, title: `Needs you: ${goal.title}`, body: reason, goalId: id });
+    this.deps.notifications.create({ kind, title: `Needs you: ${goal.title}`, body: reason, goalId: id });
     this.leadStatus(BotStatus.Waiting, `${id} · Needs you`);
   }
 
@@ -442,4 +605,11 @@ function firstParagraph(md: string): string {
     .map((p) => p.trim())
     .find((p) => p && !/^#{1,6}\s/.test(p) && !p.startsWith('|'));
   return clip((para ?? md).replace(/\*\*/g, ''), 300);
+}
+
+function checkReviewMode(mode: unknown): SecurityReviewMode {
+  if (!Object.values(SecurityReviewMode).includes(mode as SecurityReviewMode)) {
+    throw new Error(`securityReview must be one of: ${Object.values(SecurityReviewMode).join(', ')}`);
+  }
+  return mode as SecurityReviewMode;
 }

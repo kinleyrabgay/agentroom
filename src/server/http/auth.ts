@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
-import { TOKEN_HEADER } from '../../shared/constants.js';
+import { TOKEN_HEADER, TOKEN_QUERY } from '../../shared/constants.js';
 
 /** Random per-run session token. It's printed in the start URL; every API/WS call must carry it. */
 export function createSessionToken(): string {
@@ -15,10 +15,14 @@ export function tokenMatches(expected: string, provided: string | undefined): bo
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** Only this request may carry the token in the query string: `<img src>` can't send headers. */
+const QUERY_TOKEN_ROUTE = /\/uploads\/[A-Za-z0-9_-]+$/;
+
 export function requireToken(token: string): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.method === 'OPTIONS') return next();
-    if (!tokenMatches(token, c.req.header(TOKEN_HEADER))) return c.json({ error: 'unauthorized' }, 401);
+    const viaQuery = c.req.method === 'GET' && QUERY_TOKEN_ROUTE.test(c.req.path) ? c.req.query(TOKEN_QUERY) : undefined;
+    if (!tokenMatches(token, c.req.header(TOKEN_HEADER)) && !tokenMatches(token, viaQuery)) return c.json({ error: 'unauthorized' }, 401);
     await next();
   };
 }

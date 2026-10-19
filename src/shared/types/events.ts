@@ -1,11 +1,12 @@
 import type { AgentEventType, BotStatus, StreamDeltaType } from '../enums.js';
 import type { RateLimit, UsageReport } from './usage.js';
+import type { Attachment } from './attachment.js';
 import type { SecurityFinding } from './security.js';
 
 /** Things that happen during runs. Broadcast to the UI and appended to `.agentroom/runs/*.jsonl`. */
 export type AgentEvent =
   | { type: typeof AgentEventType.BotStatus; botId: string; status: BotStatus; activity?: string }
-  | { type: typeof AgentEventType.UserMessage; botId: string; text: string; from: string }
+  | { type: typeof AgentEventType.UserMessage; botId: string; text: string; from: string; attachments?: Attachment[] }
   | { type: typeof AgentEventType.Message; botId: string; text: string }
   | { type: typeof AgentEventType.ToolCall; botId: string; toolUseId: string; name: string; summary: string; input: unknown }
   | { type: typeof AgentEventType.ToolResult; botId: string; toolUseId: string; ok: boolean; output: string }

@@ -59,8 +59,8 @@ export const taskApi = {
 /** Goal runs: plan → human review → build → test → report. */
 export const goalApi = {
   list: () => request<Goal[]>("GET", "/goals"),
-  create: (brief: string, title?: string, securityReview?: SecurityReviewMode) =>
-    request<Goal>("POST", "/goals", { brief, title, securityReview }),
+  create: (brief: string, title?: string, securityReview?: SecurityReviewMode, attachments?: string[]) =>
+    request<Goal>("POST", "/goals", { brief, title, securityReview, attachments }),
   update: (id: string, patch: GoalUpdate) => request<Goal>("PATCH", `/goals/${seg(id)}`, patch),
   approve: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/approve`),
   replan: (id: string, feedback: string) => request<Goal>("POST", `/goals/${seg(id)}/replan`, { feedback }),

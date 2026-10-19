@@ -1,7 +1,7 @@
 import { ClientMessageType, TOKEN_QUERY, WS_PATH, type ClientMessage, type ServerMessage } from "@shared"
 import { projectApi, securityApi, settingsApi } from "@/lib/api/endpoints"
 import { API_BASE, RECONNECT_DELAY_MS } from "@/lib/constants"
-import { useAppStore } from "@/lib/store/app-store"
+import { setFindings, useAppStore } from "@/lib/store/app-store"
 import { handleServerMessage } from "./handlers"
 import { reportPresence, startPresence } from "./presence"
 
@@ -30,8 +30,8 @@ export function connect() {
   // Findings are pushed on change (StateType.Findings); fetch once so the badge is right from the start.
   securityApi
     .findings({})
-    .then((findings) => useAppStore.setState({ findings }))
-    .catch(() => {})
+    .then(setFindings)
+    .catch(() => setFindings(null))
 
   const base = API_BASE ? new URL(API_BASE) : window.location
   const proto = base.protocol === "https:" ? "wss" : "ws"

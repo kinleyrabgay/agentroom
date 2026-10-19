@@ -9,6 +9,7 @@ import { AgentEventType, BotStatus, type Bot, type StampedEvent } from "@shared"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
+import { useSidebar } from "@/components/ui/sidebar"
 import { treeLayout } from "../lib/tree-layout"
 import { AutoFit } from "./auto-fit"
 import { BotNode, type BotNodeData } from "./bot-node"
@@ -47,13 +48,24 @@ function buildGraph(bots: Bot[], live: Set<string>) {
   return { nodes, edges }
 }
 
-export function TeamCanvas() {
+/**
+ * The team as a graph. `fullBleed`: drawn as the full-window background of the Team view, with the
+ * sidebar, top bar, bot panel and command bar floating on top; controls are placed clear of them.
+ */
+export function TeamCanvas({ fullBleed = false }: { fullBleed?: boolean }) {
   const bots = useAppStore((s) => s.bots)
   const events = useAppStore((s) => s.events)
   const { resolvedTheme } = useTheme()
   const [creating, setCreating] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useAppStore((s) => !!s.draggingSkill)
+  const { state: sidebarState, isMobile } = useSidebar()
+  // Left edge of the visible canvas next to the floating sidebar.
+  const leftOffset = !fullBleed || isMobile
+    ? "1rem"
+    : sidebarState === "expanded"
+      ? "calc(var(--sidebar-width) + 1.25rem)"
+      : "calc(var(--sidebar-width-icon) + 2.25rem)"
 
   const live = useMemo(() => activeDelegations(events), [events])
   const { nodes, edges } = useMemo(() => buildGraph(bots, live), [bots, live])
@@ -75,10 +87,21 @@ export function TeamCanvas() {
         style={{ background: "transparent" }}
       >
         <Background gap={22} size={1.2} color="var(--border)" />
-        <Controls showInteractive={false} position="bottom-left" />
-        <AutoFit container={ref} count={bots.length} />
+        <Controls
+          showInteractive={false}
+          position="bottom-left"
+          style={fullBleed ? { left: leftOffset, bottom: "1rem", margin: 0 } : undefined}
+          className={cn(fullBleed && "overflow-hidden rounded-xl border shadow-sm")}
+        />
+        <AutoFit container={ref} count={bots.length} fullBleed={fullBleed} />
       </ReactFlow>
-      <Button variant="outline" size="sm" className="absolute top-4 right-4 shadow-sm" onClick={() => setCreating(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn("absolute shadow-sm", fullBleed ? "top-[4.5rem] bg-background/80 backdrop-blur" : "top-4 right-4")}
+        style={fullBleed ? { left: leftOffset } : undefined}
+        onClick={() => setCreating(true)}
+      >
         <PlusIcon data-icon="inline-start" /> Add bot
       </Button>
       <NewBotDialog open={creating} onOpenChange={setCreating} />

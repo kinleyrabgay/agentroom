@@ -15,7 +15,7 @@ beforeEach(() => {
 
 describe('Project', () => {
   it('scaffolds default team, skills, plugin manifest and gitignore', () => {
-    expect(p.bots.list().map((b) => b.id)).toEqual(['team-lead', 'planner', 'developer', 'qa', 'reviewer']);
+    expect(p.bots.list().map((b) => b.id)).toEqual(['team-lead', 'planner', 'developer', 'qa', 'reviewer', 'security-auditor']);
     expect(p.library.list().map((s) => s.name)).toContain('git-workflow');
     expect(p.library.list()[0].scope).toBe(SkillScope.Library);
     expect(fs.existsSync(path.join(p.paths.dir, '.claude-plugin', 'plugin.json'))).toBe(true);
@@ -63,8 +63,8 @@ describe('Project', () => {
   });
 
   it('creates bots with next number and removes deleted library skills from bots', () => {
-    const b = p.bots.create({ name: 'Security Auditor', role: 'security' });
-    expect(b.dir).toBe('06-security-auditor');
+    const b = p.bots.create({ name: 'Data Analyst', role: 'analyst' });
+    expect(b.dir).toBe('07-data-analyst');
     expect(b.reportsTo).toBe('team-lead');
     expect(b.localSkills).toEqual([]);
     p.deleteLibrarySkill('testing');

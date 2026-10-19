@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { CollapsibleSidebarGroup } from "@/components/shared/collapsible-sidebar-group"
+import { ErrorBoundary } from "@/components/shared/error-boundary"
 import { SkillLibrary } from "@/features/skills/components/skill-library"
 import { useGithubStore } from "@/features/github/lib/github-store"
 import { myOpenCount } from "@/features/github/lib/board-view"
@@ -36,8 +37,12 @@ export function AppSidebar() {
         <ProjectHeader />
       </SidebarHeader>
       <SidebarContent>
-        <WorkspaceNav />
-        <GovernanceNav />
+        <ErrorBoundary label="Workspace" compact>
+          <WorkspaceNav />
+        </ErrorBoundary>
+        <ErrorBoundary label="Governance" compact>
+          <GovernanceNav />
+        </ErrorBoundary>
         <BotList />
         <SkillLibrary />
       </SidebarContent>

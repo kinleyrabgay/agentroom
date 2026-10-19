@@ -19,6 +19,14 @@ export interface TeamRoles {
 const byRole = (bots: Bot[], role: string) =>
   bots.find((b) => b.role.toLowerCase() === role) ?? bots.find((b) => b.id === role);
 
+/** Security reviewers: role "security" (or an id mentioning security, e.g. "security-auditor"). */
+export const isSecurityRole = (bot: Bot) => bot.role.toLowerCase() === 'security' || bot.id.includes('security');
+
+/** The bot that runs the Security phase, if the team has one. */
+export function resolveSecurity(bots: Bot[]): Bot | undefined {
+  return bots.find((b) => b.role.toLowerCase() === 'security') ?? bots.find((b) => b.id.includes('security'));
+}
+
 export const isPlannerRole = (bot: Bot) => bot.role.toLowerCase() === WorkflowRole.Planner || bot.id === WorkflowRole.Planner;
 
 /** The lead is the bot with role "lead", else the top of the tree. */

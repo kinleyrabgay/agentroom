@@ -22,6 +22,7 @@ import { PlanSection, ReportSection } from "./goal-sections"
 import { PhaseStepper } from "./phase-stepper"
 import { useGoalSpend } from "../hooks/use-goal-spend"
 import { usd } from "@/features/usage/lib/format"
+import { GoalAttachments } from "@/features/attachments/components/goal-attachments"
 
 const STOPPED: Partial<
   Record<GoalStatus, { title: string; destructive: boolean }>
@@ -112,6 +113,7 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
           >
             {goal.brief}
           </button>
+          {(goal.attachments?.length ?? 0) > 0 && <GoalAttachments ids={goal.attachments} className="mt-1.5" />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ReviewModeSelect value={reviewMode} onChange={setReviewMode} className="h-8" />

@@ -107,6 +107,8 @@ export const GoalSchema = z.object({
   securityReviewedRound: z.number().optional(),
   /** The human approved a high-risk diff at this score (re-asked if the score grows). */
   riskApproval: z.object({ score: z.number(), at: z.string(), by: z.string() }).optional(),
+  /** Upload ids attached to the brief (screenshots, specs). Given to the Planner and listed for every bot. */
+  attachments: z.array(z.string()).default([]),
   /** Build/test rounds completed (bug-fix loops). */
   round: z.number().default(0),
   /** Why the goal paused/failed. */
@@ -172,7 +174,8 @@ export const SettingsSchema = z.object({
         .array(z.string())
         .default(['**/auth/**', '**/*auth*', '**/payment*/**', '**/billing/**', '**/migrations/**', '**/*.sql', '**/.env*', '**/secrets/**']),
     })
-    .default({ review: SecurityReviewMode.Auto, blockOn: 'critical', riskGates: true, sensitivePaths: [] }),
+    // prefault: run the inner defaults (incl. the sensitive-path list) when the section is missing.
+    .prefault({}),
   worktrees: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
   audit: z.object({ retentionDays: z.number().int().min(1).default(90) }).default({ retentionDays: 90 }),
 });

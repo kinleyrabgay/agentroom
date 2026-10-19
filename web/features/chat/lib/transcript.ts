@@ -1,5 +1,6 @@
-import { AgentEventType, type StampedEvent } from "@shared"
+import { AgentEventType, type Attachment, type StampedEvent } from "@shared"
 import type { LiveReply } from "@/lib/store/live-reply"
+import { hasInjectionFlag } from "@/features/security/lib/injection"
 
 export const ToolStepState = {
   Preparing: "preparing",
@@ -15,10 +16,13 @@ export interface ToolStep {
   name: string
   summary: string
   state: ToolStepState
+  /** The server flagged this tool's output as possible prompt injection. */
+  flagged?: boolean
+  goalId?: string
 }
 
 export type TranscriptItem =
-  | { kind: "user"; key: string; text: string; from: string }
+  | { kind: "user"; key: string; text: string; from: string; attachments: Attachment[] }
   | { kind: "text"; key: string; text: string; live?: boolean }
   | { kind: "tools"; key: string; steps: ToolStep[]; live: boolean }
   | { kind: "done"; key: string; ok: boolean; turns: number; durationMs: number; costUsd: number }
@@ -34,7 +38,12 @@ export const isActiveStep = (s: ToolStep) =>
 export function buildTranscript(evs: StampedEvent[], live: LiveReply | undefined, running: boolean): TranscriptItem[] {
   const items: TranscriptItem[] = []
   const results = new Map<string, boolean>()
-  for (const e of evs) if (e.type === AgentEventType.ToolResult) results.set(e.toolUseId, e.ok)
+  const flagged = new Set<string>()
+  for (const e of evs) {
+    if (e.type !== AgentEventType.ToolResult) continue
+    results.set(e.toolUseId, e.ok)
+    if (hasInjectionFlag(e.output)) flagged.add(e.toolUseId)
+  }
 
   // A tool is waiting on the human when the latest permission request (by summary) is unanswered.
   let waitingSummary: string | null = null
@@ -56,7 +65,7 @@ export function buildTranscript(evs: StampedEvent[], live: LiveReply | undefined
   for (const e of evs) {
     switch (e.type) {
       case AgentEventType.UserMessage:
-        items.push({ kind: "user", key: `u${e.seq}`, text: e.text, from: e.from })
+        items.push({ kind: "user", key: `u${e.seq}`, text: e.text, from: e.from, attachments: e.attachments ?? [] })
         break
       case AgentEventType.Message:
         items.push({ kind: "text", key: `m${e.seq}`, text: e.text })
@@ -71,7 +80,11 @@ export function buildTranscript(evs: StampedEvent[], live: LiveReply | undefined
             : ok
               ? ToolStepState.Done
               : ToolStepState.Failed
-        addStep({ id: e.toolUseId, name: e.name, summary: e.summary, state }, `t${e.seq}`, false)
+        addStep(
+          { id: e.toolUseId, name: e.name, summary: e.summary, state, flagged: flagged.has(e.toolUseId), goalId: e.goalId },
+          `t${e.seq}`,
+          false
+        )
         break
       }
       case AgentEventType.RunDone:

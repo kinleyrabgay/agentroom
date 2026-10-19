@@ -20,6 +20,8 @@ export class ProjectPaths {
   get runs() { return path.join(this.dir, 'runs'); }
   get sessionsFile() { return path.join(this.runs, 'sessions.json'); }
   get inboxFile() { return path.join(this.runs, 'inbox.json'); }
+  /** Files the human attached to messages (local, never committed). */
+  get uploads() { return path.join(this.runs, 'uploads'); }
   /** Personal alert preferences (OS notifications, sound, voice). */
   get alertsFile() { return path.join(this.runs, 'alerts.json'); }
   /** `.agentroom/github/` — committed GitHub board setup. */
@@ -35,6 +37,8 @@ export class ProjectPaths {
   get auditFile() { return path.join(this.runs, 'audit.jsonl'); }
   /** Local integration secrets (webhooks, SMTP). Never committed; mode 0600. */
   get secretsFile() { return path.join(this.runs, 'secrets.json'); }
+  /** Security findings (scanner, dependency guard, reviews, prompt injection). */
+  get securityFile() { return path.join(this.runs, 'security.json'); }
   get gitignore() { return path.join(this.root, '.gitignore'); }
   get claudeMd() { return path.join(this.root, 'CLAUDE.md'); }
 

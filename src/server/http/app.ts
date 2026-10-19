@@ -22,6 +22,10 @@ import { taskRoutes } from './routes/tasks.routes.js';
 import { findUiDir, serveUi } from './static.js';
 import { settingsRoutes } from './routes/settings.routes.js';
 import { governanceRoutes } from './routes/governance.routes.js';
+import { securityRoutes } from './routes/security.routes.js';
+import { uploadRoutes } from './routes/uploads.routes.js';
+import type { UploadStore } from '../services/upload.store.js';
+import type { SecurityService } from '../security/security.service.js';
 import type { AuditService, HumanAudit } from '../services/audit.service.js';
 import type { LedgerService } from '../services/ledger.service.js';
 import type { SecretsStore } from '../services/secrets.store.js';
@@ -41,6 +45,10 @@ export interface AppDeps {
   /** Records actions the human takes through the API. */
   humanAudit: HumanAudit;
   secrets: SecretsStore;
+  security: SecurityService;
+  uploads: UploadStore;
+  /** "Name <email>" of the human using the UI. */
+  humanName: () => string;
   /** Push the board to the UI right after a REST write. */
   boardChanged: () => void;
   router: ClientMessageRouter;
@@ -66,6 +74,8 @@ export function createApp(deps: AppDeps) {
   governanceRoutes(api, deps.ledger, deps.audit);
   alertRoutes(api, deps.alerts);
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
+  securityRoutes(api, deps.security, deps.goals, deps.humanName);
+  uploadRoutes(api, deps.uploads);
   app.route(API_PREFIX, api);
 
   app.get(

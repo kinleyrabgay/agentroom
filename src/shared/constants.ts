@@ -30,3 +30,8 @@ export const DEFAULT_ALERT_PREFS = {
   voice: false,
   onlyWhenAway: true,
 } as const;
+
+/** Attachment limits (per file / per message). Images above the API's limit are rejected with a clear message. */
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const ATTACHMENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const ATTACHMENTS_PER_MESSAGE = 10;

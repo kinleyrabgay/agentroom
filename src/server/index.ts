@@ -24,6 +24,11 @@ import { gitUser } from '../core/git.js';
 import { AuditService, humanAudit } from './services/audit.service.js';
 import { LedgerService } from './services/ledger.service.js';
 import { SecretsStore } from './services/secrets.store.js';
+import { FindingsStore } from './security/findings.store.js';
+import { DependencyGuard } from './security/dependency/dependency-guard.js';
+import { CliGitReader } from './security/git.js';
+import { SecurityService } from './security/security.service.js';
+import { UploadStore } from './services/upload.store.js';
 
 export interface StartOptions {
   root: string;
@@ -58,9 +63,25 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   });
   const sessions = new SessionStore(project.paths.sessionsFile);
   const notifications = new NotificationService(hub, project.paths.inboxFile);
+  const findings = new FindingsStore({ file: project.paths.securityFile, hub, audit: (e) => audit.record(e) });
+  const security = new SecurityService({
+    git: new CliGitReader(project.root),
+    guard: new DependencyGuard({ cwd: project.root }),
+    findings,
+    settings: () => project.settings.get(),
+    notifications,
+    goalBase: (id) => project.goals.get(id)?.baseRef,
+  });
+  permissions.useSecurity({
+    check: (botId, command, goalId) => security.gate(command, { botId, ...(goalId ? { goalId } : {}) }),
+    approve: (ids, actor) => security.approveHeld(ids, actor),
+    deniedMessage: (f) => SecurityService.deniedMessage(f),
+  });
   const boardChanged = () => pushBoard(project, hub);
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger });
-  const goals = new GoalRunner({ project, team, hub, notifications, boardChanged });
+  const uploads = new UploadStore(project.paths.uploads, project.root);
+  uploads.prune();
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads });
+  const goals = new GoalRunner({ project, team, hub, notifications, boardChanged, security, uploads, audit: (e) => audit.record(e), humanName });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
     projectFile: project.paths.githubProjectFile,
@@ -72,6 +93,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     itemDetail: (id) => github.itemDetail(id),
     startGoal: (brief, title, sources) => goals.start(brief, title, sources),
     sendToBot: (botId, text) => void team.send(botId, text).catch(() => {}),
+    guard: (text, source) => security.guardUntrusted(text, source, {}),
   });
   const models = new ModelCatalog(provider, project.root);
   const account = new AccountMonitor(provider, hub, project.root);
@@ -100,9 +122,15 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     audit,
     humanAudit: humanAudit(audit, humanName),
     secrets,
+    security,
+    uploads,
+    humanName,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),
-    onConnect: () => pushProjectState(project, hub),
+    onConnect: () => {
+      pushProjectState(project, hub);
+      findings.push();
+    },
   });
   const stopWatching = watchProject(project, hub);
 

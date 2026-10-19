@@ -16,8 +16,19 @@ import type { HostToolDef } from '../../providers/provider.js';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** In-app browser tools, executed by the bridge script inside the bot's preview iframe. */
-export function browserTools(bot: Bot, previews: PreviewService, hub: Hub, signal: AbortSignal): HostToolDef[] {
+export function browserTools(
+  bot: Bot,
+  previews: PreviewService,
+  hub: Hub,
+  signal: AbortSignal,
+  /** Wraps page content as untrusted data and flags prompt injection. */
+  guard: (text: string, source: string) => string = (t) => t,
+): HostToolDef[] {
   const actor = { name: bot.name, color: bot.color };
+  const pageSource = () => {
+    const p = previews.state(bot.id);
+    return p ? `web page ${p.target}${p.path}` : 'web page';
+  };
 
   /** While the human has control, browser actions wait. */
   const yieldToHuman = async () => {
@@ -28,7 +39,7 @@ export function browserTools(bot: Bot, previews: PreviewService, hub: Hub, signa
     hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: BotStatus.Working, activity: prev?.activity });
   };
 
-  const snapshot = async () => {
+  const rawSnapshot = async () => {
     try {
       return await previews.command(bot.id, { op: BridgeOp.Snapshot }, actor, BRIDGE_QUICK_SNAPSHOT_MS);
     } catch {
@@ -37,6 +48,8 @@ export function browserTools(bot: Bot, previews: PreviewService, hub: Hub, signa
       return previews.command(bot.id, { op: BridgeOp.Snapshot }, actor);
     }
   };
+  /** Page content is untrusted: wrapped, and checked for prompt injection. */
+  const snapshot = async () => guard(await rawSnapshot(), pageSource());
 
   /** Run an action, then return the page as it looks afterwards. */
   const act = async (cmd: BridgeCmd, withSnapshot = true) => {
@@ -106,14 +119,14 @@ export function browserTools(bot: Bot, previews: PreviewService, hub: Hub, signa
       handler: async () => {
         const lines = hub.recentConsole(bot.id);
         if (!lines.length) return 'Console is empty.';
-        return lines.map((l) => `[${new Date(l.ts).toLocaleTimeString()}] ${l.level.toUpperCase()} ${l.text}`).join('\n');
+        return guard(lines.map((l) => `[${new Date(l.ts).toLocaleTimeString()}] ${l.level.toUpperCase()} ${l.text}`).join('\n'), `console of ${pageSource()}`);
       },
     },
     {
       name: HostTool.BrowserEval,
       description: 'Run JavaScript in the page and return the result. Pass an expression, or a function body that uses `return`.',
       schema: { code: z.string() },
-      handler: ({ code }) => act({ op: BridgeOp.Eval, code }, false),
+      handler: async ({ code }) => guard(await act({ op: BridgeOp.Eval, code }, false), `script result on ${pageSource()}`),
     },
   ];
 }

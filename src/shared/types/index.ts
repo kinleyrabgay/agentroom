@@ -10,5 +10,6 @@ export type * from './github.js';
 export type * from './ledger.js';
 export type * from './settings.js';
 export type * from './security.js';
+export type * from './attachment.js';
 export type * from './events.js';
 export type * from './messages.js';

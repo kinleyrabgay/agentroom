@@ -6,6 +6,9 @@ export interface NewGoalInput {
   title: string;
   brief: string;
   sources?: GoalSource[];
+  securityReview?: Goal['securityReview'];
+  /** Upload ids attached to the brief. */
+  attachments?: string[];
 }
 
 const GOAL_PREFIX = 'G-';

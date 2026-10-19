@@ -1,5 +1,6 @@
-import { HostTool, TaskKind } from '../../shared/enums.js';
+import { FindingStatus, HostTool, TaskKind } from '../../shared/enums.js';
 import type { Goal, Task } from '../../shared/types/index.js';
+import type { GoalAssessment } from '../security/security.service.js';
 import { taskLine } from '../agents/tools/task.tools.js';
 import type { TeamRoles } from './roles.js';
 
@@ -74,6 +75,33 @@ export function testPrompt(goal: Goal, task: Task, devTasks: Task[], roles: Team
     `- If everything passes: set this QA task to "done".`,
     `- Don't fix production code yourself.`,
     `Finish with a pass/fail summary.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function securityPrompt(goal: Goal, a: GoalAssessment, tasks: Task[], roles: TeamRoles): string {
+  const open = a.findings.filter((f) => f.status === FindingStatus.Open || f.status === FindingStatus.Approved);
+  return [
+    `# Security review of goal ${goal.id}: ${goal.title}`,
+    `The developer finished building. Review the change for security problems before QA.`,
+    `## Change`,
+    `${a.stats.files} files, +${a.stats.additions} −${a.stats.deletions}${goal.baseRef ? ` since commit ${goal.baseRef.slice(0, 10)} (see \`git diff ${goal.baseRef.slice(0, 10)}\`)` : ''}.`,
+    a.stats.paths.length ? a.stats.paths.slice(0, 60).map((p) => `- ${p}`).join('\n') : '',
+    `## Risk score: ${a.risk.score} (${a.risk.level})`,
+    a.risk.factors.map((f) => `- ${f.label} (+${f.points})`).join('\n'),
+    open.length
+      ? `## Automated findings\n${open.map((f) => `- [${f.severity}] ${f.title}${f.file ? ` — ${f.file}${f.line ? `:${f.line}` : ''}` : ''}${f.snippet ? ` — \`${f.snippet}\`` : ''}`).join('\n')}`
+      : '## Automated findings\nNone.',
+    `## Tasks`,
+    tasks.map((t) => `- ${taskLine(t)}`).join('\n'),
+    `## Protocol`,
+    `- Read the diff and the changed code. Check: injection (SQL/shell/template), authentication & authorization on new endpoints, input validation, secrets in code or config, unsafe deserialization, path traversal, SSRF, XSS, CSRF, CORS, crypto misuse, logging of sensitive data, dependency changes.`,
+    `- Confirm or refute each automated finding by reading the code.`,
+    `- Record every real issue with \`${T.SecurityFinding}\` (critical = must fix before merge; warning = needs a look; info = note).`,
+    `- For each critical issue, also create a bug with \`${T.TaskCreate}\` (kind "${TaskKind.Bug}", goalId "${goal.id}", assignee "${roles.developer.id}") with the exploit scenario and the fix as acceptance criteria. The developer fixes them in the next round and you will review again.`,
+    `- Do not change code yourself, do not commit.`,
+    `Finish with a short verdict: "pass", or the list of must-fix issues.`,
   ]
     .filter(Boolean)
     .join('\n\n');

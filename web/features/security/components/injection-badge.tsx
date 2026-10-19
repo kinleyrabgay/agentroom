@@ -2,9 +2,6 @@
 
 import { ShieldAlertIcon } from "lucide-react"
 import { useAppStore } from "@/lib/store/app-store"
-import { INJECTION_MARKER } from "../constants"
-
-export const hasInjectionFlag = (output: string | undefined) => !!output && output.includes(INJECTION_MARKER)
 
 /** Shown on a tool step whose output the server flagged as possible prompt injection. */
 export function InjectionBadge({ goalId }: { goalId?: string }) {

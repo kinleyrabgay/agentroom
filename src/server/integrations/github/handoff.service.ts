@@ -10,6 +10,8 @@ export interface HandoffDeps {
   itemDetail: (id: string) => Promise<GithubItemDetail>;
   startGoal: (brief: string, title: string, sources: GoalSource[]) => Goal;
   sendToBot: (botId: string, text: string) => void;
+  /** Wraps issue bodies/comments as untrusted data and flags prompt injection. */
+  guard?: (text: string, source: string) => string;
 }
 
 const TITLE_MAX = 80;
@@ -32,7 +34,7 @@ export class HandoffService {
     for (const l of links) if (!/^https?:\/\//i.test(l)) throw new Error(`"${l}" isn't a link (http/https).`);
 
     const details = await Promise.all(ids.map((id) => this.deps.itemDetail(id)));
-    const brief = buildBrief(details, input.note?.trim() ?? '', files, links);
+    const brief = buildBrief(details, input.note?.trim() ?? '', files, links, this.deps.guard);
     const sources: GoalSource[] = details.map(({ item }) => ({
       type: 'github',
       itemId: item.id,
@@ -58,7 +60,14 @@ const ref = (d: GithubItemDetail) => {
 };
 
 /** Markdown brief: each card (with body and recent comments), then the human's notes, files and links. */
-export function buildBrief(details: GithubItemDetail[], note: string, files: string[], links: string[]): string {
+export function buildBrief(
+  details: GithubItemDetail[],
+  note: string,
+  files: string[],
+  links: string[],
+  /** Issue text is written by anyone with access to the repo: treat it as untrusted. */
+  guard: (text: string, source: string) => string = (t) => t,
+): string {
   const parts: string[] = [
     details.length === 1 ? 'Work on this GitHub card.' : `Work on these ${details.length} GitHub cards.`,
   ];
@@ -73,12 +82,13 @@ export function buildBrief(details: GithubItemDetail[], note: string, files: str
       item.linkedPrs.length ? `Linked PRs: ${item.linkedPrs.map((p) => p.url).join(', ')}` : '',
     ].filter(Boolean);
     if (meta.length) lines.push(meta.join(' · '));
-    lines.push('', d.body.trim() || '_No description._');
+    const content = [d.body.trim() || '_No description._'];
     const comments = d.comments.slice(-HANDOFF_COMMENTS);
     if (comments.length) {
-      lines.push('', '**Recent comments**');
-      for (const c of comments) lines.push(`- @${c.author} (${c.createdAt.slice(0, 10)}): ${c.body.trim().replace(/\n+/g, ' ')}`);
+      content.push('', '**Recent comments**');
+      for (const c of comments) content.push(`- @${c.author} (${c.createdAt.slice(0, 10)}): ${c.body.trim().replace(/\n+/g, ' ')}`);
     }
+    lines.push('', guard(content.join('\n'), `GitHub ${ref(d) || item.title}`));
     parts.push(lines.join('\n'));
   }
   if (note) parts.push(`## Notes from the human\n${note}`);

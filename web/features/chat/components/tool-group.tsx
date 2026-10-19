@@ -4,6 +4,7 @@ import { useState } from "react"
 import { ChevronRightIcon, CircleCheckIcon, CircleXIcon, Loader2Icon, ShieldAlertIcon, SparklesIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isActiveStep, ToolStepState, type ToolStep } from "../lib/transcript"
+import { InjectionBadge } from "@/features/security/components/injection-badge"
 
 /** Collapsible "Used N tools" block; open and live while the bot is working through it. */
 export function ToolGroup({ steps, live }: { steps: ToolStep[]; live: boolean }) {
@@ -31,6 +32,7 @@ export function ToolGroup({ steps, live }: { steps: ToolStep[]; live: boolean })
               <StepIcon state={s.state} />
               <span className="shrink-0 font-medium text-foreground/90">{s.name}</span>
               <span className="truncate text-muted-foreground">{s.summary || (s.state === ToolStepState.Preparing ? "…" : "")}</span>
+              {s.flagged && <InjectionBadge goalId={s.goalId} />}
             </li>
           ))}
         </ol>

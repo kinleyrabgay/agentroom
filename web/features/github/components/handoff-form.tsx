@@ -176,7 +176,7 @@ export function HandoffForm({
           rows={3}
           autoFocus={autoFocus}
           placeholder="Constraints, acceptance notes, where to look… e.g. @docs/dependency-logic.md"
-          className="resize-none bg-background text-sm"
+          className="resize-none text-sm"
         />
         {files.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -213,7 +213,7 @@ export function HandoffForm({
               }
             }}
             placeholder="https://github.com/acme/app/pull/42"
-            className="h-8 bg-background font-mono text-xs"
+            className="h-8 font-mono text-xs"
           />
           <Button type="button" size="sm" variant="outline" onClick={addLink} disabled={!link.trim()}>
             Add

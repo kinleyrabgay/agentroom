@@ -49,7 +49,8 @@ export type ServerMessage =
 
 /** UI → server. */
 export type ClientMessage =
-  | { type: typeof ClientMessageType.Send; botId: string; text: string }
+  /** `attachments` are ids returned by POST /api/uploads. */
+  | { type: typeof ClientMessageType.Send; botId: string; text: string; attachments?: string[] }
   | { type: typeof ClientMessageType.Stop; botId?: string }
   | { type: typeof ClientMessageType.Permission; requestId: string; allow: boolean; always?: boolean }
   | { type: typeof ClientMessageType.Focus }

@@ -6,7 +6,9 @@ import type { PreviewService } from '../../preview/preview.service.js';
 import type { Hub } from '../../realtime/hub.js';
 import type { NotificationService } from '../../services/notification.service.js';
 import type { HostToolDef } from '../../providers/provider.js';
-import { isPlannerRole } from '../../workflow/roles.js';
+import { isPlannerRole, isSecurityRole } from '../../workflow/roles.js';
+import type { SecurityService } from '../../security/security.service.js';
+import { securityTools } from './security.tools.js';
 import { browserTools } from './browser.tools.js';
 import { delegateTool, type Delegate } from './delegate.tool.js';
 import { humanTools } from './human.tools.js';
@@ -23,6 +25,8 @@ export interface HostToolDeps {
   boardChanged: () => void;
   /** Goal this run belongs to, when the workflow engine started it. */
   goalId?: string;
+  /** Security layer: findings tool for reviewers, untrusted-content guard for browser output. */
+  security?: SecurityService;
 }
 
 /**
@@ -39,7 +43,13 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
   };
   const tools = [...taskTools(board, bot.id), ...humanTools(bot, deps, signal)];
   if (isPlannerRole(bot)) tools.push(...planningTools(board, bot.id));
-  if (bot.tools.includes(ToolName.Browser)) tools.push(...browserTools(bot, deps.previews, deps.hub, signal));
+  if (bot.tools.includes(ToolName.Browser)) {
+    const guard = deps.security
+      ? (text: string, source: string) => deps.security!.guardUntrusted(text, source, { botId: bot.id, goalId: deps.goalId, runKey: signal })
+      : undefined;
+    tools.push(...browserTools(bot, deps.previews, deps.hub, signal, guard));
+  }
+  if (deps.security && isSecurityRole(bot)) tools.push(...securityTools(bot, deps.security, deps.goalId));
   const reports = team.filter((b) => b.reportsTo === bot.id).map((b) => b.id);
   if (reports.length) tools.push(delegateTool(reports, deps.delegate));
   return tools;

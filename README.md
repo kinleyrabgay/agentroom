@@ -4,7 +4,7 @@
 
 **A local control room for your AI coding agents.**
 
-Run a team of bots (Team Lead, Planner, Developer, QA, Reviewer) in any repository.<br>
+Run a team of bots (Team Lead, Planner, Developer, Security Auditor, QA, Reviewer) in any repository.<br>
 Watch every tool call live, chat with each bot, approve risky actions, and hand real work from your GitHub board to the team.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -40,8 +40,11 @@ Watch every tool call live, chat with each bot, approve risky actions, and hand 
   - [First run](#first-run)
 - [Features](#-features)
   - [Team of bots](#team-of-bots)
-  - [Goals: plan → review → build → test → report](#goals-plan--review--build--test--report)
+  - [Goals: plan → review → build → security → test → report](#goals-plan--review--build--security--test--report)
   - [Task board](#task-board)
+  - [Security review and scanning](#security-review-and-scanning)
+  - [Prompt-injection guard](#prompt-injection-guard)
+  - [Attachments](#attachments)
   - [Skills](#skills)
   - [In-app browser](#in-app-browser)
   - [GitHub board](#github-board)
@@ -123,10 +126,10 @@ The URL printed on start contains the session token (`?t=…`). If the browser d
 <details>
 <summary><b>What you'll see</b></summary>
 
-1. **Team** view with five bots, each with an avatar, color and live status (`idle`, `thinking`, `working`, `waiting`, `error`).
+1. **Team** view with six bots, each with an avatar, color and live status (`idle`, `thinking`, `working`, `waiting`, `error`).
 2. Click a bot to open its panel: **Chat**, **Activity** (every tool call and result), **Skills**, **Browser** and **Config**.
 3. Type a goal into the Team Lead's chat, or open **Tasks** and create a goal. The Planner writes a plan and waits for your approval.
-4. Approve the plan. The Developer builds, QA tests, and the Team Lead reports back. Approval prompts show up in the top bar and the bot's chat.
+4. Approve the plan. The Developer builds, the Security Auditor reviews the diff when needed, QA tests, and the Team Lead reports back. Approval prompts show up in the top bar and the bot's chat.
 
 </details>
 
@@ -136,13 +139,14 @@ The URL printed on start contains the session token (`?t=…`). If the browser d
 
 ### Team of bots
 
-`agentroom init` scaffolds five bots from [`templates/bots/`](templates/bots):
+`agentroom init` scaffolds six bots from [`templates/bots/`](templates/bots):
 
 | Bot | Avatar | Default tools | Default skills | Reports to |
 |---|---|---|---|---|
 | **Team Lead** | 🧭 | Read, Grep, Glob | planning, code-review | — |
 | **Planner** | 🗺️ | Read, Grep, Glob, WebSearch, WebFetch | repo-explore, planning | Team Lead |
 | **Developer** | 🛠️ | Read, Grep, Glob, Edit, Write, Bash, Browser | git-workflow, testing | Team Lead |
+| **Security Auditor** | 🛡️ | Read, Grep, Glob, Bash | security-review | Team Lead |
 | **QA** | 🧪 | Read, Grep, Glob, Edit, Write, Bash, Browser | testing | Team Lead |
 | **Reviewer** | 🔍 | Read, Grep, Glob, Bash | code-review, git-workflow | Team Lead |
 
@@ -164,9 +168,9 @@ The URL printed on start contains the session token (`?t=…`). If the browser d
 
 </details>
 
-### Goals: plan → review → build → test → report
+### Goals: plan → review → build → security → test → report
 
-A **goal** is a piece of work you hand to the team. The goal runner drives it through a fixed lifecycle:
+A **goal** is a piece of work you hand to the team. The goal runner drives it through a fixed lifecycle: **plan → review → build → security → test → report**.
 
 ```mermaid
 stateDiagram-v2
@@ -174,7 +178,10 @@ stateDiagram-v2
     planning --> awaiting_approval: Planner writes plan + tasks
     awaiting_approval --> planning: Request changes (replan)
     awaiting_approval --> building: You approve
-    building --> testing: Developer finishes dev tasks
+    building --> securing: review needed (risk / sensitive paths / always)
+    building --> testing: no review needed
+    securing --> building: must-fix findings become bug tasks
+    securing --> testing: clean, or high risk approved by you
     testing --> building: QA files bug tasks (max 2 fix rounds)
     testing --> reporting: QA passes
     reporting --> done: Team Lead writes summary
@@ -193,6 +200,7 @@ stateDiagram-v2
 | `planning` | The Planner explores the repo and writes a plan plus ordered tasks with acceptance criteria. |
 | `awaiting_approval` | Nothing runs until you **approve**, or **replan** with feedback. |
 | `building` | The Developer works through `dev` and `bug` tasks in order, committing on the goal's branch (`agentroom/<goal-id>`). Bots never push. |
+| `securing` | The Security Auditor reviews the diff and the automated findings, records real issues with `security_finding`, and turns must-fix ones into `bug` tasks. |
 | `testing` | QA verifies acceptance criteria. Failures become `bug` tasks and go back to the Developer. |
 | `reporting` | The Team Lead writes a summary of what changed and how it was verified. |
 | `paused` | A bot is blocked or asked a question, or you paused it. |
@@ -223,6 +231,66 @@ Tasks live in `.agentroom/tasks/board.json` and show as a Kanban board (`todo` �
 
 </details>
 
+### Security review and scanning
+
+Every goal remembers the commit it started from, so its whole diff can be scanned and scored.
+
+**Automated scanner**
+
+- **Secrets and risky code:** rules for tokens and keys (GitHub, cloud, private keys, …) and dangerous patterns in changed lines.
+- **Dependency guard:** new or changed packages in manifests, including likely typosquats of popular packages.
+- Rescans dedupe findings and mark ones that disappeared as fixed. Findings are stored in `.agentroom/runs/security.json`.
+
+**Risk score (0–100)**
+
+| Factor | Points |
+|---|---|
+| Diff size | up to 25 (1 per 40 changed lines) |
+| Files changed | up to 15 |
+| Sensitive paths (`settings.security.sensitivePaths`) | 25 |
+| Migrations / SQL | 15 |
+| Dependency changes | 10 |
+| Critical findings | 30 each (max 60) |
+| Warnings | 8 each (max 24) |
+
+Levels: **low** < 35 ≤ **medium** < 70 ≤ **high**. Dismissed and fixed findings don't count.
+
+**When the security step runs**
+
+| `security.review` | Runs when |
+|---|---|
+| `auto` *(default)* | Risk is medium or high, or sensitive paths are touched |
+| `always` | Every goal |
+| `off` | Never (unless sensitive paths are touched) |
+
+Each goal can override the team default when you create it.
+
+**Gates**
+
+- **Publish gate:** `git commit`, `git push` and PR creation wait for you while open findings are at or above `security.blockOn` (`critical` by default).
+- **Risk gate:** with `security.riskGates` on, a **high**-risk goal pauses for your approval before Test.
+- Resolve findings in the **Security** tab: **approve** (accept the risk) or **dismiss** (false positive). Findings that disappear from the diff are marked **fixed** on rescan.
+
+### Prompt-injection guard
+
+Content bots read from outside (in-app browser pages, GitHub card bodies and comments) is treated as untrusted:
+
+- It's wrapped and labeled so the model can tell data from instructions, and every bot's context includes a rule never to follow instructions found inside it.
+- Instruction-like text ("ignore previous instructions", …) is detected and flagged with a badge in the UI and a security finding, once per source per run.
+
+### Attachments
+
+Drop or paste files into any chat or the new-goal dialog.
+
+| File | Sent to the model as |
+|---|---|
+| PNG, JPEG, GIF, WebP | Image block (type sniffed from bytes, max 5 MB) |
+| PDF | Document block |
+| Text up to 200 KB | Inlined text |
+| Anything else | Saved to disk; the bot gets the path and reads it with its tools |
+
+Limits: 20 MB per file, 10 files per message. Files are stored locally in `.agentroom/runs/uploads/` (gitignored) and deleted after 30 days.
+
 ### Skills
 
 Skills use the [Claude `SKILL.md` format](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview). `.agentroom/` is loaded as a local Claude plugin, and each bot only sees the skills assigned to it.
@@ -231,6 +299,7 @@ Skills use the [Claude `SKILL.md` format](https://docs.claude.com/en/docs/agents
 |---|---|
 | `code-review` | Review a diff for correctness bugs first, then simplifications |
 | `git-workflow` | Safe conventions for branches, commits and pull requests |
+| `security-review` | OWASP-style review of a change; records findings |
 | `planning` | Break a goal into small, verifiable steps |
 | `repo-explore` | Quickly map an unfamiliar repository |
 | `testing` | Find, write and run tests for a change |
@@ -404,12 +473,13 @@ your-project/
     │   ├── 02-planner/bot.md
     │   ├── 03-developer/bot.md
     │   ├── 04-qa/bot.md
-    │   └── 05-reviewer/bot.md
+    │   ├── 05-reviewer/bot.md
+    │   └── 06-security-auditor/bot.md
     ├── skills/
     │   └── <name>/SKILL.md           # shared skill library
     ├── tasks/board.json              # goals + tasks
     ├── github/project.json           # GitHub board config (when connected)
-    └── runs/                         # gitignored: events, sessions, ledger, audit, local secrets
+    └── runs/                         # gitignored: events, sessions, ledger, audit, findings, uploads, local secrets
 ```
 
 > [!TIP]
@@ -482,14 +552,14 @@ Team-wide and committed. Every field has a default, so you only write what you c
 | `models.<phase>` | Model and effort per workflow phase (`planning`, `build`, `security`, `testing`, `reporting`). Resolution order: phase → bot → project default. |
 | `budgets.perGoalUsd` / `perDayUsd` | USD caps; `null` means no cap |
 | `budgets.warnAt` | Warn at this fraction of a cap (0.1–1) |
-| `security.review` | `auto` (on for medium+ risk or sensitive paths), `always`, `off` |
+| `security.review` | `auto` (on for medium+ risk or sensitive paths), `always`, `off`. See [security review](#security-review-and-scanning). |
 | `security.blockOn` | `critical`, `warning` or `none`: findings at or above this block commits and PRs until approved |
 | `security.riskGates` | High-risk goals add approval gates before Test and before the PR |
 | `security.sensitivePaths` | Globs that always trigger the security step |
 | `worktrees.enabled` | Run goals in isolated git worktrees *(planned)* |
 | `audit.retentionDays` | How long audit entries are kept |
 
-> Some settings drive features still on the [roadmap](docs/roadmap.md). They're accepted and saved now so files stay forward-compatible.
+> `worktrees` is accepted and saved now but not used yet; see the [roadmap](docs/roadmap.md).
 
 ### Bot files: `bots/<id>/bot.md`
 
@@ -512,7 +582,7 @@ You are the Developer. You implement one board task at a time.
 | Field | Default | Description |
 |---|---|---|
 | `name` | *required* | Display name |
-| `role` | `custom` | Role; the goal runner looks for `lead`, `planner`, `developer` and `qa` |
+| `role` | `custom` | Role; the goal runner looks for `lead`, `planner`, `developer`, `security` and `qa` |
 | `color` | `#64748b` | UI color and browser cursor color |
 | `avatar` | `🤖` | Emoji avatar |
 | `model`, `effort` | project default | Per-bot model and effort |
@@ -570,6 +640,7 @@ The `description` tells the model when to use the skill. Keep it specific. Extra
 | `task_list`, `task_get` | All bots | No | Read the board |
 | `task_create`, `task_update`, `task_delete` | All bots | No | Change the board |
 | Planning tools (`plan_overview`, …) | Planner role | No | Write the goal's plan overview |
+| `security_finding` | Security reviewers | No | Record a security finding on the goal under review |
 | `delegate` | Bots with reports | No | Send work to a report and wait for the result |
 | `ask_human` | All bots | No | Ask you a question and wait for the answer |
 | `notify_human` | All bots | No | Send you an inbox notification |
@@ -598,6 +669,8 @@ AgentRoom runs agents that can change files and run commands on your machine. It
 | **Approvals** | Enforced server-side by the permission gate, not only in the UI |
 | **Dangerous commands** | `alwaysAsk` prefixes always ask and can't be session-allowed |
 | **Credentials** | None stored. Bots inherit your shell's git config, credential helper or SSH agent, and `gh auth`, so commits and PRs are made as you. |
+| **Publish gate** | Commits, pushes and PRs wait while blocking security findings are open |
+| **Untrusted content** | Browser pages and GitHub cards are labeled untrusted; injection attempts are flagged |
 | **Git** | Bots commit on `agentroom/<goal-id>` branches and are instructed never to push |
 | **Local secrets** | Webhook URLs and similar live in `.agentroom/runs/` (gitignored) |
 | **Audit** | Append-only log of commands, writes, pushes, PRs and approvals |
@@ -627,6 +700,7 @@ flowchart LR
         GH["GitHub service"]
         WATCH["File watcher"]
         AUD["Ledger + audit"]
+        SEC["Security scanner + gates"]
     end
     subgraph Local["Your machine"]
         FS[".agentroom/ files"]
@@ -642,6 +716,8 @@ flowchart LR
     TEAM --> GATE --> SDK
     SDK --> REPO
     TEAM --> AUD
+    TEAM --> SEC
+    SEC --> REPO
     GH --> GHCLI
     WATCH --> FS
     WATCH --> WS
@@ -658,7 +734,8 @@ flowchart LR
 | [`src/server/integrations/github/`](src/server/integrations/github) | GitHub Project (v2) via `gh api graphql`, hand-off |
 | [`src/server/http/`](src/server/http) | Hono app, token auth, routes, static UI |
 | [`src/server/realtime/`](src/server/realtime) | WebSocket hub and handler |
-| [`src/server/services/`](src/server/services) | Alerts, notifications, ledger, audit, account usage, models |
+| [`src/server/security/`](src/server/security) | Scanner, dependency guard, risk score, findings store, publish gate, injection guard |
+| [`src/server/services/`](src/server/services) | Alerts, notifications, ledger, audit, uploads, account usage, models |
 | [`src/server/watch/`](src/server/watch) | `.agentroom/` file watcher (chokidar) |
 | [`src/core/`](src/core) | Project paths, file repositories, git helpers |
 | [`src/shared/`](src/shared) | Zod schemas, enums, types shared with the UI |
@@ -683,6 +760,8 @@ All routes are under `/api` and require the token.
 | GitHub | `GET/PUT/PATCH/DELETE /github` · `POST /github/sync-columns` · `GET /github/items` · `GET /github/items/:id` · `POST /github/items/:id/assign` · `POST /github/handoff` |
 | Alerts | `GET /alerts` · `PUT /alerts` · `POST /alerts/test` |
 | Settings & governance | `GET /settings` · `PATCH /settings` · `GET /ledger` · `GET /audit` · `GET/PUT /integrations` |
+| Security | `GET /security/findings` · `POST /security/findings/:id/resolve` · `POST /security/scan` |
+| Uploads | `POST /uploads` · `GET /uploads/:id` · `GET /uploads/:id/meta` |
 | Files | `GET /files` (repo file search for `@` mentions, max 100) |
 
 </details>
@@ -862,8 +941,9 @@ Goal: people can comfortably let their bots work unattended. Security comes firs
 - [x] In-app browser
 - [x] GitHub Project board and hand-off
 - [x] Desktop alerts, inbox
-- [ ] **P0 Foundation:** run ledger, audit log, settings page
-- [ ] **P1 Security:** security phase, scanner, dependency guard, risk badges
+- [x] **P0 Foundation:** run ledger, audit log, settings page
+- [x] **P1 Security:** security phase, scanner, dependency guard, risk score and gates, injection guard
+- [x] Attachments in chat and goals
 - [ ] **P2 Review & isolation:** PR-style diffs with inline comments, worktrees, open PR
 - [ ] **P3 Control:** budgets, replay, goal templates, bot memory
 - [ ] **P4 Automation:** schedules, PR review from a link, insights, remote approvals

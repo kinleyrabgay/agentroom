@@ -29,7 +29,9 @@ export function createClientMessageRouter({ hub, team, permissions, previews, no
     }
     switch (msg.type) {
       case ClientMessageType.Send:
-        team.send(msg.botId, msg.text).catch(fail(msg.botId));
+        team
+          .send(msg.botId, String(msg.text ?? ''), undefined, Array.isArray(msg.attachments) ? { attachments: msg.attachments.map(String) } : {})
+          .catch(fail(msg.botId));
         break;
       case ClientMessageType.Stop:
         team.stop(msg.botId);

@@ -5,6 +5,10 @@ import { BotAvatar } from "@/components/shared/bot-avatar"
 import { Markdown } from "@/components/shared/markdown"
 import type { TranscriptItem } from "../lib/transcript"
 import { ToolGroup } from "./tool-group"
+import { MessageAttachments } from "@/features/attachments/components/message-attachments"
+
+/** Text sent when a message is only attachments; not worth a bubble. */
+const ATTACHMENTS_ONLY = "(see attachments)"
 
 export function ChatRow({ item, bot, nameOf, showAvatar }: {
   item: TranscriptItem
@@ -16,9 +20,12 @@ export function ChatRow({ item, bot, nameOf, showAvatar }: {
     return (
       <div className="ml-10 flex flex-col items-end gap-1">
         <span className="text-[11px] text-muted-foreground">{nameOf(item.from)}</span>
-        <div className="max-w-full rounded-2xl rounded-tr-md bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
-          {item.text}
-        </div>
+        {item.text && !(item.attachments.length && item.text === ATTACHMENTS_ONLY) && (
+          <div className="max-w-full rounded-2xl rounded-tr-md bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
+            {item.text}
+          </div>
+        )}
+        <MessageAttachments attachments={item.attachments} />
       </div>
     )
   }

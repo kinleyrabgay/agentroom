@@ -1,4 +1,4 @@
-import { createSdkMcpServer, query, tool, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { createSdkMcpServer, query, tool, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { APP_VERSION } from '../../../shared/constants.js';
 import { ProviderId } from '../../../shared/enums.js';
 import type { AccountUsage, ModelOption } from '../../../shared/types/index.js';
@@ -8,6 +8,7 @@ import { fetchClaudeAccountUsage } from './account-usage.js';
 import { fetchClaudeModels } from './model-options.js';
 import { buildSkillOptions } from './skill-options.js';
 import { ClaudeStreamMapper } from './stream-mapper.js';
+import { buildUserContent, singleUserMessage } from './user-content.js';
 
 /** Runs bots on the Claude Agent SDK (the user's Claude Code login or ANTHROPIC_API_KEY). */
 export class ClaudeProvider implements Provider {
@@ -22,8 +23,13 @@ export class ClaudeProvider implements Provider {
     const onAbort = () => abortController.abort();
     req.signal.addEventListener('abort', onAbort, { once: true });
 
+    // Plain text goes as a string; attachments need a structured user message (image/document blocks).
+    const prompt = req.attachments?.length
+      ? (singleUserMessage(buildUserContent(req.prompt, req.attachments)) as unknown as AsyncIterable<SDKUserMessage>)
+      : req.prompt;
+
     const q = query({
-      prompt: req.prompt,
+      prompt,
       options: {
         cwd,
         model: req.model,
@@ -39,6 +45,7 @@ export class ClaudeProvider implements Provider {
         systemPrompt: { type: 'preset', preset: 'claude_code', append: `${bot.prompt}\n\n${req.context}` },
         permissionMode: 'default',
         includePartialMessages: true,
+        ...(req.inspectToolOutput ? { hooks: { PostToolUse: [webOutputHook(req.inspectToolOutput)] } } : {}),
         canUseTool: async (toolName, input, { signal }) => {
           const answer = await req.askPermission(toolName, input, signal);
           return answer.allow ? { behavior: 'allow', updatedInput: input } : { behavior: 'deny', message: answer.message };
@@ -64,6 +71,24 @@ export class ClaudeProvider implements Provider {
   fetchAccountUsage(cwd: string): Promise<AccountUsage | null> {
     return fetchClaudeAccountUsage(cwd);
   }
+}
+
+/** Built-in tools whose output comes from the open web. */
+const WEB_TOOLS = 'WebFetch|WebSearch';
+
+/** Flag prompt injection in web content the bot just read, as extra context next to the tool result. */
+function webOutputHook(inspect: NonNullable<RunRequest['inspectToolOutput']>) {
+  return {
+    matcher: WEB_TOOLS,
+    hooks: [
+      async (input: { hook_event_name: string; tool_name?: string; tool_response?: unknown }) => {
+        if (input.hook_event_name !== 'PostToolUse' || !input.tool_name) return {};
+        const output = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response ?? '');
+        const warning = inspect(input.tool_name, output);
+        return warning ? { hookSpecificOutput: { hookEventName: 'PostToolUse' as const, additionalContext: warning } } : {};
+      },
+    ],
+  };
 }
 
 /** Expose AgentRoom's host tools to Claude as an in-process MCP server. */
