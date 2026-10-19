@@ -1,8 +1,29 @@
 {
   "name": "agentroom",
   "version": "0.1.0",
-  "description": "Visual control room for your coding agents. Team of bots, skills, live activity.",
+  "description": "Local control room for AI coding agents: run a team of Claude bots in any repo, watch every tool call live, and approve risky actions.",
   "type": "module",
+  "keywords": [
+    "ai",
+    "agents",
+    "coding-agent",
+    "claude",
+    "claude-agent-sdk",
+    "multi-agent",
+    "developer-tools",
+    "cli",
+    "code-review",
+    "automation"
+  ],
+  "homepage": "https://github.com/kinleyrabgay/agentroom#readme",
+  "bugs": {
+    "url": "https://github.com/kinleyrabgay/agentroom/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kinleyrabgay/agentroom.git"
+  },
+  "author": "Kinley Rabgay",
   "bin": {
     "agentroom": "dist/cli.js"
   },

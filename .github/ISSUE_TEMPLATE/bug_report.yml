@@ -1,0 +1,41 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. agentroom start
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: agentroom doctor output
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: AgentRoom version or commit
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, Node version, browser
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server output or browser console. Remove secrets first.
+      render: text
