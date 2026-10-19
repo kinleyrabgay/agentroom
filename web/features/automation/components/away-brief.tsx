@@ -9,6 +9,12 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ToneDot } from "@/components/kit/badge"
 
+/** Only a real brief (an older server may answer with something else, e.g. `{}`). */
+function asBrief(v: unknown): Brief | null {
+  const b = v as Partial<Brief> | null
+  return b && typeof b === "object" && typeof b.since === "string" && typeof b.spentUsd === "number" && typeof b.goalsDone === "number" ? (b as Brief) : null
+}
+
 const hours = (from: string, to: string) => Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 3_600_000))
 
 /** "While you were away": shown at the top of the Inbox after 2+ hours away, when something happened. */
@@ -16,7 +22,7 @@ export function AwayBrief() {
   const [brief, setBrief] = useState<Brief | null>(null)
   const goals = useAppStore((s) => s.goals)
   useEffect(() => {
-    automationApi.brief().then(setBrief).catch(() => {})
+    automationApi.brief().then((b) => setBrief(asBrief(b))).catch(() => setBrief(null))
   }, [goals])
   if (!brief) return null
 

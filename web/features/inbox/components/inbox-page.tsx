@@ -1,6 +1,7 @@
 "use client"
 
 import { AwayBrief } from "@/features/automation/components/away-brief"
+import { ErrorBoundary } from "@/components/shared/error-boundary"
 
 import { useEffect, useMemo, useState } from "react"
 import {
@@ -68,7 +69,10 @@ export function InboxPage() {
       </PageActions>
 
       <div className="mx-auto max-w-6xl space-y-8 px-6 py-5 pb-24">
-        <AwayBrief />
+        {/* Optional card: if it fails, the rest of the Inbox still shows. */}
+        <ErrorBoundary label="Brief" compact>
+          <AwayBrief />
+        </ErrorBoundary>
         {waiting === 0 ? (
           <EmptyState
             icon={CheckCheckIcon}
