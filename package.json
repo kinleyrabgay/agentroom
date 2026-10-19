@@ -1,7 +1,7 @@
 {
   "name": "@kinleyrabgay/agentroom",
-  "version": "0.0.1",
-  "description": "Local control room for AI coding agents: run a team of Claude bots in any repo, watch every tool call live, and approve risky actions.",
+  "version": "0.0.2",
+  "description": "Local control room for AI coding agents: a team of Claude bots in your repo, live tool calls, approvals, GitHub and Sentry hand-offs, schedules and one-click PRs.",
   "type": "module",
   "keywords": [
     "ai",
@@ -13,7 +13,11 @@
     "developer-tools",
     "cli",
     "code-review",
-    "automation"
+    "automation",
+    "sentry",
+    "mcp",
+    "scheduler",
+    "pull-requests"
   ],
   "homepage": "https://github.com/kinleyrabgay/agentroom#readme",
   "bugs": {

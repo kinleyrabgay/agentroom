@@ -1,13 +1,14 @@
 <div align="center">
 
-<img src="assets/brand/agentroom-mark.svg" width="72" height="72" alt="AgentRoom logo">
+<img src="https://raw.githubusercontent.com/kinleyrabgay/agentroom/main/assets/brand/agentroom-mark.svg" width="88" height="88" alt="AgentRoom logo">
 
 # AgentRoom
 
 **A local control room for your AI coding agents.**
 
 Run a team of bots (Team Lead, Planner, Developer, Security Auditor, QA, Reviewer) in any repository.<br>
-Watch every tool call live, chat with each bot, approve risky actions, and hand real work from your GitHub board to the team.
+Watch every tool call live, approve risky actions, hand GitHub cards and Sentry errors to the team,<br>
+and schedule work for later: wake up to a reviewed branch and a PR, not surprise edits.
 
 [![npm](https://img.shields.io/npm/v/@kinleyrabgay/agentroom.svg?logo=npm)](https://www.npmjs.com/package/@kinleyrabgay/agentroom)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -88,7 +89,7 @@ A single coding agent in a terminal is hard to supervise. You can't see what it'
 | 👀 **Everything is visible** | Every message, tool call, file edit and shell command streams into a local web UI as it happens. |
 | ✋ **You stay in control** | Edits and shell commands wait for approval. Dangerous commands (`git push`, `rm -rf`, `gh pr merge`, …) always ask. |
 | 📁 **Plain files, shared with your team** | Bots, skills and the task board live in `.agentroom/`. Commit it and everyone runs the same team. |
-| 🔒 **Local first** | The server binds to `127.0.0.1`, needs a per-run token, and stores no credentials. Bots reuse your own git, `gh` and Claude login. |
+| 🔒 **Local first** | The server binds to `127.0.0.1` and needs a per-run token. Bots reuse your own git, `gh` and Claude login; tokens you add (Sentry, MCP, webhooks) stay in a local, gitignored file. |
 
 ---
 
