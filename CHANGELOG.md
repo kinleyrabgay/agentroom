@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-10-19
+
+First public release on npm as `@kinleyrabgay/agentroom`.
+
 ### Added
 
 - Security Auditor bot and `security-review` skill.
@@ -23,11 +27,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Setting a phase's model in `settings.json` replaces the stored choice instead of merging, so a phase can be reset.
 
-## [0.1.0] - 2026-10-19
-
-Initial release.
-
-### Added
+### Included from the initial build
 
 - `agentroom` CLI: `init`, `start`, `bot add|list`, `skill add|list`, `doctor`.
 - Default team of five bots (Team Lead, Planner, Developer, QA, Reviewer) with personas.
@@ -42,5 +42,5 @@ Initial release.
 - Run ledger, append-only audit log, usage tracking and alerts.
 - Server bound to `127.0.0.1` with a per-run access token.
 
-[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/kinleyrabgay/agentroom/releases/tag/v0.1.0
+[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/kinleyrabgay/agentroom/releases/tag/v0.0.1

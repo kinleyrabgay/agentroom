@@ -1,6 +1,6 @@
 {
-  "name": "agentroom",
-  "version": "0.1.0",
+  "name": "@kinleyrabgay/agentroom",
+  "version": "0.0.1",
   "description": "Local control room for AI coding agents: run a team of Claude bots in any repo, watch every tool call live, and approve risky actions.",
   "type": "module",
   "keywords": [
@@ -42,7 +42,8 @@
     "typecheck": "tsc --noEmit && npm --prefix web run typecheck",
     "test": "vitest run",
     "lint": "npm --prefix web run lint",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "prepublishOnly": "npm run check && npm run build"
   },
   "license": "MIT",
   "dependencies": {
@@ -64,5 +65,8 @@
   },
   "allowScripts": {
     "esbuild@0.28.2": true
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

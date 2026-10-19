@@ -7,6 +7,7 @@
 Run a team of bots (Team Lead, Planner, Developer, Security Auditor, QA, Reviewer) in any repository.<br>
 Watch every tool call live, chat with each bot, approve risky actions, and hand real work from your GitHub board to the team.
 
+[![npm](https://img.shields.io/npm/v/@kinleyrabgay/agentroom.svg?logo=npm)](https://www.npmjs.com/package/@kinleyrabgay/agentroom)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?logo=typescript&logoColor=white)](tsconfig.json)
@@ -100,8 +101,13 @@ A single coding agent in a terminal is hard to supervise. You can't see what it'
 | **Claude Code login** *or* `ANTHROPIC_API_KEY` | Auth for the Claude Agent SDK | `claude --version` |
 | **GitHub CLI** *(optional)* | GitHub board, PRs | `gh auth status` |
 
-> [!NOTE]
-> AgentRoom is not published to npm yet. Install it from source.
+### Install
+
+```bash
+npm install -g @kinleyrabgay/agentroom
+```
+
+The command is `agentroom`. Or run it once without installing: `npx @kinleyrabgay/agentroom start`.
 
 ### Install from source
 

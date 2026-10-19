@@ -1,7 +1,7 @@
 /** Constants shared by the CLI, server and web UI. Keep this file dependency-free. */
 
 export const APP_NAME = 'AgentRoom';
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.0.1';
 
 /** Folder AgentRoom creates in the user's project. */
 export const PROJECT_DIR = '.agentroom';
