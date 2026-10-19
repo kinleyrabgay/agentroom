@@ -10,11 +10,11 @@ export function SaveIndicator({ status }: { status: SaveStatus }) {
     <span className="flex items-center gap-1 text-xs font-normal text-muted-foreground" aria-live="polite">
       {status === SaveStatus.Saving ? (
         <>
-          <Loader2Icon className="size-3 animate-spin" /> Saving…
+          <Loader2Icon className="size-3.5 animate-spin" /> Saving…
         </>
       ) : (
         <>
-          <CheckIcon className="size-3 text-emerald-500" /> Saved
+          <CheckIcon className="tone-success tone-text size-3.5" /> Saved
         </>
       )}
     </span>

@@ -86,7 +86,7 @@ export function UsageCard({ usage, account, provider, providerName, claude }: {
       </div>
 
       <Separator />
-      <p className="px-4 py-2.5 text-[11px] text-muted-foreground">
+      <p className="px-4 py-2.5 text-xs text-muted-foreground">
         Plan usage covers every Claude app on your account. Token counts and costs cover only AgentRoom&apos;s bots; costs are estimates.
       </p>
     </div>
@@ -159,7 +159,7 @@ function BotBreakdown({ usage, claude }: { usage: UsageSummary; claude: boolean 
                 {fill !== undefined && (
                   <div className="mt-1 flex items-center gap-2" title={`${compact(u.contextUsed!)} of ${compact(u.contextWindow!)} context tokens on the last turn`}>
                     <MeterBar value={fill} tone={toneFor(sev, claude)} />
-                    <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground tabular-nums">ctx {pct(fill)}</span>
+                    <span className="w-16 shrink-0 text-right text-xs text-muted-foreground tabular-nums">ctx {pct(fill)}</span>
                   </div>
                 )}
               </div>
@@ -179,7 +179,7 @@ function ModelBreakdown({ usage }: { usage: UsageSummary }) {
       <ul className="space-y-1.5 text-xs">
         {models.map(([model, u]) => (
           <li key={model} className="flex items-center justify-between gap-2">
-            <span className="truncate font-mono text-[11px]">{model}</span>
+            <span className="truncate font-mono text-xs">{model}</span>
             <span className="shrink-0 text-muted-foreground tabular-nums">
               {compact(totalTokens(u))} · {usd(u.costUsd)}
             </span>
@@ -194,8 +194,8 @@ function Section({ title, aside, children }: { title: string; aside?: string; ch
   return (
     <section>
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h4 className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{title}</h4>
-        {aside && <span className="text-[10px] text-muted-foreground">{aside}</span>}
+        <h4 className="text-xs font-medium text-muted-foreground">{title}</h4>
+        {aside && <span className="text-xs text-muted-foreground">{aside}</span>}
       </div>
       {children}
     </section>
@@ -205,7 +205,7 @@ function Section({ title, aside, children }: { title: string; aside?: string; ch
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </div>
   )

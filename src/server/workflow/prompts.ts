@@ -20,6 +20,7 @@ export function planPrompt(goal: Goal, roles: TeamRoles, existing: Task[]): stri
     `# Plan goal ${goal.id}: ${goal.title}`,
     `The human's request:`,
     fence(goal.brief),
+    goal.guidance ? `## How to approach this ${goal.template ? `"${goal.template.name}" ` : ''}goal (team template)\n${goal.guidance.trim()}` : '',
     replan && goal.feedback ? `## The human reviewed your previous plan and asked for changes\n${fence(goal.feedback)}` : '',
     replan && existing.length
       ? `## Current tasks for ${goal.id}\n${existing.map(taskLine).join('\n')}\nRevise them: \`${T.TaskUpdate}\` to change, \`${T.TaskDelete}\` to remove, \`${T.TaskCreate}\` to add. Don't duplicate tasks that are still right.`
@@ -50,7 +51,9 @@ export function buildPrompt(goal: Goal, task: Task, previousBlock?: string): str
     `- Log meaningful progress with \`${T.TaskUpdate}\` appendLog (what you changed, commands run and their result).`,
     `- Tick acceptance criteria as you satisfy them with \`${T.TaskUpdate}\` acceptanceDone (0-based indexes).`,
     `- Add or update unit tests and run them (and the build/lint the project uses) before you finish.`,
-    `- Commit your work on branch \`agentroom/${goal.id.toLowerCase()}\` (create it if needed) with a clear message. Do not push.`,
+    goal.worktree
+      ? `- You're in the goal's own folder on branch \`${goal.worktree.branch}\` (already checked out; don't switch branches). AgentRoom commits your changes as a checkpoint when the task ends. Do not push.`
+      : `- Commit your work on branch \`agentroom/${goal.id.toLowerCase()}\` (create it if needed) with a clear message. Do not push.`,
     `- When done, set status "review" with \`${T.TaskUpdate}\`.`,
     `- If you are blocked (missing access, a decision only the human can make, broken environment): set \`blockedReason\` with \`${T.TaskUpdate}\` and ask with \`${T.AskHuman}\`. If the answer unblocks you, clear blockedReason (null) and continue.`,
     `Finish with a short summary: files changed, tests run and results.`,

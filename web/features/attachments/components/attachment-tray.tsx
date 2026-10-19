@@ -63,7 +63,7 @@ function FileChip({ draft, onRemove, onRetry }: { draft: DraftAttachment; onRemo
         <FileKindIcon kind={draft.kind} />
       )}
       <span className="min-w-0 truncate">{draft.name}</span>
-      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
         {draft.status === DraftStatus.Uploading ? `${Math.round(draft.progress * 100)}%` : formatBytes(draft.file.size)}
       </span>
       {failed && (

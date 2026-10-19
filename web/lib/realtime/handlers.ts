@@ -111,6 +111,10 @@ function applyState(ev: StateEvent) {
       return set({ settings: ev.settings })
     case StateType.Findings:
       return setFindings(ev.findings)
+    case StateType.Automation:
+      return set({ automation: ev.automation })
+    case StateType.Mcp:
+      return set({ mcp: ev.mcp })
     case StateType.Config:
       return set((s) => ({ info: s.info ? { ...s.info, config: ev.config, model: ev.config.model } : s.info }))
   }

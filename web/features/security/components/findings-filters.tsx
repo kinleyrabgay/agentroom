@@ -1,13 +1,14 @@
 "use client"
 
-import { SearchIcon } from "lucide-react"
+import { SearchIcon, XIcon } from "lucide-react"
 import { FindingCategory, FindingSeverity, FindingStatus, type Goal } from "@shared"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dropdown } from "@/components/kit/dropdown"
 import { ALL, CATEGORY_META, SEVERITY_META, STATUS_META } from "../constants"
-import type { FindingFilters } from "../lib/findings"
+import { DEFAULT_FILTERS, type FindingFilters } from "../lib/findings"
 
-/** Filter bar: goal, severity, status, category, search. */
+/** Search, then one row of filter pills (goal, severity, status, category). Changed pills are highlighted. */
 export function FindingsFilters({
   filters,
   onChange,
@@ -21,79 +22,65 @@ export function FindingsFilters({
 }) {
   const set = (patch: Partial<FindingFilters>) => onChange({ ...filters, ...patch })
   const pick = <T extends string>(v: string) => (v === ALL ? null : (v as T))
+  const changed =
+    (showGoal && !!filters.goalId) || !!filters.severity || filters.status !== DEFAULT_FILTERS.status || !!filters.category || !!filters.search
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-48 flex-1">
-        <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative min-w-56 flex-1">
+        <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.search}
           onChange={(e) => set({ search: e.target.value })}
           placeholder="Search findings, files, rules"
-          className="h-8 pl-8 text-sm"
+          className="h-8 rounded-full pl-9 text-[13px]"
           aria-label="Search findings"
         />
       </div>
       {showGoal && (
-        <Select value={filters.goalId ?? ALL} onValueChange={(v) => set({ goalId: pick(v) })}>
-          <SelectTrigger size="sm" className="w-40" aria-label="Goal">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All goals</SelectItem>
-            {goals.map((g) => (
-              <SelectItem key={g.id} value={g.id}>
-                <span className="font-mono text-xs">{g.id}</span> <span className="truncate">{g.title}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Dropdown<string>
+          variant="pill"
+          label="Goal"
+          active={!!filters.goalId}
+          hint="Find a goal"
+          popoverWidth={300}
+          datas={[{ label: "All goals", value: ALL }, ...goals.map((g) => ({ label: g.id, sublabel: g.title, value: g.id }))]}
+          selectedValue={filters.goalId ?? ALL}
+          onSelect={(v) => set({ goalId: pick(v as string) })}
+        />
       )}
-      <Select value={filters.severity ?? ALL} onValueChange={(v) => set({ severity: pick<FindingSeverity>(v) })}>
-        <SelectTrigger size="sm" className="w-36" aria-label="Severity">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Any severity</SelectItem>
-          {Object.values(FindingSeverity).map((s) => {
-            const Icon = SEVERITY_META[s].icon
-            return (
-              <SelectItem key={s} value={s}>
-                <Icon className={SEVERITY_META[s].text} /> {SEVERITY_META[s].label}
-              </SelectItem>
-            )
-          })}
-        </SelectContent>
-      </Select>
-      <Select value={filters.status ?? ALL} onValueChange={(v) => set({ status: pick<FindingStatus>(v) })}>
-        <SelectTrigger size="sm" className="w-36" aria-label="Status">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Any status</SelectItem>
-          {Object.values(FindingStatus).map((s) => (
-            <SelectItem key={s} value={s}>
-              {STATUS_META[s].label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={filters.category ?? ALL} onValueChange={(v) => set({ category: pick(v) })}>
-        <SelectTrigger size="sm" className="w-44" aria-label="Category">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Any category</SelectItem>
-          {Object.values(FindingCategory).map((c) => {
-            const Icon = CATEGORY_META[c].icon
-            return (
-              <SelectItem key={c} value={c}>
-                <Icon /> {CATEGORY_META[c].label}
-              </SelectItem>
-            )
-          })}
-        </SelectContent>
-      </Select>
+      <Dropdown<string>
+        variant="pill"
+        label="Severity"
+        active={!!filters.severity}
+        showSearch={false}
+        datas={[{ label: "Any", value: ALL }, ...Object.values(FindingSeverity).map((s) => ({ label: SEVERITY_META[s].label, value: s }))]}
+        selectedValue={filters.severity ?? ALL}
+        onSelect={(v) => set({ severity: pick<FindingSeverity>(v as string) })}
+      />
+      <Dropdown<string>
+        variant="pill"
+        label="Status"
+        active={filters.status !== DEFAULT_FILTERS.status}
+        showSearch={false}
+        datas={[{ label: "Any", value: ALL }, ...Object.values(FindingStatus).map((s) => ({ label: STATUS_META[s].label, value: s }))]}
+        selectedValue={filters.status ?? ALL}
+        onSelect={(v) => set({ status: pick<FindingStatus>(v as string) })}
+      />
+      <Dropdown<string>
+        variant="pill"
+        label="Category"
+        active={!!filters.category}
+        hint="Find a category"
+        datas={[{ label: "Any", value: ALL }, ...Object.values(FindingCategory).map((c) => ({ label: CATEGORY_META[c].label, value: c }))]}
+        selectedValue={filters.category ?? ALL}
+        onSelect={(v) => set({ category: pick<FindingCategory>(v as string) })}
+      />
+      {changed && (
+        <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onChange({ ...DEFAULT_FILTERS, goalId: showGoal ? null : filters.goalId })}>
+          <XIcon data-icon="inline-start" /> Reset
+        </Button>
+      )}
     </div>
   )
 }

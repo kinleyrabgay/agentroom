@@ -119,7 +119,7 @@ function LibrarySection({ bot }: { bot: Bot }) {
                   </Tooltip>
                 )}
                 {ownNames.has(s.name) && (
-                  <Badge variant="outline" className="border-dashed text-[10px]">customized</Badge>
+                  <Badge variant="outline" className="border-dashed text-xs font-normal">customized</Badge>
                 )}
               </li>
             )
@@ -173,16 +173,16 @@ function OwnSkillRow({ bot, skill, onEdit }: { bot: Bot; skill: Skill; onEdit: (
   return (
     <li className="group flex items-start gap-3 px-3 py-2.5">
       <SparklesIcon className="mt-0.5 size-4 shrink-0" style={{ color: bot.color }} />
-      <button onClick={onEdit} className="min-w-0 flex-1 text-left">
+      <button onClick={onEdit} className="min-w-0 flex-1 rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">
         <div className="font-mono text-xs font-medium">{skill.name}</div>
         <div className="line-clamp-2 text-xs text-muted-foreground">{skill.description}</div>
       </button>
-      <Button variant="ghost" size="icon-xs" onClick={onEdit} title="Edit">
+      <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label={`Edit ${skill.name}`}>
         <PencilIcon />
       </Button>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="icon-xs" className="text-destructive" title="Delete">
+          <Button variant="ghost" size="icon-xs" className="tone-danger tone-text" aria-label={`Delete ${skill.name}`}>
             <Trash2Icon />
           </Button>
         </AlertDialogTrigger>

@@ -8,6 +8,8 @@ import type { Goal, Task } from './task.js';
 import type { Notification } from './notification.js';
 import type { Settings } from './settings.js';
 import type { SecurityFinding } from './security.js';
+import type { McpSnapshot } from './mcp.js';
+import type { AutomationSnapshot } from './automation.js';
 import type { AccountUsage, UsageSummary } from './usage.js';
 
 export type StatusMap = Record<string, { status: BotStatus; activity?: string }>;
@@ -20,7 +22,9 @@ export type StateEvent =
   | { type: typeof StateType.Goals; goals: Goal[] }
   | { type: typeof StateType.Settings; settings: Settings }
   | { type: typeof StateType.Findings; findings: SecurityFinding[] }
-  | { type: typeof StateType.Config; config: Config };
+  | { type: typeof StateType.Config; config: Config }
+  | { type: typeof StateType.Mcp; mcp: McpSnapshot }
+  | { type: typeof StateType.Automation; automation: AutomationSnapshot };
 
 export interface HelloMessage {
   kind: typeof ServerMessageKind.Hello;

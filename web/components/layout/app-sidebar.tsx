@@ -1,10 +1,17 @@
 "use client"
 
 import { useTheme } from "next-themes"
-import { GitBranchIcon, GlobeIcon, ListChecksIcon, MoonIcon, NetworkIcon, ScrollTextIcon, SettingsIcon, ShieldIcon, SquareKanbanIcon, SunIcon, type LucideIcon } from "lucide-react"
-import { APP_NAME, BotStatus, GoalStatus, TaskStatus } from "@shared"
+import { useSentryStore } from "@/features/sentry/lib/sentry-store"
+import { GitBranchIcon, GlobeIcon, MoonIcon, SearchIcon, SunIcon } from "lucide-react"
+import { APP_NAME, BotStatus, TaskStatus } from "@shared"
 import { View } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
+import { VIEW_META } from "@/lib/views"
+import { useNeedsYou } from "@/hooks/use-needs-you"
+import { LogoMark } from "@/components/kit/logo"
+import { ToneDot } from "@/components/kit/badge"
+import { TONE_CLASS, type Tone } from "@/components/kit/tone"
+import { Kbd } from "@/components/ui/kbd"
 import {
   Sidebar,
   SidebarContent,
@@ -33,15 +40,15 @@ import { cn } from "@/lib/utils"
 export function AppSidebar() {
   return (
     <Sidebar variant="floating" collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="gap-2">
         <ProjectHeader />
+        <SearchButton />
       </SidebarHeader>
       <SidebarContent>
-        <ErrorBoundary label="Workspace" compact>
-          <WorkspaceNav />
-        </ErrorBoundary>
-        <ErrorBoundary label="Governance" compact>
-          <GovernanceNav />
+        <ErrorBoundary label="Navigation" compact>
+          <PrimaryNav />
+          <SourcesNav />
+          <OversightNav />
         </ErrorBoundary>
         <BotList />
         <SkillLibrary />
@@ -61,9 +68,9 @@ function ProjectHeader() {
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent active:bg-transparent">
-          <div className="grid size-8 place-items-center rounded-lg bg-primary text-base text-primary-foreground">🧭</div>
+          <LogoMark />
           <div className="grid min-w-0 flex-1 text-left leading-tight">
-            <span className="truncate font-semibold">{APP_NAME}</span>
+            <span className="truncate font-semibold tracking-tight">{APP_NAME}</span>
             <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
               {info?.name ?? "…"}
               {info?.branch && (
@@ -80,24 +87,41 @@ function ProjectHeader() {
   )
 }
 
-function WorkspaceNav() {
+/** Search and commands. Opens the ⌘K palette. */
+function SearchButton() {
+  const setPalette = useAppStore((s) => s.setPaletteOpen)
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          onClick={() => setPalette(true)}
+          tooltip="Search  ⌘K"
+          className="h-8 border bg-sidebar text-muted-foreground shadow-xs hover:text-foreground"
+        >
+          <SearchIcon className="size-4" />
+          <span>Search</span>
+          <Kbd className="ml-auto group-data-[collapsible=icon]:hidden">⌘K</Kbd>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+/** Where you spend the day: the team, what needs you, the work. */
+function PrimaryNav() {
   const view = useAppStore((s) => s.view)
   const setView = useAppStore((s) => s.setView)
+  const needs = useNeedsYou()
   const openTasks = useAppStore((s) => s.tasks.filter((t) => t.status !== TaskStatus.Done).length)
-  const openPages = useAppStore((s) => Object.keys(s.previews).length)
-  const myCards = useGithubStore((s) => myOpenCount(s.board?.items, s.board?.viewer))
-  const needsReview = useAppStore((s) => s.goals.some((g) => g.status === GoalStatus.AwaitingApproval))
-
+  const failedRuns = useAppStore((s) => s.automation?.failedSinceSeen ?? 0)
   const items: NavItem[] = [
-    { view: View.Team, label: "Team", icon: NetworkIcon },
-    { view: View.Board, label: "Board", icon: SquareKanbanIcon, badge: myCards },
-    { view: View.Tasks, label: "Tasks", icon: ListChecksIcon, badge: openTasks, alert: needsReview && "a plan needs your review" },
-    { view: View.Browser, label: "Browser", icon: GlobeIcon, badge: openPages },
+    { view: View.Team, badge: 0 },
+    { view: View.Inbox, badge: needs.total, tone: "warning", badgeLabel: `${needs.total} waiting on you` },
+    { view: View.Work, badge: openTasks, badgeLabel: `${openTasks} open tasks`, alert: needs.plans > 0 && "a plan needs your review" },
+    { view: View.Automation, badge: failedRuns, tone: "danger", badgeLabel: `${failedRuns} automation ${failedRuns === 1 ? "run" : "runs"} failed` },
   ]
-
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+    <SidebarGroup className="pt-0">
       <SidebarGroupContent>
         <NavItems items={items} active={view} onSelect={setView} />
       </SidebarGroupContent>
@@ -105,27 +129,46 @@ function WorkspaceNav() {
   )
 }
 
-/** Oversight of what the bots did. */
-function GovernanceNav() {
+/** Where work comes from. */
+function SourcesNav() {
+  const view = useAppStore((s) => s.view)
+  const setView = useAppStore((s) => s.setView)
+  const openPages = useAppStore((s) => Object.keys(s.previews).length)
+  const myCards = useGithubStore((s) => myOpenCount(s.board?.items, s.board?.viewer))
+  // New or regressed issues in the list the Sentry page last loaded.
+  const freshIssues = useSentryStore((s) => s.issues.filter((i) => i.substatus === "new" || i.substatus === "regressed").length)
+  const items: NavItem[] = [
+    { view: View.Github, badge: myCards, badgeLabel: `${myCards} open cards assigned to you` },
+    { view: View.Sentry, badge: freshIssues, tone: "danger", badgeLabel: `${freshIssues} new or regressed ${freshIssues === 1 ? "issue" : "issues"}` },
+    { view: View.Browser, badge: openPages, badgeLabel: `${openPages} open pages` },
+  ]
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Sources</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <NavItems items={items} active={view} onSelect={setView} />
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
+/** What the bots did. */
+function OversightNav() {
   const view = useAppStore((s) => s.view)
   const setView = useAppStore((s) => s.setView)
   const { openCritical, openWarning } = useFindingCounts()
   const items: NavItem[] = [
     {
       view: View.Security,
-      label: "Security",
-      icon: ShieldIcon,
-      // Red for open critical findings; amber when only warnings are open.
       badge: openCritical || openWarning,
-      badgeClassName: openCritical
-        ? "bg-red-500/15 text-red-700 dark:text-red-300"
-        : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+      tone: openCritical ? "danger" : "warning",
       badgeLabel: openCritical ? `${openCritical} open critical` : `${openWarning} open warnings`,
     },
-    { view: View.Audit, label: "Audit log", icon: ScrollTextIcon },
+    { view: View.Audit },
+    { view: View.Insights },
   ]
   return (
-    <CollapsibleSidebarGroup id="governance" label="Governance">
+    <CollapsibleSidebarGroup id="governance" label="Oversight">
       <SidebarGroupContent>
         <NavItems items={items} active={view} onSelect={setView} />
       </SidebarGroupContent>
@@ -136,41 +179,65 @@ function GovernanceNav() {
 function SettingsNav() {
   const view = useAppStore((s) => s.view)
   const setView = useAppStore((s) => s.setView)
-  return <NavItems items={[{ view: View.Settings, label: "Settings", icon: SettingsIcon }]} active={view} onSelect={setView} />
+  const { connections } = useNeedsYou()
+  const items: NavItem[] = [
+    {
+      view: View.Settings,
+      badge: connections,
+      tone: "warning",
+      badgeLabel: `${connections} ${connections === 1 ? "integration needs" : "integrations need"} you`,
+    },
+  ]
+  return <NavItems items={items} active={view === View.Connections ? View.Settings : view} onSelect={setView} />
 }
 
 interface NavItem {
   view: View
-  label: string
-  icon: LucideIcon
   badge?: number
-  /** Overrides the badge's neutral look (e.g. severity colors). */
-  badgeClassName?: string
+  /** Badge tone; neutral counts stay quiet. */
+  tone?: Tone
   /** Accessible description of the badge. */
   badgeLabel?: string
-  /** Amber dot with this reason in the tooltip. */
+  /** Small warning dot with this reason in the tooltip. */
   alert?: string | false
 }
 
 function NavItems({ items, active, onSelect }: { items: NavItem[]; active: View; onSelect: (v: View) => void }) {
   return (
     <SidebarMenu>
-      {items.map(({ view: v, label, icon: Icon, badge = 0, badgeClassName, badgeLabel, alert }) => (
-        <SidebarMenuItem key={v}>
-          <SidebarMenuButton isActive={active === v} onClick={() => onSelect(v)} tooltip={alert ? `${label} — ${alert}` : label}>
-            <span className="relative">
-              <Icon className="size-4" />
-              {alert && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-amber-500 ring-2 ring-sidebar" />}
-            </span>
-            <span>{label}</span>
-          </SidebarMenuButton>
-          {badge > 0 && (
-            <SidebarMenuBadge className={cn(badgeClassName && "rounded-full px-1.5", badgeClassName)} aria-label={badgeLabel} title={badgeLabel}>
-              {badge}
-            </SidebarMenuBadge>
-          )}
-        </SidebarMenuItem>
-      ))}
+      {items.map(({ view: v, badge = 0, tone, badgeLabel, alert }) => {
+        const { label, icon: Icon } = VIEW_META[v]
+        const on = active === v
+        return (
+          <SidebarMenuItem key={v}>
+            <SidebarMenuButton
+              isActive={on}
+              onClick={() => onSelect(v)}
+              tooltip={alert ? `${label}: ${alert}` : label}
+              aria-current={on ? "page" : undefined}
+              className="data-[active=true]:font-medium"
+            >
+              <span className="relative">
+                <Icon className={cn("size-4", on && "text-brand")} />
+                {alert && <ToneDot tone="warning" className="absolute -top-1 -right-1 size-2 ring-2 ring-sidebar" />}
+              </span>
+              <span>{label}</span>
+            </SidebarMenuButton>
+            {badge > 0 && (
+              <SidebarMenuBadge
+                aria-label={badgeLabel}
+                title={badgeLabel}
+                className={cn(
+                  "rounded-full px-1.5 tabular-nums",
+                  tone ? cn(TONE_CLASS[tone], "tone-soft border") : "text-muted-foreground"
+                )}
+              >
+                {badge}
+              </SidebarMenuBadge>
+            )}
+          </SidebarMenuItem>
+        )
+      })}
     </SidebarMenu>
   )
 }
@@ -200,12 +267,12 @@ function BotList() {
                   <BotAvatar bot={b} showStatus className="size-6 rounded-md text-sm" />
                   <div className="grid min-w-0 leading-tight">
                     <span className="truncate">{b.name}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">{active ? (st.activity ?? st.status) : b.role}</span>
+                    <span className="truncate text-xs text-muted-foreground">{active ? (st.activity ?? st.status) : b.role}</span>
                   </div>
                 </SidebarMenuButton>
                 {previews[b.id] && (
                   <SidebarMenuBadge>
-                    <GlobeIcon className="size-3.5 text-sky-500" />
+                    <GlobeIcon className="size-3.5 text-info" />
                   </SidebarMenuBadge>
                 )}
               </SidebarMenuItem>
@@ -226,7 +293,7 @@ function FooterStatus() {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex items-center gap-1.5">
-            <span className={`size-2 rounded-full ${connected ? "bg-emerald-500" : "animate-pulse bg-destructive"}`} />
+            <ToneDot tone={connected ? "success" : "danger"} pulse={!connected} />
             <span className="group-data-[collapsible=icon]:hidden">{connected ? "Live" : "Reconnecting"}</span>
           </span>
         </TooltipTrigger>
@@ -237,7 +304,7 @@ function FooterStatus() {
         size="icon-sm"
         className="ml-auto group-data-[collapsible=icon]:ml-0"
         onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-        title="Toggle theme"
+        aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
       >
         {resolvedTheme === "dark" ? <SunIcon /> : <MoonIcon />}
       </Button>

@@ -8,19 +8,21 @@ import { DragType } from "@/lib/constants"
 import { taskApi } from "@/lib/api/endpoints"
 import { orderForDrop } from "../lib/reorder"
 import { TaskCard } from "./task-card"
+import { ToneDot } from "@/components/kit/badge"
+import type { Tone } from "@/components/kit/tone"
 
 /** Kanban column. Dropping a card moves it here, at the position under the cursor. */
 export function TaskColumn({
   status,
   label,
   hint,
-  dot,
+  tone,
   tasks,
 }: {
   status: TaskStatus
   label: string
   hint?: string
-  dot: string
+  tone: Tone
   tasks: Task[]
 }) {
   const [over, setOver] = useState(false)
@@ -60,18 +62,15 @@ export function TaskColumn({
           .update(id, { status, order: orderForDrop(tasks, id, target) })
           .catch((err: Error) => toast.error(err.message))
       }}
+      aria-label={`${label}: ${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`}
+      role="region"
       className={cn(
-        "flex min-h-0 min-w-64 flex-col rounded-2xl bg-muted/40 transition-colors",
-        over && "bg-muted/70 ring-2 ring-primary/20"
+        "flex min-h-0 w-72 shrink-0 flex-col rounded-2xl border border-transparent bg-sunken transition-colors",
+        over && "border-brand/40 bg-brand/5"
       )}
     >
-      <div className="flex items-baseline gap-2 px-3 pt-3 pb-2">
-        <span
-          className={cn(
-            "size-2 shrink-0 translate-y-[-1px] self-center rounded-full",
-            dot
-          )}
-        />
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+        <ToneDot tone={tone} />
         <span className="text-sm font-medium">{label}</span>
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
@@ -88,13 +87,13 @@ export function TaskColumn({
           />
         ))}
         {over && before === null && tasks.length > 0 && (
-          <div className="mx-1 h-0.5 rounded-full bg-primary" />
+          <div className="mx-1 h-0.5 rounded-full bg-brand" />
         )}
         {!tasks.length && (
           <div
             className={cn(
               "grid h-20 place-items-center rounded-xl border border-dashed text-xs text-muted-foreground",
-              over && "border-primary/50"
+              over && "border-brand/50 text-foreground"
             )}
           >
             {over ? "Drop here" : "Nothing here"}

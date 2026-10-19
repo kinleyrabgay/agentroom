@@ -180,7 +180,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, Props>(function
             menuClassName
           )}
         >
-          <div className="border-b px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="border-b px-3 py-1.5 text-xs font-medium text-muted-foreground">
             {trigger.title}
             {active.query && <span className="font-mono"> · {active.char + active.query}</span>}
           </div>
@@ -205,9 +205,9 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, Props>(function
                 {s.icon && <span className="shrink-0">{s.icon}</span>}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-mono text-xs">{s.label}</span>
-                  {s.description && <span className="block truncate text-[11px] text-muted-foreground">{s.description}</span>}
+                  {s.description && <span className="block truncate text-xs text-muted-foreground">{s.description}</span>}
                 </span>
-                {s.hint && <span className="shrink-0 text-[10px] text-muted-foreground">{s.hint}</span>}
+                {s.hint && <span className="shrink-0 text-xs text-muted-foreground">{s.hint}</span>}
               </li>
             ))}
           </ul>

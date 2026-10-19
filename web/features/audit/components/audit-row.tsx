@@ -6,7 +6,7 @@ import type { AuditEntry } from "@shared"
 import { cn } from "@/lib/utils"
 import { timeAgo } from "@/lib/time"
 import { useAppStore } from "@/lib/store/app-store"
-import { Badge } from "@/components/ui/badge"
+import { ToneBadge } from "@/components/kit/badge"
 import { Button } from "@/components/ui/button"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { KIND_META, MONO_KINDS } from "../lib/meta"
@@ -22,21 +22,23 @@ export function AuditRow({ entry, now }: { entry: AuditEntry; now: number }) {
   const ts = Date.parse(entry.ts)
 
   return (
-    <li className={cn("border-b last:border-b-0", open && "bg-muted/30")}>
+    <li className={cn("border-b last:border-b-0", open && "bg-sunken/60")}>
       <div
         role="button"
         tabIndex={0}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpen(!open))}
-        className="grid cursor-pointer grid-cols-[16px_88px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 hover:bg-muted/40 md:grid-cols-[16px_88px_120px_minmax(0,1fr)_auto]"
+        className="grid cursor-pointer grid-cols-[16px_88px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-2.5 outline-none hover:bg-accent/60 focus-visible:bg-accent md:grid-cols-[16px_88px_132px_minmax(0,1fr)_auto]"
       >
         <ChevronRightIcon className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
         <time dateTime={entry.ts} title={new Date(ts).toLocaleString()} className="text-xs text-muted-foreground tabular-nums">
           {timeAgo(ts, now)}
         </time>
-        <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
-          <KindIcon className="size-3.5" /> {kind.label}
+        <span className="hidden md:flex">
+          <ToneBadge tone="neutral" icon={KindIcon} className="font-normal">
+            {kind.label}
+          </ToneBadge>
         </span>
         <span className="flex min-w-0 items-center gap-2">
           <KindIcon className="size-3.5 shrink-0 text-muted-foreground md:hidden" />
@@ -51,8 +53,8 @@ export function AuditRow({ entry, now }: { entry: AuditEntry; now: number }) {
                 e.stopPropagation()
                 showOnTasks({ goalId: entry.goalId })
               }}
-              className="hidden rounded-md border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground sm:inline"
-              title="Open this goal in Tasks"
+              className="hidden rounded-md border px-1.5 py-0.5 font-mono text-xs text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 sm:inline"
+              aria-label={`Open ${entry.goalId} in Work`}
             >
               {entry.goalId}
               {entry.taskId && ` · ${entry.taskId}`}
@@ -61,9 +63,9 @@ export function AuditRow({ entry, now }: { entry: AuditEntry; now: number }) {
           {bot && <BotAvatar bot={bot} className="size-5 rounded-md text-[10px]" />}
           <ActorChip actor={entry.actor} />
           {entry.decision && (
-            <Badge variant={entry.decision === "denied" ? "destructive" : "secondary"} className="font-normal">
+            <ToneBadge tone={entry.decision === "denied" ? "danger" : "success"} dot>
               {entry.decision === "denied" ? "Denied" : "Allowed"}
-            </Badge>
+            </ToneBadge>
           )}
         </span>
       </div>
@@ -86,11 +88,11 @@ function AuditDetail({ entry }: { entry: AuditEntry }) {
   }
   return (
     <div className="px-4 pb-3 pl-11">
-      <div className="relative rounded-lg border bg-background">
+      <div className="relative rounded-lg border bg-surface">
         <Button size="icon-xs" variant="ghost" className="absolute top-1.5 right-1.5" onClick={copy} aria-label="Copy entry as JSON">
           {copied ? <CheckIcon /> : <CopyIcon />}
         </Button>
-        <pre className="max-h-80 overflow-auto p-3 pr-10 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">{json}</pre>
+        <pre className="max-h-80 overflow-auto p-3 pr-10 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">{json}</pre>
       </div>
     </div>
   )

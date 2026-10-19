@@ -38,6 +38,20 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    /* Brand and status tones (see :root). `*-ink` is the readable text colour on a soft tone fill. */
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-brand-ink: var(--brand-ink);
+    --color-success: var(--success);
+    --color-success-ink: var(--success-ink);
+    --color-warning: var(--warning);
+    --color-warning-ink: var(--warning-ink);
+    --color-danger: var(--danger);
+    --color-danger-ink: var(--danger-ink);
+    --color-info: var(--info);
+    --color-info-ink: var(--info-ink);
+    --color-surface: var(--surface);
+    --color-sunken: var(--sunken);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -48,72 +62,99 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    /* Ink neutrals with a faint cool bias; teal brand (an instrument display) used sparingly. */
+    --background: oklch(0.99 0.002 220);
+    --foreground: oklch(0.2 0.012 230);
+    --surface: oklch(1 0 0);
+    --sunken: oklch(0.97 0.004 220);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.2 0.012 230);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --popover-foreground: oklch(0.2 0.012 230);
+    --primary: oklch(0.24 0.015 230);
+    --primary-foreground: oklch(0.985 0.002 220);
+    --secondary: oklch(0.955 0.005 220);
+    --secondary-foreground: oklch(0.24 0.015 230);
+    --muted: oklch(0.96 0.005 220);
+    --muted-foreground: oklch(0.52 0.014 230);
+    --accent: oklch(0.955 0.006 210);
+    --accent-foreground: oklch(0.24 0.015 230);
+    --destructive: oklch(0.58 0.21 27);
+    --border: oklch(0.915 0.006 225);
+    --input: oklch(0.89 0.008 225);
+    --ring: oklch(0.62 0.11 195);
+    --brand: oklch(0.6 0.11 195);
+    --brand-foreground: oklch(0.99 0.01 195);
+    --brand-ink: oklch(0.45 0.09 200);
+    --success: oklch(0.63 0.15 155);
+    --success-ink: oklch(0.45 0.12 155);
+    --warning: oklch(0.76 0.16 70);
+    --warning-ink: oklch(0.5 0.12 60);
+    --danger: oklch(0.6 0.21 27);
+    --danger-ink: oklch(0.5 0.19 27);
+    --info: oklch(0.62 0.13 245);
+    --info-ink: oklch(0.47 0.13 250);
+    --chart-1: oklch(0.6 0.11 195);
+    --chart-2: oklch(0.62 0.13 245);
+    --chart-3: oklch(0.72 0.14 75);
+    --chart-4: oklch(0.6 0.16 330);
+    --chart-5: oklch(0.65 0.14 145);
+    --radius: 0.75rem;
+    --sidebar: oklch(0.985 0.003 220);
+    --sidebar-foreground: oklch(0.24 0.015 230);
+    --sidebar-primary: oklch(0.6 0.11 195);
+    --sidebar-primary-foreground: oklch(0.99 0.01 195);
+    --sidebar-accent: oklch(0.95 0.008 210);
+    --sidebar-accent-foreground: oklch(0.2 0.012 230);
+    --sidebar-border: oklch(0.915 0.006 225);
+    --sidebar-ring: oklch(0.62 0.11 195);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: oklch(0.165 0.008 230);
+    --foreground: oklch(0.96 0.004 220);
+    --surface: oklch(0.2 0.009 230);
+    --sunken: oklch(0.145 0.008 230);
+    --card: oklch(0.2 0.009 230);
+    --card-foreground: oklch(0.96 0.004 220);
+    --popover: oklch(0.22 0.01 230);
+    --popover-foreground: oklch(0.96 0.004 220);
+    --primary: oklch(0.94 0.005 220);
+    --primary-foreground: oklch(0.2 0.012 230);
+    --secondary: oklch(0.26 0.01 230);
+    --secondary-foreground: oklch(0.96 0.004 220);
+    --muted: oklch(0.25 0.01 230);
+    --muted-foreground: oklch(0.7 0.012 225);
+    --accent: oklch(0.27 0.012 220);
+    --accent-foreground: oklch(0.96 0.004 220);
+    --destructive: oklch(0.7 0.18 24);
+    --border: oklch(1 0 0 / 9%);
+    --input: oklch(1 0 0 / 14%);
+    --ring: oklch(0.75 0.11 195);
+    --brand: oklch(0.77 0.11 195);
+    --brand-foreground: oklch(0.2 0.03 200);
+    --brand-ink: oklch(0.82 0.1 195);
+    --success: oklch(0.74 0.15 155);
+    --success-ink: oklch(0.8 0.13 155);
+    --warning: oklch(0.82 0.15 78);
+    --warning-ink: oklch(0.85 0.13 80);
+    --danger: oklch(0.7 0.18 24);
+    --danger-ink: oklch(0.78 0.15 24);
+    --info: oklch(0.74 0.12 245);
+    --info-ink: oklch(0.8 0.1 245);
+    --chart-1: oklch(0.77 0.11 195);
+    --chart-2: oklch(0.74 0.12 245);
+    --chart-3: oklch(0.8 0.14 78);
+    --chart-4: oklch(0.72 0.15 330);
+    --chart-5: oklch(0.75 0.14 145);
+    --sidebar: oklch(0.19 0.009 230);
+    --sidebar-foreground: oklch(0.96 0.004 220);
+    --sidebar-primary: oklch(0.77 0.11 195);
+    --sidebar-primary-foreground: oklch(0.2 0.03 200);
+    --sidebar-accent: oklch(0.26 0.012 220);
+    --sidebar-accent-foreground: oklch(0.96 0.004 220);
+    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar-ring: oklch(0.75 0.11 195);
 }
 
 @layer base {
@@ -121,8 +162,12 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
     }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 28%, transparent);
+  }
   html {
     @apply font-sans;
     }
@@ -170,3 +215,23 @@
   animation: caret-blink 1s steps(2, start) infinite;
 }
 @keyframes caret-blink { to { visibility: hidden; } }
+
+/* Tone utilities: one vocabulary for status everywhere (badges, dots, callouts, pills). */
+@utility tone-brand { --tone: var(--brand); --tone-ink: var(--brand-ink); }
+@utility tone-success { --tone: var(--success); --tone-ink: var(--success-ink); }
+@utility tone-warning { --tone: var(--warning); --tone-ink: var(--warning-ink); }
+@utility tone-danger { --tone: var(--danger); --tone-ink: var(--danger-ink); }
+@utility tone-info { --tone: var(--info); --tone-ink: var(--info-ink); }
+@utility tone-neutral { --tone: var(--muted-foreground); --tone-ink: var(--muted-foreground); }
+/* Soft fill + border + readable text in the current tone. */
+@utility tone-soft {
+  background-color: color-mix(in oklch, var(--tone) 12%, transparent);
+  border-color: color-mix(in oklch, var(--tone) 30%, transparent);
+  color: var(--tone-ink);
+}
+@utility tone-solid { background-color: var(--tone); }
+@utility tone-text { color: var(--tone-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

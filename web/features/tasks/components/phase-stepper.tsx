@@ -2,70 +2,87 @@ import { CheckIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PHASES } from "../constants"
 
+type PhaseKey = (typeof PHASES)[number]["key"]
+
+const last = PHASES.length - 1
+
+/** State of each step: done (success), current (brand, or warning when waiting/stopped), upcoming, skipped. */
+function stepState(i: number, current: number, skipped: Partial<Record<PhaseKey, string>>) {
+  const skip = skipped[PHASES[i]!.key]
+  if (skip) return "skipped" as const
+  if (i < current || (i === last && current === last)) return "done" as const
+  if (i === current) return "current" as const
+  return "upcoming" as const
+}
+
 /**
- * Plan → Review → Build → Security → Test → Report → Done. `stopped` freezes the current step
- * (paused/failed/cancelled). `skipped` marks steps that don't run for this goal (e.g. "security": "off").
+ * Plan → Review → Build → Security → Test → Report → Done. `waiting` marks the current step as
+ * waiting on the human (plan review, paused, failed). `skipped` marks steps that don't run for this goal.
  */
 export function PhaseStepper({
   current,
-  stopped,
+  waiting,
   skipped = {},
 }: {
   current: number
-  stopped: boolean
-  /** Step key → short reason shown instead of a check, e.g. { security: "off" }. */
-  skipped?: Partial<Record<(typeof PHASES)[number]["key"], string>>
+  waiting: boolean
+  /** Step key → short reason, e.g. { security: "off" }. */
+  skipped?: Partial<Record<PhaseKey, string>>
 }) {
-  const last = PHASES.length - 1
   return (
-    <ol className="flex items-center gap-1.5" aria-label="Goal progress">
+    <ol className="flex flex-wrap items-center gap-y-2" aria-label="Goal progress">
       {PHASES.map((p, i) => {
+        const state = stepState(i, current, skipped)
         const skip = skipped[p.key]
-        const done = !skip && (i < current || (i === last && current === last))
-        const active = !skip && i === current && current !== last
         return (
-          <li key={p.key} className="flex items-center gap-1.5">
+          <li key={p.key} className="flex items-center">
             <span
-              aria-current={active ? "step" : undefined}
-              className={cn(
-                "flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-medium transition-colors",
-                done &&
-                  "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-                active &&
-                  !stopped &&
-                  "border-primary/40 bg-primary/10 text-foreground",
-                active &&
-                  stopped &&
-                  "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                !done && !active && "text-muted-foreground",
-                skip && "border-dashed opacity-60"
-              )}
+              aria-current={state === "current" ? "step" : undefined}
               title={skip ? `${p.label}: ${skip}` : undefined}
+              className={cn(
+                "flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors",
+                state === "done" && "tone-success tone-text",
+                state === "current" && cn(waiting ? "tone-warning" : "tone-brand", "tone-soft border"),
+                state === "upcoming" && "text-muted-foreground",
+                state === "skipped" && "text-muted-foreground/70 line-through decoration-muted-foreground/40"
+              )}
             >
-              {done ? (
-                <CheckIcon className="size-3" />
-              ) : active ? (
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    stopped ? "bg-amber-500" : "animate-pulse bg-primary"
-                  )}
-                />
-              ) : null}
+              {state === "done" ? (
+                <CheckIcon className="size-3.5" aria-hidden />
+              ) : state === "current" ? (
+                <span className="relative flex size-2" aria-hidden>
+                  {!waiting && <span className="tone-solid absolute inset-0 animate-ping rounded-full opacity-50" />}
+                  <span className="tone-solid relative size-2 rounded-full" />
+                </span>
+              ) : (
+                <span className="size-1.5 rounded-full bg-current opacity-40" aria-hidden />
+              )}
               {p.label}
-              {skip && <span className="font-normal"> · {skip}</span>}
+              {skip && <span className="font-normal no-underline">({skip})</span>}
             </span>
             {i < last && (
-              <span
-                className={cn(
-                  "h-px w-3",
-                  i < current ? "bg-emerald-500/50" : "bg-border"
-                )}
-              />
+              <span aria-hidden className={cn("mx-0.5 h-px w-4", i < current ? "bg-success/50" : "bg-border")} />
             )}
           </li>
         )
       })}
     </ol>
+  )
+}
+
+/** The same progress as a thin segmented bar (goal list rows). */
+export function PhaseBar({ current, waiting, className }: { current: number; waiting: boolean; className?: string }) {
+  return (
+    <div className={cn("flex gap-0.5", className)} role="img" aria-label={`Step ${Math.min(current + 1, last + 1)} of ${last + 1}: ${PHASES[current]?.label}`}>
+      {PHASES.slice(0, last).map((p, i) => (
+        <span
+          key={p.key}
+          className={cn(
+            "h-1 flex-1 rounded-full",
+            i < current || current === last ? "bg-success/70" : i === current ? (waiting ? "bg-warning" : "bg-brand") : "bg-border"
+          )}
+        />
+      ))}
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-import { HostTool, ToolName } from "@shared"
+import { HostTool, MCP_TOOL_PREFIX, ToolName } from "@shared"
 import { HOST_TOOL_PREFIX } from "@/lib/constants"
 
 const BROWSER_PREFIX = `${HOST_TOOL_PREFIX}browser_`
@@ -17,8 +17,10 @@ export interface ToolRequestView {
 export function describeRequest(tool: string, input: Record<string, unknown>, summary: string): ToolRequestView {
   const isBrowser = tool.startsWith(BROWSER_PREFIX)
   const isEval = tool === HOST_TOOL_PREFIX + HostTool.BrowserEval
-  const label = isBrowser ? tool.replace(BROWSER_PREFIX, "browser · ") : tool
-  const group = isEval ? "Browser JS" : isBrowser ? "Browser" : tool
+  // External MCP tool: `mcp__sentry__find_issues` → "sentry · find_issues"; "Always allow" covers the server.
+  const mcp = !tool.startsWith(HOST_TOOL_PREFIX) && tool.startsWith(MCP_TOOL_PREFIX) ? tool.split("__") : null
+  const label = isBrowser ? tool.replace(BROWSER_PREFIX, "browser · ") : mcp ? `${mcp[1]} · ${mcp.slice(2).join("__")}` : tool
+  const group = isEval ? "Browser JS" : isBrowser ? "Browser" : mcp ? `MCP ${mcp[1]}` : tool
 
   let preview: string
   if (tool === ToolName.Bash) preview = `$ ${String(input.command)}`

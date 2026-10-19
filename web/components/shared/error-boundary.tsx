@@ -45,11 +45,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (compact) {
       return (
         <div role="alert" className={cn("flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground", className)}>
-          <TriangleAlertIcon className="size-3.5 shrink-0 text-amber-500" />
+          <TriangleAlertIcon className="tone-warning tone-text size-3.5 shrink-0" />
           <span className="min-w-0 truncate" title={error.message}>
             {label ? `${label} failed to load` : "Failed to load"}
           </span>
-          <button onClick={this.retry} className="ml-auto inline-flex items-center gap-1 font-medium text-foreground hover:underline">
+          <button onClick={this.retry} className="ml-auto inline-flex items-center gap-1 rounded font-medium text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">
             <RotateCwIcon className="size-3" /> Retry
           </button>
         </div>
@@ -96,9 +96,9 @@ function ErrorScreen({
 
   return (
     <div role="alert" className={cn("grid h-full place-items-center overflow-y-auto p-6", className)}>
-      <div className="w-full max-w-lg rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="w-full max-w-lg rounded-2xl border bg-card p-6 shadow-xs">
         <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <span className="tone-warning tone-soft grid size-10 shrink-0 place-items-center rounded-xl border">
             <TriangleAlertIcon className="size-5" />
           </span>
           <div className="min-w-0">
@@ -109,7 +109,7 @@ function ErrorScreen({
           </div>
         </div>
 
-        <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 font-mono text-xs break-words">{error.message || error.name}</p>
+        <p className="mt-4 rounded-lg border bg-sunken px-3 py-2 font-mono text-xs break-words">{error.message || error.name}</p>
 
         <p className="mt-3 text-xs text-muted-foreground">
           Just updated AgentRoom? Restart <code className="font-mono">agentroom start</code> so the server and the page match, then reload.
@@ -130,12 +130,13 @@ function ErrorScreen({
 
         <button
           onClick={() => setOpen(!open)}
-          className="mt-4 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          aria-expanded={open}
+          className="mt-4 flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
           <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} /> Technical details
         </button>
         {open && (
-          <pre className="mt-2 max-h-64 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+          <pre className="mt-2 max-h-64 overflow-auto rounded-lg border bg-sunken p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
             {details}
           </pre>
         )}

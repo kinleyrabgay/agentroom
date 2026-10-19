@@ -2,25 +2,29 @@
 
 import type { RiskAssessment } from "@shared"
 import { cn } from "@/lib/utils"
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { TONE_CLASS } from "@/components/kit/tone"
 import { RISK_META } from "../constants"
 
-/** Risk level + score; hover lists what contributed and the diff size. */
+/** Risk level + score; click (or Enter) lists what contributed and the diff size. */
 export function RiskBadge({ risk }: { risk: RiskAssessment }) {
   const meta = RISK_META[risk.level]
   const Icon = meta.icon
   const factors = [...risk.factors].sort((a, b) => b.points - a.points)
   return (
-    <HoverCard openDelay={150}>
-      <HoverCardTrigger asChild>
+    <Popover>
+      <PopoverTrigger asChild>
         <button
-          className={cn("inline-flex h-5 items-center gap-1 rounded-full border px-2 text-[11px] font-medium", meta.chip)}
-          aria-label={`${meta.label}, score ${risk.score}`}
+          className={cn(
+            TONE_CLASS[meta.tone],
+            "tone-soft inline-flex h-[22px] items-center gap-1 rounded-full border px-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          )}
+          aria-label={`${meta.label}, score ${risk.score}. Show details`}
         >
-          <Icon className="size-3" /> {meta.label} · {risk.score}
+          <Icon className="size-3.5" /> {meta.label} · {risk.score}
         </button>
-      </HoverCardTrigger>
-      <HoverCardContent align="start" className="w-72 space-y-2 p-3 text-sm">
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 space-y-2 p-3 text-sm">
         <div className="flex items-baseline justify-between">
           <span className="font-medium">{meta.label}</span>
           <span className="text-xs text-muted-foreground tabular-nums">{risk.score}/100</span>
@@ -36,10 +40,10 @@ export function RiskBadge({ risk }: { risk: RiskAssessment }) {
             ))}
           </ul>
         )}
-        <p className="border-t pt-2 font-mono text-[11px] text-muted-foreground">
+        <p className="border-t pt-2 font-mono text-xs text-muted-foreground">
           {risk.files} {risk.files === 1 ? "file" : "files"} · +{risk.additions} −{risk.deletions}
         </p>
-      </HoverCardContent>
-    </HoverCard>
+      </PopoverContent>
+    </Popover>
   )
 }

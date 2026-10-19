@@ -1,31 +1,29 @@
 "use client"
 
-import { GithubMark } from "./github-mark"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { EmptyState } from "@/components/kit/state-view"
+import { GithubMark } from "@/components/kit/brand-icons"
 import { ConnectForm } from "./connect-form"
 
 /** First run: paste the project URL, preview its columns, done. */
 export function SetupCard() {
   return (
-    <div className="grid h-full place-items-center overflow-y-auto p-6">
-      <Empty className="max-w-xl border bg-card/40">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <GithubMark className="size-5" />
-          </EmptyMedia>
-          <EmptyTitle>Connect your GitHub project board</EmptyTitle>
-          <EmptyDescription>
-            See your project&apos;s columns and cards here, assign yourself, and hand cards to the team.
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent className="w-full max-w-lg">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-10">
+        <EmptyState
+          // EmptyState takes a lucide icon; the GitHub mark has the same shape (className in, svg out).
+          icon={GithubMark}
+          title="Connect your GitHub project board"
+          description="See your project's columns and cards here, assign yourself, and hand cards to the team."
+          className="py-6"
+        />
+        <div className="rounded-2xl border bg-card p-5">
           <ConnectForm />
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             Saved to <code className="font-mono">.agentroom/github/project.json</code> so your team shares it. AgentRoom uses your{" "}
-            <code className="font-mono">gh</code> login and only writes when you assign or unassign yourself.
+            <code className="font-mono">gh</code> login and only writes to GitHub when you assign or unassign yourself.
           </p>
-        </EmptyContent>
-      </Empty>
+        </div>
+      </div>
     </div>
   )
 }

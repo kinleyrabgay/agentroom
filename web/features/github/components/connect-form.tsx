@@ -57,9 +57,9 @@ export function ConnectForm({ confirmLabel = "Open board", onDone }: { confirmLa
           </Button>
         </form>
       ) : (
-        <div className="w-full space-y-3 rounded-xl border bg-background p-4 text-left">
+        <div className="w-full space-y-3 rounded-xl border bg-surface p-4 text-left">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <CheckIcon className="size-4 text-emerald-500" /> {connected.title}
+            <CheckIcon className="size-4 text-success" /> {connected.title}
             <span className="ml-auto font-mono text-xs text-muted-foreground">
               {connected.owner}/{connected.number}
             </span>

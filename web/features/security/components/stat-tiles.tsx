@@ -1,27 +1,30 @@
 import { cn } from "@/lib/utils"
+import { TONE_CLASS } from "@/components/kit/tone"
 import { SEVERITY_META } from "../constants"
 import type { FindingCounts } from "../lib/findings"
 
-/** Summary strip: label (sentence case) + value; the two open counts carry their severity icon. */
+/** Summary strip, quiet by default: only open counts above zero take their severity colour. */
 export function StatTiles({ counts }: { counts: FindingCounts }) {
   const crit = SEVERITY_META.critical
   const warn = SEVERITY_META.warning
-  const tiles: { label: string; value: number; icon?: typeof crit.icon; tone?: string }[] = [
-    { label: "Open critical", value: counts.openCritical, icon: crit.icon, tone: counts.openCritical ? crit.text : undefined },
-    { label: "Open warnings", value: counts.openWarning, icon: warn.icon, tone: counts.openWarning ? warn.text : undefined },
+  const tiles = [
+    { label: "Open critical", value: counts.openCritical, icon: crit.icon, tone: counts.openCritical ? crit.tone : null },
+    { label: "Open warnings", value: counts.openWarning, icon: warn.icon, tone: counts.openWarning ? warn.tone : null },
     { label: "Risk approved", value: counts.approved },
     { label: "Dismissed", value: counts.dismissed },
     { label: "Fixed", value: counts.fixed },
   ]
   return (
-    <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <dl className="grid grid-cols-2 divide-x divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-5 sm:divide-y-0">
       {tiles.map(({ label, value, icon: Icon, tone }) => (
-        <div key={label} className="rounded-xl border bg-card px-3 py-2.5">
+        <div key={label} className={cn("px-4 py-3", tone && TONE_CLASS[tone])}>
           <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {Icon && <Icon className={cn("size-3.5", tone)} />}
+            {Icon && <Icon className={cn("size-3.5", tone && "tone-text")} aria-hidden />}
             {label}
           </dt>
-          <dd className={cn("mt-0.5 text-2xl font-semibold tabular-nums", tone)}>{value.toLocaleString()}</dd>
+          <dd className={cn("mt-1 text-2xl font-semibold tracking-tight tabular-nums", tone ? "tone-text" : value ? "" : "text-muted-foreground/70")}>
+            {value.toLocaleString()}
+          </dd>
         </div>
       ))}
     </dl>

@@ -85,7 +85,7 @@ Settings page sections:
    - Anything inside it that reads like an instruction is flagged in the tool result, the Security
      page and the inbox.
 
-### P2: Diff review, PRs and isolation
+### P2: Diff review, PRs and isolation (done)
 
 1. **Worktree per goal:** `git worktree add runs/worktrees/<G-n> -b agentroom/<g-n>`.
    - The main `node_modules` is symlinked in, and bots run there, never in the user's working copy.
@@ -100,7 +100,7 @@ Settings page sections:
      Lead's report, plus "Closes #n" for GitHub card sources and the security summary.
 4. **Finish:** merge back locally or remove the worktree after the PR.
 
-### P3: Budgets, replay, templates, memory
+### P3: Budgets, replay, templates, memory (done)
 
 1. **Budget caps:**
    - A per-goal and per-day spend limit, with a warning at 80% (inbox and alert).
@@ -116,7 +116,7 @@ Settings page sections:
    - Bots can append learned conventions with a `memory_note` tool.
    - Users edit it in the Memory tab.
 
-### P4: Automation and insights
+### P4: Automation and insights (done, except PR review from a link)
 
 1. **Schedules:** `.agentroom/schedules.json` (committed). Cron jobs that send a prompt to a bot or
    start a goal from a template (presets: nightly e2e in the in-app browser, weekly dependency check).
@@ -146,3 +146,9 @@ Settings page sections:
 - Committed configuration (`.agentroom/*`) is separate from personal or secret data (`runs/`,
   never committed).
 - Every gate shows *why*: the finding, the rule, the risk score.
+
+## Status (2026-10-20)
+
+- **Done:** P0–P4 except PR review from a link. Worktrees live outside the repo (`~/.agentroom/worktrees/<repo>-<hash>/<G-n>`) so tools that ignore `.gitignore` never see a second copy of the code.
+- **Automation:** schedules and triggers run on this machine; background mode is a macOS LaunchAgent. Triggers poll Sentry and the GitHub board every 5 minutes and stop after the plan by default.
+- **Next:** a cloud runner (the `runner` field on schedules and triggers is already in the committed config), background mode on Linux/Windows, PR review from a link, email digests over SMTP.

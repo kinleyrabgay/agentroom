@@ -46,7 +46,7 @@ export function MessageAttachments({ attachments, className }: { attachments: At
             >
               <FileKindIcon kind={a.kind} />
               <span className="min-w-0 truncate">{a.name}</span>
-              <span className="shrink-0 text-[10px] text-muted-foreground">{formatBytes(a.size)}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(a.size)}</span>
             </a>
           ))}
         </div>

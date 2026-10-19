@@ -68,7 +68,7 @@ export function BrowserWorkspace() {
                 <span className="flex items-center gap-1.5 truncate">
                   {b.name} <StatusDot botId={b.id} />
                 </span>
-                <span className="truncate font-mono text-[10px] text-muted-foreground">
+                <span className="truncate font-mono text-xs text-muted-foreground">
                   {p ? stripScheme(previewUrl(p)) : b.tools.includes(ToolName.Browser) ? "no page open" : "browser off"}
                 </span>
               </span>

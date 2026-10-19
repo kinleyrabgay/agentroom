@@ -13,6 +13,8 @@ import {
   type ProjectInfo,
   type ProviderModels,
   type SecurityFinding,
+  type McpSnapshot,
+  type AutomationSnapshot,
   type Settings,
   type Skill,
   type StampedEvent,
@@ -46,6 +48,10 @@ export interface AppState {
   live: Record<string, LiveReply>
   /** Security findings across goals (StateType.Findings push, or the initial fetch). */
   findings: SecurityFinding[]
+  /** External MCP servers and their status (StateType.Mcp push); null until the server sends it. */
+  mcp: McpSnapshot | null
+  /** Schedules, triggers and run history (StateType.Automation push). */
+  automation: AutomationSnapshot | null
   /** Team-wide settings (`.agentroom/settings.json`); null until loaded. */
   settings: Settings | null
   /** Models the current provider offers (GET /api/models), fetched once. */
@@ -70,6 +76,10 @@ export interface AppState {
   goalTab: GoalTab
   /** Goal filter applied when opening the Security view from elsewhere (null = all goals). */
   securityGoalId: string | null
+  /** Settings section to scroll to (route `#/settings/<section>`); null = top. */
+  settingsSection: string | null
+  /** The ⌘K command palette is open. */
+  paletteOpen: boolean
 }
 
 /** Shared empty list so selectors and fallbacks never mint new arrays. */
@@ -108,6 +118,9 @@ export interface AppActions {
   setGoalTab: (tab: GoalTab) => void
   /** Jump to the Security view, optionally filtered to one goal. */
   showSecurity: (goalId?: string | null) => void
+  /** Open Settings at a section (e.g. "integrations"). */
+  showSettings: (section?: string | null) => void
+  setPaletteOpen: (open: boolean) => void
 }
 
 const initialState: AppState = {
@@ -128,6 +141,8 @@ const initialState: AppState = {
   consoles: {},
   live: {},
   findings: NO_FINDINGS,
+  mcp: null,
+  automation: null,
   settings: null,
   models: null,
   modelsStatus: LoadStatus.Idle,
@@ -143,6 +158,8 @@ const initialState: AppState = {
   selectedTaskId: null,
   goalTab: GoalTab.Tasks,
   securityGoalId: null,
+  settingsSection: null,
+  paletteOpen: false,
 }
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
@@ -156,11 +173,13 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   openTask: (selectedTaskId) => set({ selectedTaskId }),
   showOnTasks: ({ goalId, taskId }) =>
     set((s) => ({
-      view: View.Tasks,
+      view: View.Work,
       selectedGoalId: goalId ?? s.selectedGoalId,
       selectedTaskId: taskId ?? null,
       goalTab: taskId ? GoalTab.Tasks : s.goalTab,
     })),
   setGoalTab: (goalTab) => set({ goalTab }),
   showSecurity: (goalId) => set({ view: View.Security, securityGoalId: goalId ?? null }),
+  showSettings: (section) => set({ view: View.Settings, settingsSection: section ?? null }),
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 }))

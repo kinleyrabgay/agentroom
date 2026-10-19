@@ -10,6 +10,8 @@ export interface AuditFilters {
   kind?: AuditKind
   botId?: string
   goalId?: string
+  /** ISO: start from entries older than this (jump to a date). */
+  before?: string
 }
 
 interface Loaded {
@@ -34,8 +36,8 @@ export function useAuditLog(filters: AuditFilters) {
   }, [filters.q])
 
   const query = useMemo(
-    () => ({ q: q || undefined, kind: filters.kind, botId: filters.botId, goalId: filters.goalId, limit: AUDIT_PAGE_SIZE }),
-    [q, filters.kind, filters.botId, filters.goalId]
+    () => ({ q: q || undefined, kind: filters.kind, botId: filters.botId, goalId: filters.goalId, before: filters.before, limit: AUDIT_PAGE_SIZE }),
+    [q, filters.kind, filters.botId, filters.goalId, filters.before]
   )
   const key = `${JSON.stringify(query)}#${reloads}`
 

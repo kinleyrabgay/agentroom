@@ -5,11 +5,13 @@ import { useAppStore } from "@/lib/store/app-store"
 import { cn } from "@/lib/utils"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { ErrorBoundary } from "@/components/shared/error-boundary"
-import { Approvals } from "@/features/approvals/components/approvals"
 import { PreviewHost } from "@/features/browser/components/preview-host"
 import { NotificationEffects } from "@/features/inbox/hooks/use-notification-effects"
 import { TeamCanvas } from "@/features/team/components/team-canvas"
 import { AppSidebar } from "./app-sidebar"
+import { CommandPalette } from "./command-palette"
+import { AutomationEditors } from "@/features/automation/components/automation-editors"
+import { RouteSync } from "./route-sync"
 import { TokenGate } from "./token-gate"
 import { TopBar } from "./top-bar"
 import { Workspace } from "./workspace"
@@ -35,10 +37,12 @@ export function AppShell() {
         >
           <TopBar floating={fullCanvas} />
           <Workspace />
-          <Approvals />
         </SidebarInset>
         <PreviewHost />
         <NotificationEffects />
+        <CommandPalette />
+        <AutomationEditors />
+        <RouteSync />
       </SidebarProvider>
     </TokenGate>
   )

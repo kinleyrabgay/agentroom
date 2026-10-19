@@ -46,7 +46,7 @@ export function SkillLibrary() {
         className="group-data-[collapsible=icon]:hidden"
         action={
           <SidebarGroupAction
-            title="New skill"
+            aria-label="New skill"
             onClick={() => setEditing(NEW_SKILL)}
           >
             <PlusIcon /> <span className="sr-only">New skill</span>
@@ -63,7 +63,7 @@ export function SkillLibrary() {
               className="pl-7"
             />
           </div>
-          <p className="px-2 text-[11px] text-muted-foreground">
+          <p className="px-2 text-xs text-muted-foreground">
             Drag onto a bot, or manage in a bot&apos;s Skills tab.
           </p>
           <SidebarMenu>
@@ -88,14 +88,14 @@ export function SkillLibrary() {
                           <span
                             key={b.id}
                             title={b.name}
-                            className="text-[11px]"
+                            className="text-xs"
                           >
                             {b.avatar}
                           </span>
                         ))}
                       </span>
                     </div>
-                    <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                    <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">
                       {s.description}
                     </span>
                   </SidebarMenuButton>

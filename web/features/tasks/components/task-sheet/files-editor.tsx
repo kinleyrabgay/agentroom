@@ -26,7 +26,7 @@ export function FilesEditor({
       {files.map((f) => (
         <span
           key={f}
-          className="flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 font-mono text-[11px]"
+          className="flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 font-mono text-xs"
         >
           <FileCodeIcon className="size-3 shrink-0 text-muted-foreground" />
           <span className="truncate">{f}</span>

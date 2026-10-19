@@ -4,7 +4,7 @@ import type { AuditActor, Config, SecurityFinding } from '../../shared/types/ind
 import type { NewAuditEntry } from '../services/audit.service.js';
 import { classifyToolCall } from './audit-classify.js';
 import type { Hub } from '../realtime/hub.js';
-import { decide } from '../safety/permission-policy.js';
+import { decide, type McpToolInfo } from '../safety/permission-policy.js';
 import type { PermissionAnswer } from '../providers/provider.js';
 import { describeTool } from './tool-descriptions.js';
 
@@ -56,13 +56,20 @@ export class PermissionGate {
     private readonly audit?: GateAudit,
   ) {}
 
+  private mcp?: McpToolInfo;
+
+  /** Tell the policy which external MCP tools only read. */
+  useMcp(info: McpToolInfo) {
+    this.mcp = info;
+  }
+
   /** Plug in the security gate (scans commits/pushes/PRs before they run). */
   useSecurity(hook: SecurityGateHook) {
     this.security = hook;
   }
 
   async ask(botId: string, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<PermissionAnswer> {
-    const decision = decide(tool, input, this.config(), this.sessionAllowed);
+    const decision = decide(tool, input, this.config(), this.sessionAllowed, this.mcp);
     // Only publishing shell commands are scanned; everything else stays synchronous up to the approval event.
     const hold = tool === ToolName.Bash && this.security ? await this.securityHold(botId, tool, input) : null;
     if (decision.action === 'allow' && !hold) {
@@ -108,6 +115,17 @@ export class PermissionGate {
       });
       signal.addEventListener('abort', () => this.answer(requestId, { allow: false, message: 'Aborted.' }), { once: true });
     });
+  }
+
+  /** Requests waiting on the human right now (for the phone approvals page). */
+  pendingRequests(): { requestId: string; botId: string; tool: string; summary: string; held: boolean }[] {
+    return [...this.pending.entries()].map(([requestId, p]) => ({
+      requestId,
+      botId: p.botId,
+      tool: p.tool,
+      summary: describeTool(p.tool, p.input, this.cwd).summary,
+      held: !!p.findings?.length,
+    }));
   }
 
   /** The human's decision. `actor` defaults to the human in the UI (remote approvals pass their own). */

@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 
 const LEVEL_STYLE: Record<ConsoleLevel, string> = {
   [ConsoleLevel.Log]: "text-foreground/80",
-  [ConsoleLevel.Info]: "text-sky-600 dark:text-sky-400",
-  [ConsoleLevel.Warn]: "bg-amber-500/5 text-amber-700 dark:text-amber-300",
-  [ConsoleLevel.Error]: "bg-destructive/5 text-destructive",
-  [ConsoleLevel.Network]: "bg-destructive/5 text-orange-600 dark:text-orange-400",
+  [ConsoleLevel.Info]: "tone-info tone-text",
+  [ConsoleLevel.Warn]: "tone-warning tone-text bg-warning/5",
+  [ConsoleLevel.Error]: "tone-danger tone-text bg-danger/5",
+  [ConsoleLevel.Network]: "tone-danger tone-text bg-danger/5",
 }
 
 export const isProblem = (l: ConsoleLine) => l.level === ConsoleLevel.Error || l.level === ConsoleLevel.Network
@@ -24,12 +24,12 @@ export function ConsolePanel({ lines, onClear }: { lines: ConsoleLine[]; onClear
           <BanIcon data-icon="inline-start" /> Clear
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto font-mono text-[11px]">
+      <div className="min-h-0 flex-1 overflow-y-auto font-mono text-xs">
         {!lines.length && <p className="p-3 text-muted-foreground">No messages yet.</p>}
         {lines.map((l, i) => (
           <div key={i} className={cn("flex gap-2 border-b border-border/50 px-3 py-0.5", LEVEL_STYLE[l.level])}>
             <span className="shrink-0 opacity-50">{new Date(l.ts).toLocaleTimeString()}</span>
-            <span className="w-12 shrink-0 uppercase opacity-70">{l.level}</span>
+            <span className="w-14 shrink-0 opacity-70">{l.level}</span>
             <span className="break-all whitespace-pre-wrap">{l.text}</span>
           </div>
         ))}

@@ -8,7 +8,10 @@ export type Goal = z.infer<typeof GoalSchema>;
 export type Board = z.infer<typeof BoardSchema>;
 
 export type TaskPatch = Partial<Omit<Task, 'id' | 'createdAt'>>;
-export type GoalPatch = Partial<Pick<Goal, 'title' | 'plan' | 'securityReview'>>;
+export type GoalPatch = Partial<Pick<Goal, 'title' | 'plan' | 'securityReview'>> & {
+  /** Per-goal budget in USD; null clears it (back to the team default). */
+  budgetUsd?: number | null;
+};
 
 export interface NewTaskInput {
   title: string;

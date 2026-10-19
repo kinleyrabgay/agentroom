@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Automation: schedules (once or repeating) that start a goal, message a bot or hand off GitHub cards / Sentry issues; plain-language times in the goal box ("tomorrow at 9", "every weekday at 8:30"); Later on hand-offs; Schedule… in New goal.
+- Triggers: when a new Sentry issue appears, a GitHub card moves to a column, or a goal fails, hand it to a bot, start a goal, message a bot or notify you; limits per day, budget per run, quiet hours; stop after the plan by default.
+- Automation page with schedules, triggers, run history, and a Next-run pill in the top bar.
+- Background mode on macOS (`agentroom daemon install|uninstall|status`, Settings → Runner); `agentroom start` reuses a running instance.
+- "While you were away" brief in the Inbox and a daily Slack/Teams digest.
+- Per-goal branch and folder, a commit per task with revert, Changes tab with inline review comments, Open PR, merge locally.
+- Budgets per goal and per day with warnings and pause at the cap.
+- Bot memory, goal templates, phone approvals, Replay timeline and Insights.
+
+- Sentry page (Workspace → Sentry): issues with search, filters and sorting, issue detail with stack trace, breadcrumbs and tags, and hand-off to any bot (the Team Lead starts a fix goal).
+- Connections page for MCP servers: Sentry presets (OAuth or token), custom servers, import from Claude Code, live status with Sign in / token / retry actions, and per-bot access.
+- Bots get only the MCP servers added in AgentRoom (`strictMcpConfig`). Read-only MCP tools run without asking under ask-writes; the rest need approval; MCP calls are audited.
+- Approvals and bot questions are answered inline in the bot's chat thread.
+
+### Fixed
+
+- Form fields are readable in light mode.
+
 ## [0.0.1] - 2026-10-19
 
 First public release on npm as `@kinleyrabgay/agentroom`.

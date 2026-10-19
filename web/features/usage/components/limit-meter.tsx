@@ -15,7 +15,7 @@ export function LimitMeter({ limit, now, claude }: { limit: RateLimit; now: numb
         <span className="flex items-center gap-1.5 font-medium">
           {WINDOW_LABEL[limit.window] ?? limit.window}
           <SeverityTag severity={sev} label={limit.status === RateLimitStatus.Rejected ? "Limit reached" : undefined} />
-          {limit.usingOverage && <span className="text-[10px] font-normal text-muted-foreground">· using extra usage</span>}
+          {limit.usingOverage && <span className="text-xs font-normal text-muted-foreground">· using extra usage</span>}
         </span>
         <span className="text-muted-foreground tabular-nums">
           {limit.utilization !== undefined ? `${pct(limit.utilization)} used` : LIMIT_STATUS_TEXT[limit.status]}

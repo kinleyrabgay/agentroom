@@ -29,6 +29,8 @@ export interface RunRequest {
   /** Files the human attached (images, PDFs, text, other files). */
   attachments?: ResolvedAttachment[];
   cwd: string;
+  /** Stop once the run has spent this much (USD). */
+  maxBudgetUsd?: number;
   model: string;
   /** Reasoning effort; omitted to use the model's default. */
   effort?: EffortLevel;
@@ -37,6 +39,8 @@ export interface RunRequest {
   context: string;
   resumeSessionId?: string;
   hostTools: HostToolDef[];
+  /** External MCP servers this bot may use (already resolved: secrets filled in), keyed by name. */
+  mcpServers?: Record<string, unknown>;
   signal: AbortSignal;
   /** Logged events (messages, tool calls, usage…). */
   emit: (event: AgentEvent) => void;

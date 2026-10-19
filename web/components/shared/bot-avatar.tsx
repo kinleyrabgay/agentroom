@@ -2,6 +2,7 @@ import { BotStatus, type Bot } from "@shared"
 import { cn } from "@/lib/utils"
 import { STATUS_META } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
+import { TONE_CLASS } from "@/components/kit/tone"
 
 /** Emoji tile tinted with the bot's color; optionally shows its live status dot. */
 export function BotAvatar({ bot, className, showStatus = false }: { bot: Bot; className?: string; showStatus?: boolean }) {
@@ -17,9 +18,10 @@ export function BotAvatar({ bot, className, showStatus = false }: { bot: Bot; cl
       {bot.avatar}
       {showStatus && (
         <span
+          aria-label={STATUS_META[status].label}
           className={cn(
-            "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-sidebar",
-            STATUS_META[status].dot,
+            TONE_CLASS[STATUS_META[status].tone],
+            "tone-solid absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-sidebar",
             status !== BotStatus.Idle && "animate-pulse"
           )}
         />

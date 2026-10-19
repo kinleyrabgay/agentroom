@@ -1,4 +1,4 @@
-import { createSdkMcpServer, query, tool, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { createSdkMcpServer, query, tool, type McpServerConfig, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { APP_VERSION } from '../../../shared/constants.js';
 import { ProviderId } from '../../../shared/enums.js';
 import type { AccountUsage, ModelOption } from '../../../shared/types/index.js';
@@ -34,12 +34,15 @@ export class ClaudeProvider implements Provider {
         cwd,
         model: req.model,
         ...(req.effort ? { effort: req.effort } : {}),
+        ...(req.maxBudgetUsd !== undefined ? { maxBudgetUsd: Math.max(0.01, req.maxBudgetUsd) } : {}),
         abortController,
         resume: req.resumeSessionId,
         tools: skillOptions.tools,
         plugins: skillOptions.plugins,
         skills: skillOptions.skills,
-        mcpServers: { [HOST_MCP_SERVER]: hostToolServer(req.hostTools) },
+        // Only AgentRoom's host tools and the servers added in AgentRoom; never everything set up in Claude Code.
+        mcpServers: { ...((req.mcpServers ?? {}) as Record<string, McpServerConfig>), [HOST_MCP_SERVER]: hostToolServer(req.hostTools) },
+        strictMcpConfig: true,
         // Isolate from user/project settings so AgentRoom's approval gate is authoritative.
         settingSources: [],
         systemPrompt: { type: 'preset', preset: 'claude_code', append: `${bot.prompt}\n\n${req.context}` },
@@ -73,8 +76,8 @@ export class ClaudeProvider implements Provider {
   }
 }
 
-/** Built-in tools whose output comes from the open web. */
-const WEB_TOOLS = 'WebFetch|WebSearch';
+/** Tools whose output comes from outside the repo: the open web and external MCP servers (not AgentRoom's own). */
+const WEB_TOOLS = `WebFetch|WebSearch|mcp__(?!${HOST_MCP_SERVER}__).*`;
 
 /** Flag prompt injection in web content the bot just read, as extra context next to the tool result. */
 function webOutputHook(inspect: NonNullable<RunRequest['inspectToolOutput']>) {

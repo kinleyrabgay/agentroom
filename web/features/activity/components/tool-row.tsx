@@ -33,16 +33,17 @@ export function ToolRow({
         className={cn(
           "absolute top-2 -left-[23px] size-3.5 bg-background",
           !result
-            ? "animate-spin text-sky-500"
+            ? "animate-spin text-brand"
             : result.ok
-              ? "text-emerald-500"
-              : "text-destructive"
+              ? "tone-success tone-text"
+              : "tone-danger tone-text"
         )}
       />
-      <div className="flex items-center gap-1 rounded-lg hover:bg-muted/60">
+      <div className="flex items-center gap-1 rounded-lg hover:bg-accent">
         <button
           onClick={() => setOpen(!open)}
-          className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left font-mono text-xs"
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left font-mono text-xs focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
           <ChevronRightIcon
             className={cn(
@@ -52,7 +53,7 @@ export function ToolRow({
           />
           <span className="font-medium">{call.name}</span>
           <span className="truncate text-muted-foreground">{call.summary}</span>
-          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+          <span className="ml-auto shrink-0 font-sans text-xs text-muted-foreground tabular-nums">
             {new Date(call.ts).toLocaleTimeString()}
           </span>
         </button>
@@ -65,7 +66,7 @@ export function ToolRow({
         <div className="mt-1 mb-2 space-y-2 pl-2">
           <ToolInput call={call} />
           {result && (
-            <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/50 p-2.5 font-mono text-[11px] break-all whitespace-pre-wrap">
+            <pre className="max-h-64 overflow-auto rounded-lg border bg-sunken p-2.5 font-mono text-xs break-all whitespace-pre-wrap">
               {result.output || "(no output)"}
             </pre>
           )}
@@ -93,7 +94,7 @@ function ToolInput({ call }: { call: ToolCallEvent }) {
     return <Diff path={call.summary} before="" after={input.content} />
   }
   return (
-    <pre className="max-h-48 overflow-auto rounded-lg border bg-muted/30 p-2.5 font-mono text-[11px] break-all whitespace-pre-wrap text-muted-foreground">
+    <pre className="max-h-48 overflow-auto rounded-lg border bg-sunken/60 p-2.5 font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground">
       {JSON.stringify(input, null, 2)}
     </pre>
   )

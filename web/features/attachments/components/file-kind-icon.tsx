@@ -10,8 +10,8 @@ const ICONS: Record<AttachmentKind, LucideIcon> = {
 }
 
 const TONE: Record<AttachmentKind, string> = {
-  [AttachmentKind.Image]: "text-sky-500",
-  [AttachmentKind.Pdf]: "text-red-500",
+  [AttachmentKind.Image]: "tone-info tone-text",
+  [AttachmentKind.Pdf]: "tone-danger tone-text",
   [AttachmentKind.Text]: "text-muted-foreground",
   [AttachmentKind.File]: "text-muted-foreground",
 }

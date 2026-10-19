@@ -7,7 +7,7 @@ export function SeverityTag({ severity, label }: { severity: Severity; label?: s
   if (severity === Severity.Ok) return null
   const critical = severity === Severity.Critical
   return (
-    <span className={cn("flex items-center gap-0.5 text-[10px] font-normal", critical ? "text-[var(--status-critical)]" : "text-[var(--status-warning-text)]")}>
+    <span className={cn("flex items-center gap-0.5 text-xs font-normal", critical ? "text-[var(--status-critical)]" : "text-[var(--status-warning-text)]")}>
       {critical ? <OctagonAlertIcon className="size-3" /> : <TriangleAlertIcon className="size-3" />}
       {label ?? (critical ? "Almost out" : "Running high")}
     </span>

@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react"
 import { HandIcon } from "lucide-react"
 import { ClientMessageType, ToolName, type Bot } from "@shared"
-import { cn } from "@/lib/utils"
 import { isBusy } from "@/lib/constants"
 import { send } from "@/lib/realtime/socket"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
+import { ToneDot } from "@/components/kit/badge"
 import { ToPage } from "../constants"
 import { postToPreview } from "../lib/preview-registry"
 import { BrowserToolbar } from "./browser-toolbar"
@@ -56,7 +56,7 @@ function LiveSurface({ bot, compact }: { bot: Bot; compact: boolean }) {
       />
 
       {preview.humanControl && (
-        <div className="flex items-center gap-2 border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+        <div className="tone-warning tone-soft flex items-center gap-2 border-x-0 border-t-0 border-b px-3 py-1.5 text-xs">
           <HandIcon className="size-3.5" /> You have control. {bot.name}&apos;s browser actions wait until you hand it back.
           <Button size="xs" variant="outline" className="ml-auto" onClick={() => send({ type: ClientMessageType.BrowserControl, botId: bot.id, on: false })}>
             Hand back
@@ -68,8 +68,8 @@ function LiveSurface({ bot, compact }: { bot: Bot; compact: boolean }) {
 
       {consoleOpen && <ConsolePanel lines={shown} onClear={() => setClearedAt(Date.now())} />}
 
-      <div className="flex items-center gap-2 border-t px-3 py-1.5 text-[11px] text-muted-foreground">
-        <span className={cn("size-1.5 rounded-full", botBusy ? "animate-pulse bg-sky-500" : "bg-emerald-500")} />
+      <div className="flex items-center gap-2 border-t px-3 py-1.5 text-xs text-muted-foreground">
+        <ToneDot tone={botBusy ? "brand" : "success"} pulse={botBusy} />
         <span className="truncate">{preview.title || preview.target}</span>
         <span className="ml-auto shrink-0">
           {picking

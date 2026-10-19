@@ -30,11 +30,11 @@ export function DescriptionEditor({
   )
 
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <div className="overflow-hidden rounded-2xl border">
       <div className="flex items-center gap-1 border-b bg-muted/40 px-1.5 py-1">
         {tab("write", "Write")}
         {tab("preview", "Preview")}
-        <span className="ml-auto pr-1 text-[10px] text-muted-foreground">
+        <span className="ml-auto pr-1 text-xs text-muted-foreground">
           Markdown
         </span>
       </div>

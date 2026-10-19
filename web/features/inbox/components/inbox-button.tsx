@@ -5,6 +5,7 @@ import { BellIcon, CheckCheckIcon, InboxIcon } from "lucide-react"
 import { isToday } from "@/lib/time"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/kit/state-view"
 import {
   Popover,
   PopoverContent,
@@ -15,7 +16,7 @@ import { needsAnswer } from "../lib/route"
 import { AlertSettings } from "./alert-settings"
 import { NotificationItem } from "./notification-item"
 
-/** Top-bar bell: unread count and the inbox of plan reviews, questions, blocks and results. */
+/** Top-bar bell: recent notifications (plan reviews, questions, blocks, results). The Inbox page is where things get done. */
 export function InboxButton() {
   const notifications = useAppStore((s) => s.notifications)
   const [open, setOpen] = useState(false)
@@ -46,7 +47,7 @@ export function InboxButton() {
   const group = (label: string, items: typeof sorted) =>
     items.length > 0 && (
       <section>
-        <h4 className="sticky top-0 z-10 bg-popover/95 px-3 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase backdrop-blur">
+        <h4 className="sticky top-0 z-10 bg-popover/95 px-4 pt-2.5 pb-1 text-xs font-medium text-muted-foreground backdrop-blur">
           {label}
         </h4>
         <ul className="divide-y">
@@ -68,11 +69,11 @@ export function InboxButton() {
           variant="ghost"
           size="icon-sm"
           className="relative"
-          aria-label={unread ? `Inbox, ${unread} unread` : "Inbox"}
+          aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
         >
           <BellIcon />
           {unread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
+            <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] leading-none font-semibold text-brand-foreground tabular-nums">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -83,8 +84,8 @@ export function InboxButton() {
         sideOffset={8}
         className="w-96 overflow-hidden p-0"
       >
-        <div className="flex items-center gap-2 border-b px-3 py-2.5">
-          <span className="text-sm font-medium">Inbox</span>
+        <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          <span className="text-sm font-semibold">Notifications</span>
           {unread > 0 && (
             <span className="text-xs text-muted-foreground">
               {unread} unread
@@ -109,14 +110,15 @@ export function InboxButton() {
               {group("Earlier", earlier)}
             </>
           ) : (
-            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-muted-foreground">
-              <InboxIcon className="size-6" />
-              Nothing yet. Plan reviews, questions from bots and finished goals
-              show up here.
-            </div>
+            <EmptyState
+              compact
+              icon={InboxIcon}
+              title="No notifications yet"
+              description="Plan reviews, questions from bots and finished goals show up here."
+            />
           )}
         </div>
-        <AlertSettings />
+        <AlertSettings onNavigate={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   )

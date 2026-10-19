@@ -42,7 +42,7 @@ export function TokenMix({ counts }: { counts: TokenCounts }) {
               <span className="size-2 shrink-0 rounded-[2px]" style={{ background: k.color }} />
               <span className="flex-1 text-muted-foreground">{k.label}</span>
               <span className="font-medium tabular-nums">{compact(v)}</span>
-              <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">{total ? pct(v / total) : "—"}</span>
+              <span className="w-9 text-right text-xs text-muted-foreground tabular-nums">{total ? pct(v / total) : "—"}</span>
             </li>
           )
         })}

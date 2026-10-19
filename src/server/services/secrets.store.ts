@@ -4,6 +4,7 @@ import type { IntegrationSecrets, IntegrationStatus } from '../../shared/types/i
 import { readJson } from '../../core/fs/json.js';
 
 const FILE_MODE = 0o600;
+export const MCP_SECRET = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 /**
  * Local integration secrets (`.agentroom/runs/secrets.json`, mode 0600, never committed).
@@ -37,6 +38,26 @@ export class SecretsStore {
     }
     this.write(next);
     return this.status();
+  }
+
+  /** Value for a `${secret:NAME}` reference in mcp.json, or undefined. */
+  mcpSecret(name: string): string | undefined {
+    return this.read().mcp?.[name];
+  }
+
+  /** Set (or with '' clear) MCP secrets. Values are never returned over the API. */
+  setMcpSecrets(values: Record<string, string>) {
+    const next = { ...this.read() };
+    const mcp = { ...(next.mcp ?? {}) };
+    for (const [k, v] of Object.entries(values)) {
+      if (!MCP_SECRET.test(k)) throw new Error(`Invalid secret name "${k}" (use A-Z, 0-9 and _)`);
+      if (typeof v !== 'string') throw new Error(`${k} must be a string`);
+      if (v === '') delete mcp[k];
+      else mcp[k] = v.trim();
+    }
+    if (Object.keys(mcp).length) next.mcp = mcp;
+    else delete next.mcp;
+    this.write(next);
   }
 
   private write(value: IntegrationSecrets) {

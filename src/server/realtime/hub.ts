@@ -82,22 +82,33 @@ export class Hub {
   }
 
   remove(client: Client) {
+    const before = this.isActive;
     this.clients.delete(client);
     this.active.delete(client);
     if (this.primary === client) this.primary = [...this.clients].at(-1) ?? null;
+    if (before !== this.isActive) for (const fn of this.presenceListeners) fn();
   }
 
   focus(client: Client) {
     if (this.clients.has(client)) this.primary = client;
   }
 
+  private presenceListeners: (() => void)[] = [];
+
+  /** Called when the human starts or stops looking at AgentRoom (any tab). */
+  onPresence(fn: () => void) {
+    this.presenceListeners.push(fn);
+  }
+
   /** A UI tab reports whether it is visible and focused. */
   setPresence(client: Client, active: boolean) {
     if (!this.clients.has(client)) return;
+    const before = this.isActive;
     if (active) {
       this.active.add(client);
       this.primary = client;
     } else this.active.delete(client);
+    if (before !== this.isActive) for (const fn of this.presenceListeners) fn();
   }
 
   /** True while the human is looking at an AgentRoom tab. */

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { API_PREFIX, TOKEN_QUERY, WS_PATH } from '../../shared/constants.js';
+import { API_PREFIX, BIND_HOST, PUBLIC_HOST, TOKEN_QUERY, WS_PATH } from '../../shared/constants.js';
 import type { Project } from '../../core/project.js';
 import type { Team } from '../agents/team.js';
 import { WS_UNAUTHORIZED } from '../config/constants.js';
@@ -22,6 +22,8 @@ import { taskRoutes } from './routes/tasks.routes.js';
 import { findUiDir, serveUi } from './static.js';
 import { settingsRoutes } from './routes/settings.routes.js';
 import { governanceRoutes } from './routes/governance.routes.js';
+import { insightsRoutes } from './routes/insights.routes.js';
+import { InsightsService } from '../services/insights.service.js';
 import { securityRoutes } from './routes/security.routes.js';
 import { uploadRoutes } from './routes/uploads.routes.js';
 import type { UploadStore } from '../services/upload.store.js';
@@ -29,6 +31,17 @@ import type { SecurityService } from '../security/security.service.js';
 import type { AuditService, HumanAudit } from '../services/audit.service.js';
 import type { LedgerService } from '../services/ledger.service.js';
 import type { SecretsStore } from '../services/secrets.store.js';
+import type { McpService } from '../services/mcp/mcp.service.js';
+import { mcpRoutes } from './routes/mcp.routes.js';
+import { sentryRoutes } from './routes/sentry.routes.js';
+import { memoryRoutes } from './routes/memory.routes.js';
+import { REMOTE_PUBLIC_PATH, remoteControlRoutes, remotePublicRoutes, tunnelGuard } from './routes/remote.routes.js';
+import type { RemoteService } from '../remote/remote.service.js';
+import type { AutomationService } from '../automation/automation.service.js';
+import { automationRoutes, type RunnerControls } from './routes/automation.routes.js';
+import { goalTemplateRoutes } from './routes/goal-templates.routes.js';
+import type { SentryService } from '../integrations/sentry/sentry.service.js';
+import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
 export interface AppDeps {
   token: string;
@@ -45,6 +58,14 @@ export interface AppDeps {
   /** Records actions the human takes through the API. */
   humanAudit: HumanAudit;
   secrets: SecretsStore;
+  mcp: McpService;
+  sentry: SentryService;
+  sentryHandoff: (input: SentryHandoffInput) => Promise<HandoffResult>;
+  /** Phone approvals (tunnel + remote token). */
+  remote?: RemoteService;
+  /** Schedules, triggers, brief; background mode. */
+  automation?: AutomationService;
+  runner?: RunnerControls;
   security: SecurityService;
   uploads: UploadStore;
   /** "Name <email>" of the human using the UI. */
@@ -61,6 +82,19 @@ export function createApp(deps: AppDeps) {
   const app = new Hono();
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
+  // Through the phone tunnel only the approvals page and its API exist.
+  app.use('*', tunnelGuard());
+
+  // Opened as 127.0.0.1? Move the page to localhost, the same site as the previews (see PUBLIC_HOST).
+  app.use('*', async (c, next) => {
+    const url = new URL(c.req.url);
+    if (c.req.method === 'GET' && url.hostname === BIND_HOST && !url.pathname.startsWith(API_PREFIX) && url.pathname !== WS_PATH && !REMOTE_PUBLIC_PATH.test(url.pathname)) {
+      url.hostname = PUBLIC_HOST;
+      return c.redirect(url.toString(), 302);
+    }
+    await next();
+  });
+
   const api = new Hono();
   const cors = devCors(process.env.AGENTROOM_DEV_ORIGIN);
   if (cors) api.use('*', cors);
@@ -69,9 +103,16 @@ export function createApp(deps: AppDeps) {
   botRoutes(api, deps.project, deps.team);
   skillRoutes(api, deps.project);
   taskRoutes(api, deps.project, deps.boardChanged);
-  goalRoutes(api, deps.goals, deps.humanAudit);
+  goalRoutes(api, deps.goals, deps.humanAudit, deps.project.goalTemplates);
+  memoryRoutes(api, deps.project, deps.humanAudit);
+  goalTemplateRoutes(api, deps.project, deps.humanAudit);
   settingsRoutes(api, deps.project, deps.secrets, deps.hub, deps.humanAudit);
+  mcpRoutes(api, deps.mcp, deps.humanAudit);
+  sentryRoutes(api, deps.sentry, deps.sentryHandoff, deps.humanAudit, () => void deps.mcp.refresh());
+  if (deps.remote) remoteControlRoutes(api, deps.remote);
+  if (deps.automation && deps.runner) automationRoutes(api, deps.automation, deps.runner);
   governanceRoutes(api, deps.ledger, deps.audit);
+  insightsRoutes(api, new InsightsService(deps.project, deps.ledger, deps.audit));
   alertRoutes(api, deps.alerts);
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
@@ -100,6 +141,7 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
+  if (deps.remote) remotePublicRoutes(app, deps.remote);
   serveUi(app, findUiDir());
   return { app, injectWebSocket };
 }

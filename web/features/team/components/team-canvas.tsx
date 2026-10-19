@@ -4,18 +4,34 @@ import "@xyflow/react/dist/style.css"
 import { useMemo, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react"
-import { PlusIcon } from "lucide-react"
+import { NetworkIcon, PlusIcon } from "lucide-react"
 import { AgentEventType, BotStatus, type Bot, type StampedEvent } from "@shared"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
+import { EmptyState } from "@/components/kit/state-view"
 import { treeLayout } from "../lib/tree-layout"
 import { AutoFit } from "./auto-fit"
 import { BotNode, type BotNodeData } from "./bot-node"
 import { NewBotDialog } from "./new-bot-dialog"
 
 const nodeTypes = { bot: BotNode }
+
+/** Gap between floating chrome and the edges of the free area. */
+const SLOT_GAP = "1rem"
+/** The full-bleed top bar (h-14 header with pt-2). */
+const TOP_BAR = "4rem"
+const INSET_AREA = { left: SLOT_GAP, top: SLOT_GAP }
+
+/**
+ * Where the canvas is not covered by the floating sidebar and top bar, from the shadcn sidebar's
+ * own width variables (floating variant: the collapsed rail adds its p-2 gutter and border).
+ */
+function freeArea(expanded: boolean, mobile: boolean) {
+  const sidebar = mobile ? "0px" : expanded ? "var(--sidebar-width)" : "calc(var(--sidebar-width-icon) + 1rem + 2px)"
+  return { left: `calc(${sidebar} + ${SLOT_GAP})`, top: `calc(${TOP_BAR} + 0.5rem)` }
+}
 
 /** Delegation edges stay animated until the receiving bot finishes. */
 function activeDelegations(events: StampedEvent[]) {
@@ -42,7 +58,7 @@ function buildGraph(bots: Bot[], live: Set<string>) {
         target: b.id,
         type: "smoothstep",
         animated,
-        style: { stroke: animated ? b.color : "var(--border)", strokeWidth: animated ? 2.5 : 1.5 },
+        style: { stroke: animated ? "var(--brand)" : "var(--border)", strokeWidth: animated ? 2 : 1.5 },
       }
     })
   return { nodes, edges }
@@ -60,12 +76,7 @@ export function TeamCanvas({ fullBleed = false }: { fullBleed?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useAppStore((s) => !!s.draggingSkill)
   const { state: sidebarState, isMobile } = useSidebar()
-  // Left edge of the visible canvas next to the floating sidebar.
-  const leftOffset = !fullBleed || isMobile
-    ? "1rem"
-    : sidebarState === "expanded"
-      ? "calc(var(--sidebar-width) + 1.25rem)"
-      : "calc(var(--sidebar-width-icon) + 2.25rem)"
+  const free = fullBleed ? freeArea(sidebarState === "expanded", isMobile) : INSET_AREA
 
   const live = useMemo(() => activeDelegations(events), [events])
   const { nodes, edges } = useMemo(() => buildGraph(bots, live), [bots, live])
@@ -90,21 +101,40 @@ export function TeamCanvas({ fullBleed = false }: { fullBleed?: boolean }) {
         <Controls
           showInteractive={false}
           position="bottom-left"
-          style={fullBleed ? { left: leftOffset, bottom: "1rem", margin: 0 } : undefined}
-          className={cn(fullBleed && "overflow-hidden rounded-xl border shadow-sm")}
+          style={{ left: free.left, bottom: SLOT_GAP, margin: 0 }}
+          className="overflow-hidden rounded-xl border shadow-sm"
         />
         <AutoFit container={ref} count={bots.length} fullBleed={fullBleed} />
       </ReactFlow>
-      <Button
-        variant="outline"
-        size="sm"
-        className={cn("absolute shadow-sm", fullBleed ? "top-[4.5rem] bg-background/80 backdrop-blur" : "top-4 right-4")}
-        style={fullBleed ? { left: leftOffset } : undefined}
-        onClick={() => setCreating(true)}
-      >
-        <PlusIcon data-icon="inline-start" /> Add bot
-      </Button>
+
+      {/* Chrome slots: the box the sidebar and top bar leave free. */}
+      <div className="pointer-events-none absolute right-0 bottom-0" style={{ left: free.left, top: free.top }}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="pointer-events-auto absolute top-0 left-0 bg-background/85 shadow-sm backdrop-blur-md"
+          onClick={() => setCreating(true)}
+        >
+          <PlusIcon data-icon="inline-start" /> Add bot
+        </Button>
+        {bots.length === 0 && (
+          <div className="pointer-events-auto absolute inset-0 grid place-items-center">
+            <EmptyState
+              icon={NetworkIcon}
+              title="No bots yet"
+              description="A team starts with a lead. Add one, or run `agentroom init` in the repo for the default six."
+              action={
+                <Button size="sm" onClick={() => setCreating(true)}>
+                  <PlusIcon data-icon="inline-start" /> Add bot
+                </Button>
+              }
+              className="rounded-2xl border bg-background/85 shadow-sm backdrop-blur-md"
+            />
+          </div>
+        )}
+      </div>
       <NewBotDialog open={creating} onOpenChange={setCreating} />
     </div>
   )
 }
+

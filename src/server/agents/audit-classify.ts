@@ -1,5 +1,6 @@
 import { AuditKind, HostTool, ToolName } from '../../shared/enums.js';
 import { HOST_TOOL_PREFIX } from '../config/constants.js';
+import { MCP_TOOL_PREFIX } from '../../shared/constants.js';
 
 const FILE_WRITES = new Set<string>([ToolName.Edit, ToolName.Write, ToolName.MultiEdit, ToolName.NotebookEdit]);
 const BROWSER_ACTIONS = new Set<string>([HostTool.BrowserClick, HostTool.BrowserType, HostTool.BrowserPress, HostTool.BrowserEval]);
@@ -27,6 +28,10 @@ export function classifyToolCall(tool: string, input: Record<string, unknown>): 
   if (host && BROWSER_ACTIONS.has(host)) {
     const what = host === HostTool.BrowserEval ? String(input.code ?? '') : [input.element ?? input.ref, input.text ? `"${input.text}"` : '', input.key ?? ''].filter(Boolean).join(' ');
     return { kind: AuditKind.Command, summary: `${host} ${what}`.trim().slice(0, 300) };
+  }
+  if (!host && tool.startsWith(MCP_TOOL_PREFIX)) {
+    const [, server, name] = tool.split('__');
+    return { kind: AuditKind.Mcp, summary: `${server} · ${name} ${JSON.stringify(input ?? {})}`.slice(0, 300) };
   }
   return null;
 }

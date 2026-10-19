@@ -12,6 +12,8 @@ import { securityTools } from './security.tools.js';
 import { browserTools } from './browser.tools.js';
 import { delegateTool, type Delegate } from './delegate.tool.js';
 import { humanTools } from './human.tools.js';
+import { memoryTools } from './memory.tools.js';
+import type { MemoryRepository } from '../../../core/repositories/memory.repository.js';
 import { planningTools, taskTools } from './task.tools.js';
 
 export interface HostToolDeps {
@@ -27,6 +29,8 @@ export interface HostToolDeps {
   goalId?: string;
   /** Security layer: findings tool for reviewers, untrusted-content guard for browser output. */
   security?: SecurityService;
+  /** Bot memory: lets the bot suggest notes (`memory_note`). */
+  memory?: MemoryRepository;
 }
 
 /**
@@ -42,6 +46,7 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
     roleOf: (id: string) => team.find((b) => b.id === id)?.role,
   };
   const tools = [...taskTools(board, bot.id), ...humanTools(bot, deps, signal)];
+  if (deps.memory) tools.push(...memoryTools(bot, deps.memory, deps.notifications));
   if (isPlannerRole(bot)) tools.push(...planningTools(board, bot.id));
   if (bot.tools.includes(ToolName.Browser)) {
     const guard = deps.security

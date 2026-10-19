@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dropdown } from "@/components/kit/dropdown"
 import type { AlertPrefsState } from "../hooks/use-alert-prefs"
 
 /** OS notification / sound / voice switches. Shared by the inbox popover and the Settings page. */
@@ -26,18 +26,16 @@ export function AlertPrefsForm({ state, compact = false }: { state: AlertPrefsSt
       />
       <Row id="alert-sound" label="Sound" checked={p.sound} disabled={!caps.sound} compact={compact} onChange={(v) => update({ sound: v })}>
         {caps.sounds.length > 0 && (
-          <Select value={p.soundName} onValueChange={(v) => update({ soundName: v })} disabled={!p.sound}>
-            <SelectTrigger size="sm" className="h-7 w-28 text-xs" aria-label="Alert sound">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {caps.sounds.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="w-36">
+            <Dropdown<string>
+              datas={caps.sounds.map((s) => ({ label: s, value: s }))}
+              selectedValue={p.soundName}
+              disabled={!p.sound}
+              hint="Find a sound"
+              onSelect={(v) => update({ soundName: v as string })}
+              className="h-8 text-[13px]"
+            />
+          </div>
         )}
       </Row>
       <Row
@@ -58,16 +56,16 @@ export function AlertPrefsForm({ state, compact = false }: { state: AlertPrefsSt
         onChange={(v) => update({ onlyWhenAway: v })}
       />
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <Button size="xs" variant="outline" onClick={test}>
+        <Button size="sm" variant="outline" onClick={test}>
           <Volume2Icon data-icon="inline-start" /> Send a test alert
         </Button>
         {caps.platform === "darwin" && !caps.clickToOpen && (
-          <span className="text-[10px] leading-tight text-muted-foreground">
+          <span className="text-xs leading-tight text-muted-foreground">
             Tip: <code className="font-mono">brew install terminal-notifier</code> to open AgentRoom by clicking an alert.
           </span>
         )}
         {!caps.system && !caps.sound && !caps.voice && (
-          <span className="text-[10px] text-muted-foreground">Not supported on {caps.platform}; the inbox still works.</span>
+          <span className="text-xs text-muted-foreground">Not supported on {caps.platform}; the inbox still works.</span>
         )}
       </div>
     </div>
@@ -99,7 +97,7 @@ function Row({
         <Label htmlFor={id} className={cn("font-medium", compact ? "text-xs" : "text-sm")}>
           {label}
         </Label>
-        {hint && <p className={cn("leading-snug text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{hint}</p>}
+        {hint && <p className={cn("leading-snug text-muted-foreground", "text-xs")}>{hint}</p>}
       </div>
       {children}
       <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />

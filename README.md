@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🛰️ AgentRoom
+<img src="assets/brand/agentroom-mark.svg" width="72" height="72" alt="AgentRoom logo">
+
+# AgentRoom
 
 **A local control room for your AI coding agents.**
 
@@ -340,6 +342,9 @@ Opening and reading pages run without asking. Clicking and typing ask for approv
 > [!IMPORTANT]
 > The AgentRoom tab must stay open for bots to browse, because the page runs inside it.
 
+- Pages on `localhost` are served under `localhost` too, so apps that check `location.hostname` behave as in a normal tab.
+- Cross-origin API calls from the page (fetch/XHR) go through the proxy with your app's real origin (for example `http://localhost:4200`), so CORS allow-lists written for the dev server keep working. Cookies those APIs set are kept server-side for that API only; your browser's localhost cookies are never forwarded.
+
 ### GitHub board
 
 Mirror a **GitHub Project (v2)** in AgentRoom and hand cards to the Team Lead to start goal runs.
@@ -353,6 +358,77 @@ Mirror a **GitHub Project (v2)** in AgentRoom and hand cards to the Team Lead to
 - Missing `project` scope? Run `gh auth refresh -s project`.
 
 Full spec: [docs/specs/github-board.md](docs/specs/github-board.md).
+
+### Sentry
+
+**Workspace → Sentry** lists your Sentry issues so you can hand them to a bot to fix.
+
+1. Paste a Sentry user auth token with the `org:read`, `project:read` and `event:read` scopes. It's stored only on your machine as `SENTRY_ACCESS_TOKEN` in `runs/secrets.json`; the Sentry MCP server uses the same secret.
+2. Pick the organization and projects (optionally a default environment). This is saved to `.agentroom/sentry.json`, which is committed.
+3. Search with Sentry syntax and filter by project, environment, status, level, assignee and time period, then sort. Each issue card shows the error, its culprit, event and user counts, a 24-hour sparkline, and New / Regressed / Unhandled badges.
+4. Open an issue to see its stack trace (in-app frames first, with source context), breadcrumbs, tags, request and contexts.
+5. **Hand off** one or more issues to any bot, or to a new one such as a "Bug Fixer". Sending them to the Team Lead starts a goal titled `Fix WEB-1A2: …`. The brief includes the in-app frames and breadcrumbs (wrapped as untrusted data) plus steps for fixing them, and asks the bot to reference the short ID in the commit so Sentry links the fix.
+
+- AgentRoom only reads from Sentry. It never changes issue status.
+- Sentry's data regions (US/EU) and self-hosted Sentry are supported.
+
+### MCP servers (Connections)
+
+**Connections** controls which external MCP servers bots can use, such as Sentry, Linear or your own. Bots run with `strictMcpConfig`, so they get only these servers, never everything configured in Claude Code.
+
+- **Add** a preset (Sentry with OAuth sign-in, or Sentry with an access token), a custom URL, or a command. You can also import a server from **Found in Claude Code** (claude.ai connectors, user/project config, plugins).
+- **Status** is shown for each server: Connected (with its tools), Needs sign-in (**Sign in** opens the OAuth page and the status updates automatically), Needs a token, Can't connect (with the error), or Off. The sidebar badge counts servers that need you.
+- **Bots** can be all bots or specific ones. **Team** servers live in `.agentroom/mcp.json` (committed, with `${secret:NAME}` references only); **Personal** servers live in `runs/mcp.local.json`.
+- **Approvals:** tools the server marks read-only run without asking under `ask-writes`. Everything else asks first, and "Always allow" covers that whole server. Every call is written to the audit log (kind `mcp`), and results are checked for prompt injection.
+
+### Branches, diff review and PRs
+
+Each goal works on its own branch (`agentroom/g-4`) in its own folder outside your repo (`~/.agentroom/worktrees/<repo>-<hash>/G-4`), so bots never touch your working copy and several goals can run at once. `node_modules` is linked in, not copied.
+
+- **Checkpoints:** every finished task is one commit (`T-3: …`). **Revert T-3** undoes just that task.
+- **Changes tab:** the goal's diff grouped by task and by file, unified or split. Click a line to comment; **Request changes from Developer** sends the comments back as a fix round.
+- **Open PR:** pushes the branch and runs `gh pr create`. The body is the Team Lead's report plus `Closes #n` for GitHub cards, `Fixes WEB-4X` for Sentry issues, and the security and test results.
+- **Merge into my branch** (only with a clean working copy) and **Remove the goal's folder** are in the goal header menu.
+
+### Budgets
+
+Caps per goal and per day in **Settings → Budgets**, plus a per-goal override in the goal header.
+
+- A warning at 80% (configurable), once per goal or day.
+- At the cap the goal pauses with "Paused at its $5.00 budget"; **Add $3 and resume** continues it. Each run gets the remaining budget as its limit.
+- Chats outside goals respect the daily cap too. The top bar shows "Today $3.20 / $10".
+
+### Automation: schedules and triggers
+
+Run the team without you. **Automation** in the sidebar lists schedules, triggers and every run.
+
+- **Schedule from anywhere:** type a time in the goal box ("Start the dependency rules tomorrow at 9", "every weekday at 8:30") and Send becomes **Schedule**. Hand-offs have **Now / Later**, and New goal has **Schedule…**.
+- **Schedules** (`.agentroom/schedules.json`, committed) run once or repeat (every day, weekdays, weekly, or a cron rule), and can start a goal, message a bot or hand off GitHub cards or Sentry issues. **Build without waiting for my approval** is off by default: the team plans and waits for you.
+- **Triggers** (`.agentroom/triggers.json`) read like a sentence: *When Sentry reports a new fatal issue, hand it to Bug Fixer and stop after the plan.* Sources: new Sentry issues, GitHub cards moved to a column, failed goals. Limits: runs per day, budget per run, quiet hours.
+- **History** shows each run with its result, goal and cost; failures also land in the Inbox.
+- **Background mode** (macOS): `agentroom daemon install` (or **Settings → Runner**) adds a LaunchAgent so schedules fire with the tab closed while the Mac is awake. `agentroom start` then opens the running instance.
+- A missed one-off (AgentRoom was off for more than 12 hours) is skipped and listed, never run late by surprise.
+
+### Morning brief and digest
+
+After two or more hours away, the Inbox opens with **While you were away**: goals finished, PRs ready, what needs you, and what it cost. **Settings → Integrations → Digests** sends a one-line daily summary to Slack or Teams at a time you pick.
+
+### Bot memory
+
+Each bot keeps `bots/<dir>/memory.md` (committed): conventions it learned about the repo, added to its context. Bots suggest notes with a `memory_note` tool; you **Keep** or **Ignore** them in the bot's **Memory** tab, and can edit, pin or delete any note.
+
+### Goal templates
+
+**New goal** offers Bug fix, New endpoint, Refactor and Dependency upgrade, each with its own fields and guidance for the Planner. Templates live in `.agentroom/goal-templates/*.md` and can be edited or added.
+
+### Approve from your phone
+
+**Settings → Remote approvals** opens a temporary link (via `cloudflared`) with a QR code. The phone page can only approve or deny requests, answer bot questions and approve plans; nothing else is reachable. The link expires (1–24 h, default 8 h) and can be revoked.
+
+### Replay and Insights
+
+- **Replay:** a goal's **Timeline** tab plays back what each bot did, lane by lane, with the cost building up.
+- **Insights:** goals finished and how many needed help, spend per day against the cap, approval wait, success per bot, and why runs fail.
 
 ### Approvals and permission modes
 
@@ -411,6 +487,20 @@ Copies default bots, skills and config into `.agentroom/` and adds `runs/` to `.
 | `-m, --model <id>` | from config | Default model for bots |
 | `--port <n>` | `4317` (from config) | Server port |
 | `--no-open` | — | Don't open the browser |
+
+If AgentRoom is already running for the repo (for example in background mode), `start` opens that instance instead of starting a second one.
+
+</details>
+
+<details>
+<summary><b><code>agentroom daemon install</code> / <code>uninstall</code> / <code>status</code></b>: background mode (macOS)</summary>
+
+Installs a LaunchAgent (`~/Library/LaunchAgents/dev.agentroom.<repo>-<hash>.plist`) that runs `agentroom start --no-open` for this repo at login and keeps it running, so schedules and triggers fire with the tab closed. Output goes to `.agentroom/runs/daemon.log`.
+
+| Option | Default | Description |
+|---|---|---|
+| `--port <n>` | from config | Port for the background server |
+| `-p, --provider <name>` | from config | Agent provider |
 
 </details>
 
@@ -485,6 +575,11 @@ your-project/
     │   └── <name>/SKILL.md           # shared skill library
     ├── tasks/board.json              # goals + tasks
     ├── github/project.json           # GitHub board config (when connected)
+    ├── sentry.json                   # Sentry org/projects for the Sentry page (token is a local secret)
+    ├── mcp.json                      # team MCP servers (${secret:NAME} references only)
+    ├── schedules.json                # scheduled goals, messages and hand-offs
+    ├── triggers.json                 # "when … then …" automation
+    ├── goal-templates/*.md           # New goal templates (fields + planner guidance)
     └── runs/                         # gitignored: events, sessions, ledger, audit, findings, uploads, local secrets
 ```
 
@@ -764,6 +859,9 @@ All routes are under `/api` and require the token.
 | Tasks | `GET /tasks` · `POST /tasks` · `PATCH /tasks/:id` · `DELETE /tasks/:id` |
 | Goals | `GET /goals` · `POST /goals` · `PATCH /goals/:id` · `DELETE /goals/:id` · `POST /goals/:id/{approve,pause,resume,cancel,replan}` |
 | GitHub | `GET/PUT/PATCH/DELETE /github` · `POST /github/sync-columns` · `GET /github/items` · `GET /github/items/:id` · `POST /github/items/:id/assign` · `POST /github/handoff` |
+| Sentry | `GET/PUT/DELETE /sentry` · `PUT /sentry/token` · `GET /sentry/{orgs,projects,environments}` · `GET /sentry/issues` · `GET /sentry/issues/:id` · `POST /sentry/handoff` |
+| Automation | `GET /automation` · `GET /automation/next` · `GET /automation/history` · `POST /schedule/parse` · `GET/POST /schedules` · `PATCH/DELETE /schedules/:id` · `POST /schedules/:id/run-now` · `GET/POST /triggers` · `PATCH/DELETE /triggers/:id` · `POST /triggers/:id/test` · `GET /brief` · `POST /brief/dismiss` · `GET /runner` · `POST /runner/{install,uninstall}` |
+| MCP | `GET /mcp` · `GET /mcp/presets` · `POST /mcp/refresh` · `POST /mcp/servers` · `POST /mcp/import` · `PATCH/DELETE /mcp/servers/:name` · `PUT /mcp/servers/:name/secrets` · `POST /mcp/servers/:name/sign-in` |
 | Alerts | `GET /alerts` · `PUT /alerts` · `POST /alerts/test` |
 | Settings & governance | `GET /settings` · `PATCH /settings` · `GET /ledger` · `GET /audit` · `GET/PUT /integrations` |
 | Security | `GET /security/findings` · `POST /security/findings/:id/resolve` · `POST /security/scan` |
@@ -808,7 +906,7 @@ npm install && npm --prefix web install
 | `npm run build` | Build UI (`next build` static export → `dist/ui`) then CLI (`tsup` → `dist/cli.js`) |
 | `npm run build:cli` | CLI and server only |
 | `npm run build:web` | UI only |
-| `npm run dev:web` | Next.js dev server pointed at `http://127.0.0.1:4317` |
+| `npm run dev:web` | Next.js dev server pointed at `http://localhost:4317` |
 | `npm test` | Vitest |
 | `npm run typecheck` | `tsc` for server and UI |
 | `npm run lint` | UI lint |
@@ -950,9 +1048,11 @@ Goal: people can comfortably let their bots work unattended. Security comes firs
 - [x] **P0 Foundation:** run ledger, audit log, settings page
 - [x] **P1 Security:** security phase, scanner, dependency guard, risk score and gates, injection guard
 - [x] Attachments in chat and goals
-- [ ] **P2 Review & isolation:** PR-style diffs with inline comments, worktrees, open PR
-- [ ] **P3 Control:** budgets, replay, goal templates, bot memory
-- [ ] **P4 Automation:** schedules, PR review from a link, insights, remote approvals
+- [x] **P2 Review & isolation:** PR-style diffs with inline comments, worktrees, open PR
+- [x] **P3 Control:** budgets, replay, goal templates, bot memory
+- [x] **P4 Automation:** schedules, triggers, background mode, morning brief and digest, insights, remote approvals
+- [ ] Cloud runner for schedules and triggers
+- [ ] PR review from a link
 
 Details: [docs/roadmap.md](docs/roadmap.md).
 

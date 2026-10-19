@@ -1,6 +1,7 @@
 import { HostTool, PermissionMode, ToolName } from '../../shared/enums.js';
 import type { Config } from '../../shared/types/index.js';
 import { HOST_TOOL_PREFIX } from '../config/constants.js';
+import { MCP_TOOL_PREFIX } from '../../shared/constants.js';
 
 /** Approval groups that "Always allow" applies to. */
 export const ApprovalGroup = {
@@ -35,11 +36,18 @@ export function matchesAlwaysAsk(command: string, patterns: string[]): string | 
   return null;
 }
 
+/** What the policy needs to know about external MCP tools (`mcp__<server>__<tool>`). */
+export interface McpToolInfo {
+  /** The server marks the tool read-only. */
+  isReadOnlyTool(tool: string): boolean;
+  serverOf(tool: string): string | undefined;
+}
+
 /**
  * Decide whether a tool call can run without asking the human.
  * `sessionAllowed` holds groups the human chose "Always allow" for during this server session.
  */
-export function decide(tool: string, input: Record<string, unknown>, config: Config, sessionAllowed: ReadonlySet<string>): Decision {
+export function decide(tool: string, input: Record<string, unknown>, config: Config, sessionAllowed: ReadonlySet<string>, mcp?: McpToolInfo): Decision {
   const hostTool = tool.startsWith(HOST_TOOL_PREFIX) ? tool.slice(HOST_TOOL_PREFIX.length) : null;
   const browser = hostTool?.startsWith('browser_') ? hostTool : null;
   if (hostTool && !browser) return { action: 'allow', by: 'policy', rule: 'AgentRoom host tool' };
@@ -49,14 +57,27 @@ export function decide(tool: string, input: Record<string, unknown>, config: Con
     if (hit) return { action: 'ask', reason: `"${hit}" always requires approval`, sticky: true, group: tool };
   }
 
-  const group = browser ? (browser === HostTool.BrowserEval ? ApprovalGroup.BrowserJs : ApprovalGroup.Browser) : tool;
+  const mcpServer = !hostTool && tool.startsWith(MCP_TOOL_PREFIX) ? (mcp?.serverOf(tool) ?? tool.split('__')[1]) : null;
+  // "Always allow" for an MCP server covers all of its tools.
+  const group = browser ? (browser === HostTool.BrowserEval ? ApprovalGroup.BrowserJs : ApprovalGroup.Browser) : mcpServer ? `MCP ${mcpServer}` : tool;
 
   if (config.permissionMode === PermissionMode.Auto) return { action: 'allow', by: 'policy', rule: 'auto mode' };
   if (sessionAllowed.has(group)) return { action: 'allow', by: 'session', rule: group };
   if (config.permissionMode === PermissionMode.AskWrites && (READ_ONLY.has(tool) || (browser && BROWSER_READ.has(browser)))) {
     return { action: 'allow', by: 'policy', rule: browser ? 'ask-writes: page read' : 'ask-writes: read-only tool' };
   }
+  if (config.permissionMode === PermissionMode.AskWrites && mcpServer && mcp?.isReadOnlyTool(tool)) {
+    return { action: 'allow', by: 'policy', rule: `ask-writes: read-only ${mcpServer} tool` };
+  }
 
-  const reason = browser ? 'acts on a web page' : WRITES.has(tool) ? 'modifies files' : tool === ToolName.Bash ? 'runs a shell command' : 'needs approval';
+  const reason = browser
+    ? 'acts on a web page'
+    : mcpServer
+      ? `uses ${mcpServer} (external service)`
+      : WRITES.has(tool)
+        ? 'modifies files'
+        : tool === ToolName.Bash
+          ? 'runs a shell command'
+          : 'needs approval';
   return { action: 'ask', reason, sticky: false, group };
 }

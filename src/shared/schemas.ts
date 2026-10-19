@@ -58,6 +58,10 @@ export const TaskSchema = z.object({
   /** Progress notes appended by bots and the engine. */
   log: z.array(TaskLogEntrySchema).default([]),
   createdBy: z.string().default('human'),
+  /** Checkpoint commits of this task in the goal's branch (oldest first). */
+  commits: z.array(z.string()).default([]),
+  /** The task's commits were reverted by the human. */
+  reverted: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -77,14 +81,24 @@ export const GoalSchema = z.object({
   /** Where the goal came from (e.g. GitHub cards handed off to the Team Lead). */
   sources: z
     .array(
-      z.object({
-        type: z.literal('github'),
-        itemId: z.string(),
-        url: z.string().optional(),
-        number: z.number().optional(),
-        repo: z.string().optional(),
-        title: z.string(),
-      }),
+      z.discriminatedUnion('type', [
+        z.object({
+          type: z.literal('github'),
+          itemId: z.string(),
+          url: z.string().optional(),
+          number: z.number().optional(),
+          repo: z.string().optional(),
+          title: z.string(),
+        }),
+        z.object({
+          type: z.literal('sentry'),
+          itemId: z.string(),
+          shortId: z.string(),
+          url: z.string().optional(),
+          project: z.string().optional(),
+          title: z.string(),
+        }),
+      ]),
     )
     .default([]),
   /** Security review for this goal: auto (risk-based), always, or off. */
@@ -109,12 +123,40 @@ export const GoalSchema = z.object({
   riskApproval: z.object({ score: z.number(), at: z.string(), by: z.string() }).optional(),
   /** Upload ids attached to the brief (screenshots, specs). Given to the Planner and listed for every bot. */
   attachments: z.array(z.string()).default([]),
+  /** Goal template it was started from (e.g. "bug-fix"). */
+  template: z.object({ id: z.string(), name: z.string() }).optional(),
+  /** Template guidance for the Planner (how to approach this kind of goal). */
+  guidance: z.string().optional(),
   /** Build/test rounds completed (bug-fix loops). */
   round: z.number().default(0),
   /** Why the goal paused/failed. */
   reason: z.string().optional(),
   /** When the human approved the plan; unset until then. */
   approvedAt: z.string().optional(),
+  /** The goal's own git branch and folder (a worktree), so bots never touch the human's working copy. */
+  worktree: z.object({ path: z.string(), branch: z.string() }).optional(),
+  /** Why the goal runs in the project root instead of its own folder (git missing, worktree failed…). */
+  worktreeWarning: z.string().optional(),
+  /** Inline review comments on the goal's diff (Changes tab). */
+  reviewComments: z
+    .array(
+      z.object({
+        id: z.string(),
+        file: z.string(),
+        line: z.number().optional(),
+        body: z.string(),
+        author: z.string(),
+        createdAt: z.string(),
+        resolved: z.boolean().default(false),
+        /** Sent to the Developer as a fix round. */
+        sent: z.boolean().default(false),
+      }),
+    )
+    .default([]),
+  /** Pull request opened for this goal. */
+  pr: z.object({ url: z.string(), number: z.number().optional() }).optional(),
+  /** Per-goal spend cap (USD); overrides settings.budgets.perGoalUsd. */
+  budgetUsd: z.number().positive().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -178,4 +220,108 @@ export const SettingsSchema = z.object({
     .prefault({}),
   worktrees: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
   audit: z.object({ retentionDays: z.number().int().min(1).default(90) }).default({ retentionDays: 90 }),
+  /** Daily summary sent to Slack/Teams webhooks (stored in local secrets). */
+  digest: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Local time, "HH:MM". */
+      time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:30'),
+      channels: z.array(z.enum(['slack', 'teams'])).default(['slack']),
+    })
+    .prefault({}),
 });
+
+/** MCP server names become tool prefixes (`mcp__<name>__…`), so keep them simple. */
+export const MCP_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const stringMap = z.record(z.string(), z.string());
+
+/** One server in mcp.json: Claude Code's `.mcp.json` fields plus AgentRoom's (bots, enabled, description, preset). */
+export const McpFileEntrySchema = z
+  .object({
+    type: z.enum(['stdio', 'http', 'sse', 'claudeai-proxy']).optional(),
+    url: z.string().url().optional(),
+    id: z.string().optional(),
+    headers: stringMap.optional(),
+    command: z.string().min(1).optional(),
+    args: z.array(z.string()).optional(),
+    env: stringMap.optional(),
+    bots: z.array(z.string()).default(['*']),
+    enabled: z.boolean().default(true),
+    description: z.string().optional(),
+    preset: z.string().optional(),
+  })
+  .refine((e) => (e.type === 'stdio' || (!e.type && e.command) ? !!e.command : !!e.url), {
+    message: 'needs "command" (stdio) or "url" (http, sse)',
+  })
+  .refine((e) => e.type !== 'claudeai-proxy' || !!e.id, { message: 'claudeai-proxy needs "id"' });
+
+export const McpFileSchema = z.object({
+  servers: z.record(z.string().regex(MCP_NAME, 'letters, digits, - and _ only'), McpFileEntrySchema).default({}),
+});
+
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'use HH:MM');
+const RunnerSchema = z.enum(['local', 'cloud']).default('local');
+
+export const AutomationActionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('goal'),
+    brief: z.string().min(1, 'Describe the goal'),
+    title: z.string().optional(),
+    templateId: z.string().optional(),
+    fields: z.record(z.string(), z.string()).optional(),
+    budgetUsd: z.number().positive().optional(),
+    autoBuild: z.boolean().optional(),
+  }),
+  z.object({ type: z.literal('message'), botId: z.string().min(1), text: z.string().min(1, 'Write the message') }),
+  z.object({
+    type: z.literal('handoff'),
+    source: z.enum(['github', 'sentry']),
+    ids: z.array(z.string()).min(1, 'Pick at least one item'),
+    botId: z.string().optional(),
+    note: z.string().optional(),
+  }),
+]);
+
+export const ScheduleSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(120),
+  enabled: z.boolean().default(true),
+  when: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('once'), at: z.string().datetime({ offset: true }) }),
+    z.object({ type: z.literal('cron'), cron: z.string().min(9), label: z.string() }),
+  ]),
+  action: AutomationActionSchema,
+  runner: RunnerSchema,
+  createdAt: z.string(),
+  createdBy: z.string().optional(),
+});
+export const SchedulesFileSchema = z.object({ schedules: z.array(ScheduleSchema).default([]) });
+
+export const TriggerSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(120),
+  enabled: z.boolean().default(true),
+  when: z.discriminatedUnion('source', [
+    z.object({ source: z.literal('sentry'), event: z.literal('new_issue'), level: z.enum(['fatal', 'error', 'warning']).optional(), project: z.string().optional() }),
+    z.object({ source: z.literal('github'), event: z.literal('card_moved'), toColumn: z.string().min(1) }),
+    z.object({ source: z.literal('goal'), event: z.literal('failed') }),
+  ]),
+  then: z.object({
+    type: z.enum(['handoff', 'goal', 'message', 'notify']),
+    botId: z.string().optional(),
+    planOnly: z.boolean().default(true),
+    channel: z.enum(['inbox', 'slack', 'teams']).optional(),
+    text: z.string().optional(),
+  }),
+  limits: z
+    .object({
+      maxRunsPerDay: z.number().int().min(1).max(100).default(3),
+      budgetUsd: z.number().positive().optional(),
+      quietHours: z.object({ from: HHMM, to: HHMM }).optional(),
+    })
+    .prefault({}),
+  runner: RunnerSchema,
+  createdAt: z.string(),
+  createdBy: z.string().optional(),
+});
+export const TriggersFileSchema = z.object({ triggers: z.array(TriggerSchema).default([]) });

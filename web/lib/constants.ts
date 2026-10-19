@@ -1,15 +1,27 @@
 import { BotStatus } from "@shared"
+import type { Tone } from "@/components/kit/tone"
 
 type ValueOf<T> = T[keyof T]
 
 /** Top-level workspace views. */
 export const View = {
   Team: "team",
-  Board: "board",
-  Tasks: "tasks",
+  /** Everything waiting on the human: approvals, questions, plan reviews, gates, sign-ins. */
+  Inbox: "inbox",
+  /** Goals and their tasks (was "Tasks"). */
+  Work: "work",
+  /** Schedules and triggers that run the team without the human. */
+  Automation: "automation",
+  /** The GitHub Project board (was "Board"). */
+  Github: "github",
+  Sentry: "sentry",
   Browser: "browser",
   Security: "security",
   Audit: "audit",
+  /** Results, spend and failure reasons over time. */
+  Insights: "insights",
+  /** MCP servers; shown inside Settings → Integrations. */
+  Connections: "connections",
   Settings: "settings",
 } as const
 export type View = ValueOf<typeof View>
@@ -19,6 +31,8 @@ export const BotTab = {
   Chat: "chat",
   Activity: "activity",
   Skills: "skills",
+  /** What the bot has learned about the repo (bots/<dir>/memory.md). */
+  Memory: "memory",
   Browser: "browser",
   Config: "config",
 } as const
@@ -27,7 +41,11 @@ export type BotTab = ValueOf<typeof BotTab>
 /** Tabs under a goal's header in the Tasks view, in display order (P2 adds Changes and Timeline). */
 export const GoalTab = {
   Tasks: "tasks",
+  /** The goal's diff with inline review comments. */
+  Changes: "changes",
   Security: "security",
+  /** Replay of what each bot did. */
+  Timeline: "timeline",
 } as const
 export type GoalTab = ValueOf<typeof GoalTab>
 
@@ -51,12 +69,13 @@ export const DEV_SERVER_SUGGESTIONS = ["localhost:3000", "localhost:5173", "loca
 /** Prefix the agent SDK adds to AgentRoom's own tools (e.g. `mcp__agentroom__browser_click`). */
 export const HOST_TOOL_PREFIX = "mcp__agentroom__"
 
-export const STATUS_META: Record<BotStatus, { label: string; dot: string }> = {
-  [BotStatus.Idle]: { label: "Idle", dot: "bg-muted-foreground/50" },
-  [BotStatus.Thinking]: { label: "Thinking", dot: "bg-sky-400" },
-  [BotStatus.Working]: { label: "Working", dot: "bg-emerald-400" },
-  [BotStatus.Waiting]: { label: "Needs you", dot: "bg-amber-400" },
-  [BotStatus.Error]: { label: "Error", dot: "bg-destructive" },
+/** Bot status: label, tone (badges, dots) and the dot class for places that draw their own. */
+export const STATUS_META: Record<BotStatus, { label: string; tone: Tone; dot: string }> = {
+  [BotStatus.Idle]: { label: "Idle", tone: "neutral", dot: "bg-muted-foreground/50" },
+  [BotStatus.Thinking]: { label: "Thinking", tone: "info", dot: "bg-info" },
+  [BotStatus.Working]: { label: "Working", tone: "brand", dot: "bg-brand" },
+  [BotStatus.Waiting]: { label: "Needs you", tone: "warning", dot: "bg-warning" },
+  [BotStatus.Error]: { label: "Error", tone: "danger", dot: "bg-danger" },
 }
 
 export const isBusy = (s: BotStatus | undefined) => s === BotStatus.Thinking || s === BotStatus.Working || s === BotStatus.Waiting

@@ -41,7 +41,7 @@ const components: Components = {
     ) : null,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noreferrer noopener" className="font-medium underline underline-offset-2 hover:text-primary">
+    <a href={href} target="_blank" rel="noreferrer noopener" className="font-medium text-brand-ink underline decoration-brand/40 underline-offset-2 hover:decoration-brand">
       {children}
     </a>
   ),
@@ -52,16 +52,16 @@ const components: Components = {
       <table className="w-full text-xs">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
+  thead: ({ children }) => <thead className="bg-sunken">{children}</thead>,
   th: ({ children }) => <th className="border-b px-3 py-1.5 text-left font-medium">{children}</th>,
   td: ({ children }) => <td className="border-b px-3 py-1.5 align-top last:border-b-0">{children}</td>,
   pre: ({ children }) => (
-    <pre className="my-3 overflow-x-auto rounded-xl border bg-muted/40 p-3 font-mono text-xs leading-relaxed [&>code]:bg-transparent [&>code]:p-0">
+    <pre className="my-3 overflow-x-auto rounded-xl border bg-sunken p-3 font-mono text-xs leading-relaxed [&>code]:bg-transparent [&>code]:p-0">
       {children}
     </pre>
   ),
   code: ({ className, children }) => (
-    <code className={cn("rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.85em]", className)}>{children}</code>
+    <code className={cn("rounded-md border bg-sunken px-1.5 py-0.5 font-mono text-[0.85em]", className)}>{children}</code>
   ),
 }
 

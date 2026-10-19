@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { Markdown } from "@/components/shared/markdown"
 import { ActorChip } from "@/features/audit/components/actor-chip"
-import { CATEGORY_META, SEVERITY_META, SOURCE_LABEL, STATUS_META } from "../constants"
+import { CATEGORY_META, SOURCE_LABEL, STATUS_META } from "../constants"
 import { location } from "../lib/findings"
 import { ResolveDialog, type ResolveMode } from "./resolve-dialog"
 import { SeverityBadge } from "./severity-badge"
@@ -22,7 +22,6 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
   const showOnTasks = useAppStore((s) => s.showOnTasks)
   const [detailOpen, setDetailOpen] = useState(false)
   const [resolving, setResolving] = useState<ResolveMode | null>(null)
-  const sev = SEVERITY_META[f.severity]
   const cat = CATEGORY_META[f.category] ?? CATEGORY_META.other
   const CatIcon = cat.icon
   const status = STATUS_META[f.status]
@@ -32,8 +31,7 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
 
   return (
     <li className={cn("relative overflow-hidden rounded-xl border bg-card", !open && "opacity-80")}>
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", sev.stripe)} />
-      <div className="space-y-2.5 py-3 pr-4 pl-5">
+      <div className="space-y-2.5 px-4 py-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <SeverityBadge severity={f.severity} />
           <Badge variant="outline" className="gap-1 font-normal">
@@ -51,8 +49,8 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
             {showGoal && f.goalId && (
               <button
                 onClick={() => showOnTasks({ goalId: f.goalId })}
-                className="rounded-md border px-1.5 py-0.5 font-mono text-[10px] hover:bg-muted hover:text-foreground"
-                title="Open this goal in Tasks"
+                className="rounded-md border px-1.5 py-0.5 font-mono text-xs hover:bg-muted hover:text-foreground"
+                aria-label="Open this goal in Work"
               >
                 {f.goalId}
                 {f.taskId && ` · ${f.taskId}`}
@@ -70,7 +68,7 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
         {where && <CopyLocation text={where} />}
 
         {f.snippet && (
-          <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 p-2.5 font-mono text-[11px] break-all whitespace-pre-wrap">{f.snippet}</pre>
+          <pre className="max-h-40 overflow-auto rounded-lg border bg-sunken p-3 font-mono text-xs break-all whitespace-pre-wrap">{f.snippet}</pre>
         )}
 
         {f.detail && (
@@ -99,7 +97,7 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
             <Button size="sm" variant="ghost" onClick={() => setResolving("dismissed")}>
               Dismiss as false positive
             </Button>
-            <span className={cn("ml-auto text-[11px]", sev.text)}>
+            <span className="ml-auto text-xs text-muted-foreground">
               <code className="font-mono">{f.rule}</code>
             </span>
           </div>
@@ -135,7 +133,7 @@ function CopyLocation({ text }: { text: string }) {
     <div className="flex items-center gap-1.5">
       <code className="truncate font-mono text-xs text-muted-foreground">{text}</code>
       <Button variant="ghost" size="icon-xs" onClick={copy} title="Copy path" aria-label="Copy path">
-        {copied ? <CheckIcon className="text-emerald-500" /> : <CopyIcon />}
+        {copied ? <CheckIcon className="tone-success tone-text" /> : <CopyIcon />}
       </Button>
     </div>
   )

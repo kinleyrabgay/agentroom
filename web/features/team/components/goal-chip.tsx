@@ -30,20 +30,18 @@ export function GoalChip() {
         e.stopPropagation()
         showOnTasks({ goalId: goal.id })
       }}
-      title={`${goal.title} — open in Tasks`}
+      aria-label={`${goal.id} ${goal.title}: ${meta.label}. Open in Work`}
       className={cn(
-        "mx-3 mb-2 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] hover:bg-muted",
-        goal.status === GoalStatus.AwaitingApproval
-          ? "border-amber-500/40 bg-amber-500/10"
-          : "bg-muted/40"
+        "mx-3 mb-2 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+        goal.status === GoalStatus.AwaitingApproval ? "tone-warning tone-soft" : "bg-sunken hover:bg-accent"
       )}
     >
       <RocketIcon className="size-3 shrink-0 text-muted-foreground" />
-      <span className="font-mono text-[10px] text-muted-foreground">
+      <span className="font-mono text-xs text-muted-foreground">
         {goal.id}
       </span>
       <span className={cn("size-1.5 shrink-0 rounded-full", meta.dot)} />
-      <span className="font-medium">{meta.label}</span>
+      <span className="font-medium text-foreground">{meta.label}</span>
       {own.length > 0 && (
         <span className="ml-auto text-muted-foreground tabular-nums">
           {done}/{own.length}

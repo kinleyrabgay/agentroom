@@ -1,22 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowUpIcon, MessageSquareIcon, RocketIcon } from "lucide-react"
+import { ArrowUpIcon, CalendarClockIcon, MessageSquareIcon, RocketIcon } from "lucide-react"
 import { toast } from "sonner"
 import { ClientMessageType } from "@shared"
 import { cn } from "@/lib/utils"
 import { BotTab } from "@/lib/constants"
-import { goalApi } from "@/lib/api/endpoints"
+import { automationApi, goalApi } from "@/lib/api/endpoints"
+import { View } from "@/lib/constants"
 import { send } from "@/lib/realtime/socket"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { BotAvatar } from "@/components/shared/bot-avatar"
+import { Segmented } from "@/components/kit/segmented"
 import { useAttachments } from "@/features/attachments/hooks/use-attachments"
 import { pastedFiles, useFileDrop } from "@/features/attachments/hooks/use-file-drop"
 import { AttachButton } from "@/features/attachments/components/attach-button"
 import { AttachmentTray } from "@/features/attachments/components/attachment-tray"
 import { DropOverlay } from "@/features/attachments/components/drop-overlay"
+import { ScheduleChip } from "@/features/automation/components/schedule-chip"
+import { useTimePhrase } from "@/features/automation/lib/use-time-phrase"
+import { formatAt } from "@/features/automation/lib/format"
 
 const Mode = { Goal: "goal", Chat: "chat" } as const
 type Mode = (typeof Mode)[keyof typeof Mode]
@@ -39,14 +44,40 @@ export function CommandBar({ floating = false }: { floating?: boolean }) {
   const [busy, setBusy] = useState(false)
   const files = useAttachments()
   const drop = useFileDrop(files.add)
+  const time = useTimePhrase(text)
   if (!lead) return null
 
   const hasContent = !!text.trim() || files.readyIds.length > 0
   const canSend = hasContent && !busy && !files.uploading
 
+  /** "…tomorrow at 9": schedule it instead of running now. */
+  const schedule = async () => {
+    if (!time.when) return
+    if (files.readyIds.length) return toast.error("Attachments can't be kept for later yet. Remove them or send now.")
+    const what = time.rest.trim()
+    if (!what) return toast.error("Say what to do, as well as when.")
+    setBusy(true)
+    try {
+      await automationApi.createSchedule({
+        name: what.slice(0, 80),
+        when: time.when,
+        action: mode === Mode.Goal ? { type: "goal", brief: what } : { type: "message", botId: lead.id, text: what },
+      })
+      setText("")
+      toast.success(time.when.type === "once" ? `Scheduled for ${formatAt(time.when.at)}` : `Scheduled: ${time.when.label}`, {
+        action: { label: "View", onClick: () => useAppStore.getState().setView(View.Automation) },
+      })
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSend) return
+    if (time.active) return schedule()
     const value = text.trim() || FILES_ONLY
     const attachments = files.readyIds.length ? files.readyIds : undefined
     if (mode === Mode.Chat) {
@@ -57,7 +88,7 @@ export function CommandBar({ floating = false }: { floating?: boolean }) {
       return
     }
     if (!text.trim()) {
-      toast.error("Describe the goal — attachments alone aren't enough to plan from.")
+      toast.error("Describe the goal. Attachments alone aren't enough to plan from.")
       return
     }
     setBusy(true)
@@ -76,26 +107,22 @@ export function CommandBar({ floating = false }: { floating?: boolean }) {
     }
   }
 
-  const modeButton = (m: Mode, label: string, Icon: typeof RocketIcon) => (
-    <button
-      type="button"
-      onClick={() => setMode(m)}
-      aria-pressed={mode === m}
-      className={cn(
-        "flex h-7 items-center gap-1 rounded-full px-2.5 text-xs transition-colors",
-        mode === m ? "bg-background font-medium shadow-xs" : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      <Icon className="size-3.5" />
-      {label}
-    </button>
-  )
-
   return (
-    <div className={cn(floating ? "pointer-events-none px-4 pb-4" : "border-t bg-background/80 p-3 backdrop-blur")}>
+    <div className={cn(floating ? "pointer-events-none px-4 pb-4" : "border-t bg-background px-6 py-3")}>
       <div className="pointer-events-auto mx-auto max-w-3xl">
+        {time.active && time.when && (
+          <div className={cn("mb-2 flex flex-wrap items-center gap-2 rounded-2xl border bg-surface px-3 py-2 text-xs", floating && "shadow-md")}>
+            <span className="text-muted-foreground">
+              {time.phrase ? <>Found <span className="rounded bg-brand/15 px-1 text-foreground">{time.phrase}</span>:</> : "Runs"}
+            </span>
+            <ScheduleChip when={time.when} onChange={time.setWhen} />
+            <button type="button" onClick={time.dismiss} className="ml-auto rounded-full px-2 py-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60">
+              Send now instead
+            </button>
+          </div>
+        )}
         {files.drafts.length > 0 && (
-          <div className="mb-2 rounded-2xl border bg-card/95 p-2 shadow-sm backdrop-blur">
+          <div className={cn("mb-2 rounded-2xl border bg-surface p-2", floating && "shadow-md")}>
             <AttachmentTray controller={files} />
           </div>
         )}
@@ -107,12 +134,12 @@ export function CommandBar({ floating = false }: { floating?: boolean }) {
             if (pasted.length) files.add(pasted)
           }}
           className={cn(
-            "relative flex items-center gap-2 rounded-full border bg-card p-1.5 pl-2 focus-within:ring-2 focus-within:ring-ring/30",
-            floating ? "shadow-lg" : "shadow-sm"
+            "relative flex items-center gap-2 rounded-2xl border bg-surface p-1.5 pl-2 transition-shadow focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-ring/25",
+            floating && "shadow-lg"
           )}
         >
           <DropOverlay show={drop.over} />
-          <BotAvatar bot={lead} className="size-7 rounded-full text-sm" />
+          <BotAvatar bot={lead} className="size-7 rounded-lg text-sm" />
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -121,21 +148,35 @@ export function CommandBar({ floating = false }: { floating?: boolean }) {
                 ? "Give the team a goal. Paste screenshots or drop specs…"
                 : `Message ${lead.name}…`
             }
+            aria-label={mode === Mode.Goal ? "Goal for the team" : `Message to ${lead.name}`}
             className="h-8 border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
-          <AttachButton onFiles={files.add} className="shrink-0 rounded-full text-muted-foreground" />
-          <div className="flex shrink-0 items-center rounded-full bg-muted p-0.5" role="group" aria-label="Send as">
-            {modeButton(Mode.Goal, "Goal", RocketIcon)}
-            {modeButton(Mode.Chat, "Chat", MessageSquareIcon)}
-          </div>
+          <AttachButton onFiles={files.add} className="shrink-0 rounded-lg text-muted-foreground" />
+          <Segmented<Mode>
+            size="sm"
+            aria-label="Send as"
+            className="shrink-0"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: Mode.Goal, label: <><RocketIcon className="size-3.5" /> Goal</>, title: "Start a planned goal" },
+              { value: Mode.Chat, label: <><MessageSquareIcon className="size-3.5" /> Chat</>, title: `Message ${lead.name}` },
+            ]}
+          />
           <Button
             type="submit"
-            size="icon-sm"
-            className="rounded-full"
+            size={time.active ? "sm" : "icon-sm"}
+            className="rounded-xl"
             disabled={!canSend}
-            title={files.uploading ? "Wait for uploads to finish" : mode === Mode.Goal ? "Start goal" : `Send to ${lead.name}`}
+            aria-label={files.uploading ? "Wait for uploads to finish" : time.active ? "Schedule" : mode === Mode.Goal ? "Start goal" : `Send to ${lead.name}`}
           >
-            <ArrowUpIcon />
+            {time.active ? (
+              <>
+                <CalendarClockIcon data-icon="inline-start" /> Schedule
+              </>
+            ) : (
+              <ArrowUpIcon />
+            )}
           </Button>
         </form>
       </div>

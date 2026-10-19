@@ -89,6 +89,10 @@ export const AuditKind = {
   Security: 'security',
   Settings: 'settings',
   Goal: 'goal',
+  /** A call to an external MCP server (Sentry, …). */
+  Mcp: 'mcp',
+  /** Schedules and triggers: created, changed, fired. */
+  Automation: 'automation',
 } as const;
 export type AuditKind = ValueOf<typeof AuditKind>;
 
@@ -255,6 +259,8 @@ export const HostTool = {
   NotifyHuman: 'notify_human',
   AskHuman: 'ask_human',
   Delegate: 'delegate',
+  /** Suggest a note for the bot's memory (the human keeps or ignores it). */
+  MemoryNote: 'memory_note',
   BrowserOpen: 'browser_open',
   BrowserSnapshot: 'browser_snapshot',
   BrowserClick: 'browser_click',
@@ -342,6 +348,8 @@ export const StateType = {
   Settings: 'settings',
   Findings: 'findings',
   Config: 'config',
+  Mcp: 'mcp',
+  Automation: 'automation',
 } as const;
 export type StateType = ValueOf<typeof StateType>;
 
@@ -365,3 +373,27 @@ export const ClientMessageType = {
   Presence: 'presence',
 } as const;
 export type ClientMessageType = ValueOf<typeof ClientMessageType>;
+
+/** Connection state of an external MCP server (the SDK's statuses plus AgentRoom's own checks). */
+export const McpStatus = {
+  Connected: 'connected',
+  /** The server wants an OAuth sign-in. */
+  NeedsAuth: 'needs-auth',
+  Failed: 'failed',
+  Pending: 'pending',
+  Disabled: 'disabled',
+  /** A `${secret:NAME}` it references isn't set yet; it isn't started until it is. */
+  MissingSecret: 'missing-secret',
+  /** Not checked yet. */
+  Unknown: 'unknown',
+} as const;
+export type McpStatus = ValueOf<typeof McpStatus>;
+
+/** Where an AgentRoom MCP server is defined. */
+export const McpScope = {
+  /** `.agentroom/mcp.json`, committed: everyone on the team gets it. */
+  Team: 'team',
+  /** `.agentroom/runs/mcp.local.json`: only this machine (personal connectors, private servers). */
+  Personal: 'personal',
+} as const;
+export type McpScope = ValueOf<typeof McpScope>;

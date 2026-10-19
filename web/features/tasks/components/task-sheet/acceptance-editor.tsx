@@ -46,7 +46,7 @@ export function AcceptanceEditor({
           />
           <button
             onClick={() => onChange(items.filter((_, j) => j !== i))}
-            className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+            className="rounded-md text-muted-foreground/60 outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 group-hover:text-muted-foreground"
             aria-label="Remove criterion"
           >
             <XIcon className="size-3.5" />

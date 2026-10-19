@@ -20,6 +20,10 @@ export interface SecurityServiceDeps {
   notifications?: NotificationService;
   /** Base commit of a goal (for push/PR diffs of goal work). */
   goalBase?: (goalId: string) => string | undefined;
+  /** A goal's own folder (worktree), when it has one: its diffs and gates are read there. */
+  goalCwd?: (goalId: string) => string | undefined;
+  /** Git access for another folder (a goal's worktree). */
+  gitFor?: (cwd: string) => GitReader;
 }
 
 export interface ScanResult {
@@ -65,9 +69,15 @@ export class SecurityService {
     return this.deps.git.head();
   }
 
+  /** Git for a goal's own folder, else the project's. */
+  private gitOf(goalId?: string): GitReader {
+    const cwd = goalId ? this.deps.goalCwd?.(goalId) : undefined;
+    return cwd && this.deps.gitFor ? this.deps.gitFor(cwd) : this.deps.git;
+  }
+
   /** Scan the working tree against `base` (a goal's base commit, or HEAD). */
   async scan(scope: FindingScope, base?: string, opts: { dependencies?: boolean } = {}): Promise<ScanResult> {
-    const files = ownFiles(parseUnifiedDiff(await this.deps.git.workingDiff(base ?? 'HEAD')));
+    const files = ownFiles(parseUnifiedDiff(await this.gitOf(scope.goalId).workingDiff(base ?? 'HEAD')));
     const depsChanged = this.deps.guard.touchesManifests(files);
     const runDeps = opts.dependencies !== false && depsChanged;
     const drafts = [...scanFiles(files), ...(runDeps ? await this.deps.guard.check(files) : [])];
@@ -91,7 +101,7 @@ export class SecurityService {
   async gate(command: string, scope: FindingScope): Promise<GateHold | null> {
     const action = gitActionOf(command);
     if (!action) return null;
-    const { git } = this.deps;
+    const git = this.gitOf(scope.goalId);
     let diff: string;
     if (action === GitAction.Commit) {
       diff = await git.stagedDiff();

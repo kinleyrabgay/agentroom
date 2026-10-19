@@ -1,16 +1,20 @@
 "use client"
 
-import { ActivityIcon, GlobeIcon, MessageSquareIcon, Settings2Icon, SparklesIcon } from "lucide-react"
+import { ActivityIcon, AppWindowIcon, BrainIcon, GlobeIcon, MessageSquareIcon, Settings2Icon, SparklesIcon } from "lucide-react"
 import { BotStatus } from "@shared"
 import { cn } from "@/lib/utils"
 import { BotTab, isBusy, View } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { ToneDot } from "@/components/kit/badge"
+import { EmptyState } from "@/components/kit/state-view"
 import { Activity } from "@/features/activity/components/activity"
 import { BotConfig } from "@/features/bot-config/components/bot-config"
 import { BrowserSurface } from "@/features/browser/components/browser-surface"
 import { Chat } from "@/features/chat/components/chat"
 import { BotSkillsTab } from "@/features/skills/components/bot-skills-tab"
+import { MemoryTab, MemoryTabLabel } from "@/features/memory/components/memory-tab"
 import { BotPanelHeader } from "./bot-panel-header"
 
 /** Side panel for one bot: chat, activity, skills, browser and config. */
@@ -21,6 +25,7 @@ export function BotPanel({ botId }: { botId: string }) {
   const setTab = useAppStore((s) => s.setBotTab)
   const browserLive = useAppStore((s) => !!s.previews[botId])
   const inFullBrowser = useAppStore((s) => s.view === View.Browser && s.browserBot === botId)
+  const setView = useAppStore((s) => s.setView)
 
   if (!bot) return null
   const skillCount = bot.skills.length + bot.localSkills.length
@@ -29,16 +34,20 @@ export function BotPanel({ botId }: { botId: string }) {
     <div className="flex h-full flex-col bg-background">
       <BotPanelHeader bot={bot} />
       <Tabs value={tab} onValueChange={(v) => setTab(v as BotTab)} className="min-h-0 flex-1 gap-0">
-        <div className="overflow-x-auto border-b px-4 py-2">
-          <TabsList>
+        <div className="overflow-x-auto border-b px-3">
+          <TabsList variant="line" className="h-10">
             <TabsTrigger value={BotTab.Chat}><MessageSquareIcon /> Chat</TabsTrigger>
             <TabsTrigger value={BotTab.Activity}><ActivityIcon /> Activity</TabsTrigger>
             <TabsTrigger value={BotTab.Skills}>
               <SparklesIcon /> Skills
-              {skillCount > 0 && <span className="text-[10px] text-muted-foreground tabular-nums">{skillCount}</span>}
+              {skillCount > 0 && <span className="text-xs text-muted-foreground tabular-nums">{skillCount}</span>}
+            </TabsTrigger>
+            <TabsTrigger value={BotTab.Memory}>
+              <BrainIcon /> Memory <MemoryTabLabel botId={bot.id} />
             </TabsTrigger>
             <TabsTrigger value={BotTab.Browser}>
-              <GlobeIcon className={cn(browserLive && "text-sky-500")} /> Browser
+              <GlobeIcon className={cn(browserLive && "text-info")} /> Browser
+              {browserLive && <ToneDot tone="info" pulse className="size-1.5" />}
             </TabsTrigger>
             <TabsTrigger value={BotTab.Config}><Settings2Icon /> Config</TabsTrigger>
           </TabsList>
@@ -52,9 +61,22 @@ export function BotPanel({ botId }: { botId: string }) {
         <TabsContent value={BotTab.Skills} className="min-h-0">
           <BotSkillsTab bot={bot} />
         </TabsContent>
+        <TabsContent value={BotTab.Memory} className="min-h-0">
+          <MemoryTab key={bot.id} bot={bot} />
+        </TabsContent>
         <TabsContent value={BotTab.Browser} className="flex min-h-0 flex-col">
           {inFullBrowser ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">This page is open in the full Browser view.</p>
+            <EmptyState
+              compact
+              icon={AppWindowIcon}
+              title="Open in the Browser view"
+              description={`${bot.name}'s page is showing in the full Browser. One page can't be in two places.`}
+              action={
+                <Button size="sm" variant="outline" onClick={() => setView(View.Browser)}>
+                  Go to Browser
+                </Button>
+              }
+            />
           ) : (
             <BrowserSurface bot={bot} compact />
           )}

@@ -1,39 +1,36 @@
 "use client"
 
-import { ShieldIcon } from "lucide-react"
 import { SecurityReviewMode } from "@shared"
 import { cn } from "@/lib/utils"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dropdown } from "@/components/kit/dropdown"
 import { REVIEW_MODE_META } from "../constants"
 
-/** Security review mode picker: Auto / Always / Off. */
+/** Security review mode picker: Auto / Always / Off, each with what it means. */
 export function ReviewModeSelect({
   value,
   onChange,
   size = "sm",
   className,
-  id,
 }: {
   value: SecurityReviewMode
   onChange: (v: SecurityReviewMode) => void
   size?: "sm" | "default"
   className?: string
+  /** Kept for callers that pair it with a <Label>; the trigger is labelled "Security review". */
   id?: string
 }) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as SecurityReviewMode)}>
-      <SelectTrigger id={id} size={size} className={cn("gap-1.5", className)} aria-label="Security review">
-        <ShieldIcon className="size-3.5 text-muted-foreground" />
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {Object.values(SecurityReviewMode).map((m) => (
-          <SelectItem key={m} value={m}>
-            Review: {REVIEW_MODE_META[m].label}
-            {m === SecurityReviewMode.Auto && <span className="text-muted-foreground"> (recommended)</span>}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Dropdown<SecurityReviewMode>
+      datas={Object.values(SecurityReviewMode).map((m) => ({
+        value: m,
+        label: `Review: ${REVIEW_MODE_META[m].label}${m === SecurityReviewMode.Auto ? " (recommended)" : ""}`,
+        sublabel: REVIEW_MODE_META[m].description,
+      }))}
+      selectedValue={value}
+      showSearch={false}
+      popoverWidth={320}
+      onSelect={(v) => onChange(v as SecurityReviewMode)}
+      className={cn(size === "sm" ? "h-8 text-[13px]" : "h-9", className)}
+    />
   )
 }

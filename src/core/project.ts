@@ -13,6 +13,8 @@ import { BoardStore } from './repositories/board.store.js';
 import { FsGoalRepository, type GoalRepository } from './repositories/goal.repository.js';
 import { FsTaskRepository, type TaskRepository } from './repositories/task.repository.js';
 import { FsSettingsRepository, type SettingsRepository } from './repositories/settings.repository.js';
+import { MemoryRepository } from './repositories/memory.repository.js';
+import { GoalTemplateRepository } from './repositories/goal-template.repository.js';
 
 /**
  * Facade over a project's `.agentroom/` folder. Repositories own each kind of file;
@@ -28,6 +30,10 @@ export class Project {
   readonly config: ConfigRepository;
   /** Team-wide settings (`.agentroom/settings.json`). */
   readonly settings: SettingsRepository;
+  /** What each bot has learned (`bots/<dir>/memory.md`) and notes bots suggested. */
+  readonly memory: MemoryRepository;
+  /** Goal templates (`goal-templates/*.md`, or the built-in set). */
+  readonly goalTemplates: GoalTemplateRepository;
 
   constructor(root: string) {
     this.paths = new ProjectPaths(root);
@@ -38,6 +44,8 @@ export class Project {
     this.goals = new FsGoalRepository(board);
     this.config = new FsConfigRepository(this.paths.config);
     this.settings = new FsSettingsRepository(this.paths.settingsFile);
+    this.memory = new MemoryRepository(this.paths);
+    this.goalTemplates = new GoalTemplateRepository(this.paths.goalTemplates);
   }
 
   get root() { return this.paths.root; }

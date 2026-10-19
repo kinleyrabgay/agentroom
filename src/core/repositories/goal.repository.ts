@@ -9,10 +9,13 @@ export interface NewGoalInput {
   securityReview?: Goal['securityReview'];
   /** Upload ids attached to the brief. */
   attachments?: string[];
+  /** Goal template it came from, and its guidance for the Planner. */
+  template?: { id: string; name: string };
+  guidance?: string;
 }
 
 const GOAL_PREFIX = 'G-';
-const CLEARABLE = ['feedback', 'reason', 'approvedAt'] as const;
+const CLEARABLE = ['feedback', 'reason', 'approvedAt', 'budgetUsd', 'worktree', 'worktreeWarning', 'pr'] as const;
 
 /** Fields the engine (not the human) manages are included; REST exposes a narrower GoalPatch. */
 export type GoalUpdate = Clearable<Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>>;

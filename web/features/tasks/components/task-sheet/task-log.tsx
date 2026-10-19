@@ -17,9 +17,9 @@ export function TaskLog({ entries }: { entries: TaskLogEntry[] }) {
         const bot = bots.find((b) => b.id === e.by)
         return (
           <li key={i} className="relative">
-            <span className="absolute top-0.5 -left-[25px]">
+            <span className="absolute top-0.5 -left-[27px]">
               {bot ? (
-                <BotAvatar bot={bot} className="size-4.5 rounded text-[9px]" />
+                <BotAvatar bot={bot} className="size-5 rounded text-xs" />
               ) : (
                 <span className="block size-2 translate-x-[5px] translate-y-1 rounded-full bg-muted-foreground/50" />
               )}

@@ -108,12 +108,23 @@ export interface HandoffResult {
   goal?: Goal;
 }
 
-/** Where a goal came from. */
-export interface GoalSource {
-  type: 'github';
-  itemId: string;
-  url?: string;
-  number?: number;
-  repo?: string;
-  title: string;
-}
+/** Where a goal came from: GitHub cards or Sentry issues handed to the team. */
+export type GoalSource =
+  | {
+      type: 'github';
+      itemId: string;
+      url?: string;
+      number?: number;
+      repo?: string;
+      title: string;
+    }
+  | {
+      type: 'sentry';
+      /** Sentry issue id. */
+      itemId: string;
+      /** e.g. "WEB-1A2". */
+      shortId: string;
+      url?: string;
+      project?: string;
+      title: string;
+    };

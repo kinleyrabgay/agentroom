@@ -30,21 +30,21 @@ export function SkillChips({ bot }: { bot: Bot }) {
   const hidden = chips.slice(MAX_VISIBLE)
 
   return (
-    <div className="flex min-h-9 flex-wrap gap-1 border-t bg-muted/30 px-3 py-2">
+    <div className="flex min-h-9 flex-wrap gap-1 rounded-b-xl border-t bg-sunken/70 px-3 py-2">
       {visible.map((c) => (
         <SkillChip key={`${c.own ? "own" : "lib"}:${c.name}`} bot={bot} chip={c} onOpen={openSkills} />
       ))}
       {hidden.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="secondary" className="cursor-pointer font-mono text-[10px] font-normal" onClick={openSkills}>
+            <Badge variant="secondary" className="cursor-pointer font-mono text-xs font-normal" onClick={openSkills}>
               +{hidden.length}
             </Badge>
           </TooltipTrigger>
           <TooltipContent className="max-w-60">{hidden.map((c) => c.name).join(", ")}</TooltipContent>
         </Tooltip>
       )}
-      {!chips.length && <span className="text-[11px] text-muted-foreground/70">No skills yet</span>}
+      {!chips.length && <span className="text-xs text-muted-foreground/70">No skills yet</span>}
     </div>
   )
 }
@@ -62,18 +62,18 @@ function SkillChip({ bot, chip, onOpen }: { bot: Bot; chip: Chip; onOpen: (e: Re
           variant="outline"
           onClick={onOpen}
           className={cn(
-            "group/chip cursor-pointer gap-0.5 font-mono text-[10px] font-normal transition-shadow",
-            chip.own ? "gap-1 border-dashed border-[var(--bot)] bg-[color-mix(in_oklch,var(--bot)_8%,transparent)]" : "bg-background",
+            "group/chip cursor-pointer gap-0.5 font-mono text-xs font-normal transition-shadow",
+            chip.own ? "gap-1 border-dashed border-[var(--bot)] bg-[color-mix(in_oklch,var(--bot)_8%,transparent)]" : "bg-surface",
             isNew && "animate-in duration-300 fade-in-0 zoom-in-50",
-            glow && "ring-2 ring-[var(--bot)]"
+            glow && "ring-2 ring-brand"
           )}
         >
           {chip.name}
           {chip.own ? (
-            <span className="font-sans text-[9px] text-muted-foreground uppercase">own</span>
+            <span className="font-sans text-xs text-muted-foreground">own</span>
           ) : (
             <button
-              className="hidden text-muted-foreground group-hover/chip:inline hover:text-destructive"
+              className="hidden text-muted-foreground group-hover/chip:inline group-focus-within/chip:inline hover:text-danger focus-visible:inline"
               aria-label={`Remove ${chip.name}`}
               onClick={(e) => {
                 e.stopPropagation()
@@ -86,7 +86,7 @@ function SkillChip({ bot, chip, onOpen }: { bot: Bot; chip: Chip; onOpen: (e: Re
         </Badge>
       </TooltipTrigger>
       <TooltipContent className="max-w-64">
-        <div className="font-mono text-[11px]">{chip.own ? `${chip.name} · ${bot.name}'s own` : chip.name}</div>
+        <div className="font-mono text-xs">{chip.own ? `${chip.name} · ${bot.name}'s own` : chip.name}</div>
         {chip.description && <div className="mt-0.5 opacity-80">{chip.description}</div>}
       </TooltipContent>
     </Tooltip>

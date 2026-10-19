@@ -1,5 +1,7 @@
-import type { FindingQuery, SecurityFinding, SecurityReviewMode, AuditPage, AuditQuery, IntegrationSecrets, IntegrationStatus, LedgerEntry, Settings, SettingsPatch, AlertCapabilities, AlertPrefs, Bot, BotPatch, GithubBoard, GithubItem, GithubItemDetail, GithubProjectConfig, HandoffInput, HandoffResult, Config, EffortLevel, Goal, GoalPatch, NewTaskInput, ProjectInfo, ProviderModels, Skill, SkillInput, Task, TaskPatch } from "@shared"
+import type { AutomationRun, AutomationSnapshot, Brief, NextRun, RunnerStatus, Schedule, TimeParse, Trigger, BudgetSummary, GoalChanges, PrDraft, SentryHandoffInput, SentryIssueDetail, SentryIssuePage, SentryIssueQuery, SentryOrg, SentryProject, SentryStatus, McpPreset, McpScope, McpServerEntry, McpSnapshot, McpTransportConfig, FindingQuery, SecurityFinding, SecurityReviewMode, AuditPage, AuditQuery, IntegrationSecrets, IntegrationStatus, LedgerEntry, Settings, SettingsPatch, AlertCapabilities, AlertPrefs, Bot, BotPatch, GithubBoard, GithubItem, GithubItemDetail, GithubProjectConfig, HandoffInput, HandoffResult, Config, EffortLevel, Goal, GoalPatch, NewTaskInput, ProjectInfo, ProviderModels, Skill, SkillInput, Task, TaskPatch } from "@shared"
 import { request } from "./client"
+import type { BotMemory, GoalTemplateList, MemoryNote, RemoteStatus } from "@shared"
+import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -59,8 +61,8 @@ export const taskApi = {
 /** Goal runs: plan → human review → build → test → report. */
 export const goalApi = {
   list: () => request<Goal[]>("GET", "/goals"),
-  create: (brief: string, title?: string, securityReview?: SecurityReviewMode, attachments?: string[]) =>
-    request<Goal>("POST", "/goals", { brief, title, securityReview, attachments }),
+  create: (brief: string, title?: string, securityReview?: SecurityReviewMode, attachments?: string[], extra?: GoalStartExtra) =>
+    request<Goal>("POST", "/goals", { brief, title, securityReview, attachments, ...extra }),
   update: (id: string, patch: GoalUpdate) => request<Goal>("PATCH", `/goals/${seg(id)}`, patch),
   approve: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/approve`),
   replan: (id: string, feedback: string) => request<Goal>("POST", `/goals/${seg(id)}/replan`, { feedback }),
@@ -134,3 +136,128 @@ export const securityApi = {
     request<SecurityFinding>("POST", `/security/findings/${seg(id)}/resolve`, { status, note }),
   scan: (goalId?: string) => request<SecurityFinding[]>("POST", "/security/scan", goalId ? { goalId } : {}),
 }
+
+/** External MCP servers (Sentry, …): status, add/remove, bot access, secrets (write-only) and browser sign-in. */
+export const mcpApi = {
+  get: () => request<McpSnapshot>("GET", "/mcp"),
+  presets: () => request<McpPreset[]>("GET", "/mcp/presets"),
+  refresh: () => request<McpSnapshot>("POST", "/mcp/refresh"),
+  add: (input: { name: string; config: McpTransportConfig; scope: McpScope; bots?: string[]; description?: string; preset?: string; secrets?: Record<string, string> }) =>
+    request<McpServerEntry>("POST", "/mcp/servers", input),
+  import: (name: string) => request<McpServerEntry>("POST", "/mcp/import", { name }),
+  update: (name: string, patch: { enabled?: boolean; bots?: string[]; scope?: McpScope }) =>
+    request<McpServerEntry>("PATCH", `/mcp/servers/${seg(name)}`, patch),
+  remove: (name: string) => request<{ ok: true }>("DELETE", `/mcp/servers/${seg(name)}`),
+  setSecrets: (name: string, values: Record<string, string>) => request<{ ok: true }>("PUT", `/mcp/servers/${seg(name)}/secrets`, values),
+  signIn: (name: string) =>
+    request<{ connected: true } | { connected: false; url: string; external?: boolean }>("POST", `/mcp/servers/${seg(name)}/sign-in`),
+}
+
+/** Sentry issues (REST API with the local SENTRY_ACCESS_TOKEN). Read-only except hand-offs to bots. */
+export const sentryApi = {
+  status: () => request<SentryStatus>("GET", "/sentry"),
+  setToken: (token: string, host?: string) => request<{ orgs: SentryOrg[] }>("PUT", "/sentry/token", { token, ...(host ? { host } : {}) }),
+  orgs: () => request<SentryOrg[]>("GET", "/sentry/orgs"),
+  projects: (org: string) => request<SentryProject[]>("GET", `/sentry/projects${qs({ org })}`),
+  environments: () => request<string[]>("GET", "/sentry/environments"),
+  connect: (input: { org: string; projects: string[]; environment?: string; host?: string }) => request<SentryStatus>("PUT", "/sentry", input),
+  disconnect: () => request<{ ok: true }>("DELETE", "/sentry"),
+  issues: (q: SentryIssueQuery) =>
+    request<SentryIssuePage>(
+      "GET",
+      `/sentry/issues${qs({
+        query: q.query,
+        projects: q.projects?.length ? q.projects.join(",") : undefined,
+        environment: q.environment,
+        status: q.status,
+        level: q.level,
+        assigned: q.assigned,
+        sort: q.sort,
+        period: q.period,
+        cursor: q.cursor,
+      })}`
+    ),
+  issue: (id: string) => request<SentryIssueDetail>("GET", `/sentry/issues/${seg(id)}`),
+  handoff: (input: SentryHandoffInput) => request<HandoffResult>("POST", "/sentry/handoff", input),
+}
+
+/** Replay and Insights: read-only views over the run ledger, event logs and audit log. */
+export const insightsApi = {
+  timeline: (goalId: string) => request<GoalTimeline>("GET", `/goals/${seg(goalId)}/timeline`),
+  get: (period: InsightsPeriod) => request<Insights>("GET", `/insights?period=${period}`),
+}
+
+/** Extra goal-start options: a goal template and its filled-in fields, and an optional budget. */
+export interface GoalStartExtra {
+  templateId?: string
+  fields?: Record<string, string>
+  budgetUsd?: number
+}
+
+/** Goal templates (`.agentroom/goal-templates/*.md`, or the built-in set). */
+export const goalTemplateApi = {
+  list: () => request<GoalTemplateList>("GET", "/goal-templates"),
+  saveDefaults: () => request<GoalTemplateList>("POST", "/goal-templates/save-defaults"),
+}
+
+/** Bot memory: notes in bots/<dir>/memory.md and notes the bot suggested. */
+export const memoryApi = {
+  get: (botId: string) => request<BotMemory>("GET", `/bots/${seg(botId)}/memory`),
+  save: (botId: string, notes: MemoryNote[]) => request<BotMemory>("PUT", `/bots/${seg(botId)}/memory`, { notes }),
+  keep: (botId: string, id: string, text?: string) => request<BotMemory>("POST", `/bots/${seg(botId)}/memory/suggestions/${seg(id)}/keep`, { text }),
+  ignore: (botId: string, id: string) => request<BotMemory>("POST", `/bots/${seg(botId)}/memory/suggestions/${seg(id)}/ignore`),
+}
+
+/** Phone approvals: tunnel status (with a QR code while on), turn on, revoke. */
+export const remoteApi = {
+  get: () => request<RemoteStatus & { qrSvg?: string }>("GET", "/remote"),
+  enable: (hours: number) => request<RemoteStatus & { qrSvg?: string }>("POST", "/remote/enable", { hours }),
+  disable: () => request<RemoteStatus>("POST", "/remote/disable"),
+}
+
+/** A goal's own branch: diff review, review comments, per-task revert, PR, local merge, cleanup. */
+export const goalWorkApi = {
+  changes: (id: string) => request<GoalChanges>("GET", `/goals/${seg(id)}/changes`),
+  addComment: (id: string, comment: { file: string; line?: number; body: string }) => request<Goal>("POST", `/goals/${seg(id)}/comments`, comment),
+  deleteComment: (id: string, commentId: string) => request<Goal>("DELETE", `/goals/${seg(id)}/comments/${seg(commentId)}`),
+  requestChanges: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/request-changes`),
+  revertTask: (id: string, taskId: string) => request<Task>("POST", `/goals/${seg(id)}/tasks/${seg(taskId)}/revert`),
+  prDraft: (id: string) => request<PrDraft>("GET", `/goals/${seg(id)}/pr-draft`),
+  openPr: (id: string, input: { title: string; body: string; draft: boolean }) => request<Goal>("POST", `/goals/${seg(id)}/pr`, input),
+  mergeLocal: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/merge-local`),
+  cleanup: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/cleanup`),
+}
+
+/** Spend today and per goal, against the caps in Settings → Budgets. */
+export const budgetApi = {
+  summary: () => request<BudgetSummary>("GET", "/budgets"),
+}
+
+/** Schedules, triggers, history, the brief, time parsing and background mode. */
+export const automationApi = {
+  get: () => request<AutomationSnapshot>("GET", "/automation"),
+  next: () => request<NextRun | null>("GET", "/automation/next"),
+  history: (limit = 100) => request<AutomationRun[]>("GET", `/automation/history?limit=${limit}`),
+  seen: () => request<{ ok: true }>("POST", "/automation/seen"),
+  parse: (text: string) => request<TimeParse>("POST", "/schedule/parse", { text }),
+  createSchedule: (input: ScheduleInput) => request<Schedule>("POST", "/schedules", input),
+  updateSchedule: (id: string, patch: Partial<ScheduleInput>) => request<Schedule>("PATCH", `/schedules/${seg(id)}`, patch),
+  deleteSchedule: (id: string) => request<{ ok: true }>("DELETE", `/schedules/${seg(id)}`),
+  runNow: (id: string) => request<AutomationRun>("POST", `/schedules/${seg(id)}/run-now`),
+  createTrigger: (input: TriggerInput) => request<Trigger>("POST", "/triggers", input),
+  updateTrigger: (id: string, patch: Partial<TriggerInput>) => request<Trigger>("PATCH", `/triggers/${seg(id)}`, patch),
+  deleteTrigger: (id: string) => request<{ ok: true }>("DELETE", `/triggers/${seg(id)}`),
+  testTrigger: (id: string) => request<{ wouldFire: boolean; reason?: string; event?: string; action: string }>("POST", `/triggers/${seg(id)}/test`),
+  brief: () => request<Brief | null>("GET", "/brief"),
+  dismissBrief: () => request<{ ok: true }>("POST", "/brief/dismiss"),
+}
+
+/** Background mode (macOS LaunchAgent). */
+export const runnerApi = {
+  status: () => request<RunnerStatus>("GET", "/runner"),
+  install: () => request<RunnerStatus>("POST", "/runner/install"),
+  uninstall: () => request<RunnerStatus>("POST", "/runner/uninstall"),
+}
+
+export type ScheduleInput = Pick<Schedule, "name" | "when" | "action"> & Partial<Pick<Schedule, "enabled" | "runner">>
+export type TriggerInput = Pick<Trigger, "name" | "when" | "then"> & Partial<Pick<Trigger, "enabled" | "runner" | "limits">>

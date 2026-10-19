@@ -24,10 +24,15 @@ export function pushBoard(project: Project, hub: Hub) {
 }
 
 /** Re-push state whenever anything under `.agentroom/` (except runs/) changes: UI edits, hand edits, git checkouts. */
-export function watchProject(project: Project, hub: Hub): () => Promise<void> {
+export function watchProject(project: Project, hub: Hub, onMcpChange?: () => void): () => Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const runs = project.paths.runs;
-  const watcher = watch(project.paths.dir, { ignoreInitial: true, ignored: (p) => p.startsWith(runs) }).on('all', () => {
+  let mcpTimer: NodeJS.Timeout | undefined;
+  const watcher = watch(project.paths.dir, { ignoreInitial: true, ignored: (p) => p.startsWith(runs) }).on('all', (_event, file) => {
+    if (onMcpChange && file === project.paths.mcpFile) {
+      clearTimeout(mcpTimer);
+      mcpTimer = setTimeout(onMcpChange, WATCH_DEBOUNCE_MS);
+    }
     clearTimeout(timer);
     timer = setTimeout(() => pushProjectState(project, hub), WATCH_DEBOUNCE_MS);
   });

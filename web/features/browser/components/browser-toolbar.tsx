@@ -70,7 +70,7 @@ export function BrowserToolbar({ bot, preview, compact, picking, consoleOpen, pr
         <TooltipTrigger asChild>
           <Button type="button" variant={consoleOpen ? "secondary" : "ghost"} size="sm" className="h-8 gap-1 px-2" onClick={onToggleConsole}>
             <TerminalSquareIcon />
-            {problems > 0 && <Badge variant="destructive" className="h-4 px-1 text-[10px]">{problems}</Badge>}
+            {problems > 0 && <Badge variant="destructive" className="h-4 px-1 text-xs tabular-nums">{problems}</Badge>}
           </Button>
         </TooltipTrigger>
         <TooltipContent>Console and network errors</TooltipContent>

@@ -52,7 +52,7 @@ export function BoardSettings({ project }: { project: GithubProjectConfig }) {
             const shown = !project.hiddenColumns.includes(c.id)
             return (
               <li key={c.id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-sm hover:bg-accent">
                   <Checkbox checked={shown} onCheckedChange={(v) => toggleColumn(c.id, v === true)} />
                   <span className="size-2 rounded-full" style={{ background: OPTION_COLORS[c.color ?? "GRAY"] ?? OPTION_COLORS.GRAY }} />
                   <span className="truncate">{c.name}</span>
@@ -67,7 +67,7 @@ export function BoardSettings({ project }: { project: GithubProjectConfig }) {
         </div>
         <Separator />
         <div className="flex items-center gap-2 p-2">
-          <Button size="xs" variant="ghost" onClick={sync} disabled={syncing}>
+          <Button size="sm" variant="ghost" onClick={sync} disabled={syncing}>
             <RefreshCwIcon data-icon="inline-start" className={syncing ? "animate-spin" : undefined} /> Sync columns
           </Button>
           <div className="ml-auto">
@@ -79,7 +79,7 @@ export function BoardSettings({ project }: { project: GithubProjectConfig }) {
             />
           </div>
         </div>
-        <p className="flex items-center gap-1.5 border-t px-3 py-2 text-[10px] text-muted-foreground">
+        <p className="flex items-center gap-1.5 border-t px-3 py-2 text-xs text-muted-foreground">
           <UnplugIcon className="size-3" /> Columns synced {new Date(project.columnsSyncedAt).toLocaleString()}
         </p>
       </PopoverContent>

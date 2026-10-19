@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useAppStore } from "@/lib/store/app-store"
+import { PageActions } from "@/components/layout/page-actions"
 import { newestFirst } from "@/features/tasks/lib/goal-phase"
 import { DEFAULT_FILTERS, filterFindings, type FindingFilters } from "../lib/findings"
 import { useFindingCounts } from "../hooks/use-finding-counts"
@@ -23,15 +24,10 @@ export function SecurityPage() {
 
   return (
     <div className="absolute inset-0 overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-4 px-6 py-6">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-muted-foreground">
-              Secrets, risky code, vulnerable dependencies and prompt injection found in the bots&apos; changes. Critical findings block commits and PRs until you decide.
-            </p>
-          </div>
-          <ScanButton />
-        </div>
+      <PageActions>
+        <ScanButton />
+      </PageActions>
+      <div className="mx-auto max-w-6xl space-y-5 px-6 py-5 pb-24">
         <StatTiles counts={counts} />
         <FindingsFilters filters={filters} onChange={setFilters} goals={sortedGoals} />
         <FindingsList findings={visible} filters={filters} />

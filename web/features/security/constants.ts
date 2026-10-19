@@ -25,34 +25,38 @@ import {
   RiskLevel,
   SecurityReviewMode,
 } from "@shared"
+import type { Tone } from "@/components/kit/tone"
 
 /** Severity always shows icon + label; color is only a secondary cue. */
 export const SEVERITY_META: Record<
   FindingSeverity,
-  { label: string; icon: LucideIcon; stripe: string; text: string; chip: string; rank: number }
+  { label: string; icon: LucideIcon; tone: Tone; stripe: string; text: string; chip: string; rank: number }
 > = {
   [FindingSeverity.Critical]: {
     label: "Critical",
     icon: OctagonAlertIcon,
-    stripe: "bg-red-500",
-    text: "text-red-700 dark:text-red-300",
-    chip: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+    tone: "danger",
+    stripe: "bg-danger",
+    text: "text-danger-ink",
+    chip: "tone-danger tone-soft",
     rank: 0,
   },
   [FindingSeverity.Warning]: {
     label: "Warning",
     icon: TriangleAlertIcon,
-    stripe: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-300",
-    chip: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    tone: "warning",
+    stripe: "bg-warning",
+    text: "text-warning-ink",
+    chip: "tone-warning tone-soft",
     rank: 1,
   },
   [FindingSeverity.Info]: {
     label: "Info",
     icon: InfoIcon,
+    tone: "neutral",
     stripe: "bg-muted-foreground/40",
     text: "text-muted-foreground",
-    chip: "border-border bg-muted text-muted-foreground",
+    chip: "tone-neutral tone-soft",
     rank: 2,
   },
 }
@@ -84,23 +88,26 @@ export const STATUS_META: Record<FindingStatus, { label: string; icon: LucideIco
   [FindingStatus.Fixed]: { label: "Fixed", icon: ShieldCheckIcon },
 }
 
-export const RISK_META: Record<RiskLevel, { label: string; icon: LucideIcon; chip: string; hint: string }> = {
+export const RISK_META: Record<RiskLevel, { label: string; icon: LucideIcon; tone: Tone; chip: string; hint: string }> = {
   [RiskLevel.Low]: {
     label: "Low risk",
     icon: ShieldCheckIcon,
-    chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    tone: "success",
+    chip: "tone-success tone-soft",
     hint: "No extra gates.",
   },
   [RiskLevel.Medium]: {
     label: "Medium risk",
     icon: ShieldIcon,
-    chip: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    tone: "warning",
+    chip: "tone-warning tone-soft",
     hint: "The security review step runs (in Auto mode).",
   },
   [RiskLevel.High]: {
     label: "High risk",
     icon: ShieldAlertIcon,
-    chip: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+    tone: "danger",
+    chip: "tone-danger tone-soft",
     hint: "Security review runs, and you approve before Test and before the PR.",
   },
 }

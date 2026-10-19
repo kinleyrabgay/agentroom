@@ -1,13 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { PlusIcon, RotateCcwIcon, TriangleAlertIcon, XIcon } from "lucide-react"
+import { PlusIcon, RotateCcwIcon, XIcon } from "lucide-react"
 import { SecurityReviewMode, type Settings } from "@shared"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ToneBadge } from "@/components/kit/badge"
+import { Callout } from "@/components/kit/callout"
+import { Dropdown } from "@/components/kit/dropdown"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { REVIEW_MODE_META, SCANNER_CHECKS } from "@/features/security/constants"
@@ -58,16 +60,20 @@ export function SecuritySection() {
                   aria-checked={checked}
                   onClick={() => update({ review: m })}
                   className={cn(
-                    "rounded-xl border p-3 text-left transition-colors hover:bg-muted/50",
-                    checked && "border-primary bg-primary/5 ring-1 ring-primary/30"
+                    "rounded-xl border p-3 text-left transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60",
+                    checked && "tone-brand border-[color-mix(in_oklch,var(--tone)_45%,transparent)] bg-[color-mix(in_oklch,var(--tone)_7%,transparent)]"
                   )}
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
-                    <span className={cn("grid size-3.5 place-items-center rounded-full border", checked && "border-primary")}>
-                      {checked && <span className="size-1.5 rounded-full bg-primary" />}
+                    <span className={cn("grid size-3.5 place-items-center rounded-full border", checked && "border-brand")}>
+                      {checked && <span className="size-1.5 rounded-full bg-brand" />}
                     </span>
                     {meta.label}
-                    {m === SecurityReviewMode.Auto && <span className="text-[10px] font-normal text-muted-foreground">recommended</span>}
+                    {m === SecurityReviewMode.Auto && (
+                      <ToneBadge tone="brand" size="sm" className="font-normal">
+                        Recommended
+                      </ToneBadge>
+                    )}
                   </span>
                   <span className="mt-1 block text-xs text-muted-foreground">{meta.description}</span>
                 </button>
@@ -80,29 +86,24 @@ export function SecuritySection() {
 
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-48 flex-1">
-            <Label htmlFor="sec-block" className="text-sm font-medium">
+            <Label className="text-sm font-medium">
               Block commits and PRs on
             </Label>
             <p className="text-xs text-muted-foreground">Blocked actions wait for you to approve or deny, with the findings shown.</p>
           </div>
-          <Select value={value.blockOn} onValueChange={(v) => update({ blockOn: v as BlockOn })}>
-            <SelectTrigger id="sec-block" className="w-64">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {BLOCK_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="w-64">
+            <Dropdown<BlockOn>
+              datas={BLOCK_OPTIONS}
+              selectedValue={value.blockOn}
+              showSearch={false}
+              onSelect={(v) => update({ blockOn: v as BlockOn })}
+            />
+          </div>
         </div>
         {value.blockOn === "none" && (
-          <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-            <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+          <Callout tone="warning">
             Findings are still recorded, but bots can commit, push and open PRs without stopping. Only use this for throwaway repos.
-          </p>
+          </Callout>
         )}
 
         <div className="flex items-start gap-3">

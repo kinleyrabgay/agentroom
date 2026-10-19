@@ -38,10 +38,10 @@ function Section({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="rounded-xl border bg-muted/20"
+      className="rounded-xl border bg-surface"
     >
       <div className="flex items-center gap-2 px-3 py-2">
-        <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left text-sm font-medium">
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 rounded-md text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
           <ChevronRightIcon
             className={cn(
               "size-3.5 text-muted-foreground transition-transform",
@@ -113,7 +113,7 @@ export function PlanSection({ goal }: { goal: Goal }) {
       ) : goal.plan ? (
         <Markdown text={goal.plan} />
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           The Planner hasn&apos;t written an overview yet.
         </p>
       )}

@@ -44,7 +44,7 @@ export function DependsOnPicker({
               key={id}
               className="flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-xs"
             >
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 {id}
               </span>
               <span className="truncate">
@@ -92,7 +92,7 @@ export function DependsOnPicker({
                       value.includes(t.id) ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {t.id}
                   </span>
                   <span className="truncate">{t.title}</span>

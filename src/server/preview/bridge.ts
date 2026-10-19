@@ -35,12 +35,43 @@ function agentroomBridge() {
   addEventListener('error', (e) => line('error', `${e.message}${e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : ''}`));
   addEventListener('unhandledrejection', (e) => line('error', `Unhandled rejection: ${fmt((e as PromiseRejectionEvent).reason)}`));
 
+  // Cross-origin API calls go through the proxy's forwarder, which sends them with the app's real
+  // origin (e.g. http://localhost:4200), so CORS rules written for the dev server keep working.
+  const FORWARD = '/__agentroom/forward?u=';
+  const FORWARD_HEADER = 'x-agentroom-forward';
+  const forwardUrl = (u: string): string | null => {
+    try {
+      const url = new URL(u, location.href);
+      if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.origin === location.origin) return null;
+      return location.origin + FORWARD + encodeURIComponent(url.href);
+    } catch {
+      return null;
+    }
+  };
+
   const origFetch = window.fetch;
+  const forwardFetch = async (fwd: string, input: RequestInfo | URL, init?: RequestInit) => {
+    const base: RequestInit = {};
+    if (input instanceof Request) {
+      base.method = input.method;
+      base.headers = new Headers(input.headers);
+      base.credentials = input.credentials;
+      base.redirect = input.redirect;
+      base.signal = input.signal;
+      if (!/^(GET|HEAD)$/i.test(input.method)) base.body = await input.clone().arrayBuffer();
+    }
+    const opts: RequestInit = { ...base, ...(init ?? {}) };
+    const headers = new Headers(opts.headers ?? undefined);
+    headers.set(FORWARD_HEADER, '1');
+    opts.headers = headers;
+    return origFetch.call(window, fwd, opts);
+  };
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const fwd = forwardUrl(url);
     try {
-      const res = await origFetch.call(this, input as any, init);
+      const res = fwd ? await forwardFetch(fwd, input, init) : await origFetch.call(this, input as any, init);
       if (!res.ok) line('network', `${res.status} ${method} ${url}`);
       return res;
     } catch (err) {
@@ -49,13 +80,22 @@ function agentroomBridge() {
     }
   };
   const xhrOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest & { __ar?: string }, method: string, url: string | URL, ...rest: any[]) {
+  const xhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest & { __ar?: string; __fwd?: boolean }, method: string, url: string | URL, ...rest: any[]) {
     this.__ar = `${method.toUpperCase()} ${url}`;
+    const fwd = forwardUrl(String(url));
+    this.__fwd = !!fwd;
     this.addEventListener('loadend', () => {
       if (this.status === 0 || this.status >= 400) line('network', `${this.status || 'failed'} ${this.__ar}`);
     });
-    return (xhrOpen as any).call(this, method, url, ...rest);
+    return (xhrOpen as any).call(this, method, fwd ?? url, ...rest);
   } as any;
+  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest & { __fwd?: boolean }, body?: any) {
+    if (this.__fwd) {
+      try { this.setRequestHeader(FORWARD_HEADER, '1'); } catch {}
+    }
+    return xhrSend.call(this, body);
+  };
 
   // ---------- navigation reporting ----------
   const here = () => location.pathname + location.search + location.hash;

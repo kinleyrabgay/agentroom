@@ -5,9 +5,9 @@ import { CheckIcon, ChevronsUpDownIcon } from "lucide-react"
 import type { EffortLevel, ModelOption } from "@shared"
 import { cn } from "@/lib/utils"
 import { useAppStore, LoadStatus } from "@/lib/store/app-store"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FIELD_CLASS } from "@/components/kit/field"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ProviderMark } from "@/features/usage/components/provider-mark"
@@ -45,7 +45,7 @@ export function ModelEffortPicker({
   const [open, setOpen] = useState(false)
   const provider = info?.provider ?? "claude"
 
-  if (status === LoadStatus.Loading || status === LoadStatus.Idle) return <Skeleton className="h-10 w-full rounded-xl" />
+  if (status === LoadStatus.Loading || status === LoadStatus.Idle) return <Skeleton className="h-9 w-full rounded-full" />
   if (status === LoadStatus.Error || !models?.models.length) {
     return (
       <Input
@@ -65,7 +65,7 @@ export function ModelEffortPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="h-10 w-full justify-start gap-2 rounded-xl px-3 font-normal">
+        <button type="button" className={cn(FIELD_CLASS, "justify-start gap-2 text-left")}>
           <ProviderMark provider={provider} className="size-4" />
           <span className="truncate">
             {inherit && !value.model ? (
@@ -81,10 +81,10 @@ export function ModelEffortPicker({
             )}
           </span>
           <ChevronsUpDownIcon className="ml-auto size-4 text-muted-foreground" />
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-80 p-0">
-        <div className="px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        <div className="px-3 pt-3 pb-1 text-xs font-medium text-muted-foreground">
           {models.provider} models
         </div>
         <ul className="max-h-72 overflow-y-auto p-1" role="listbox">
@@ -107,8 +107,8 @@ export function ModelEffortPicker({
         {efforts.length > 0 && (
           <div className="border-t p-3">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Effort</span>
-              <span className="text-[10px] text-muted-foreground">Higher effort thinks longer and costs more</span>
+              <span className="text-xs font-medium text-muted-foreground">Effort</span>
+              <span className="text-xs text-muted-foreground">Higher thinks longer and costs more</span>
             </div>
             <ToggleGroup
               type="single"
@@ -144,13 +144,13 @@ function ModelRow({ label, description, selected, onSelect }: { label: string; d
         role="option"
         aria-selected={selected}
         onClick={onSelect}
-        className={cn("flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted", selected && "bg-muted/60")}
+        className={cn("flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none", selected && "bg-accent/70")}
       >
         <div className="min-w-0 flex-1">
           <div className="text-sm">{label}</div>
           <div className="truncate text-xs text-muted-foreground">{description}</div>
         </div>
-        <CheckIcon className={cn("mt-0.5 size-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+        <CheckIcon className={cn("mt-0.5 size-4 shrink-0 text-brand", selected ? "opacity-100" : "opacity-0")} />
       </button>
     </li>
   )

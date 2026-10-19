@@ -3,10 +3,11 @@ import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
 import zlib from 'node:zlib';
-import { BIND_HOST } from '../../shared/constants.js';
+import { BIND_HOST, PUBLIC_HOST } from '../../shared/constants.js';
 import { BRIDGE_SCRIPT_PATH } from '../config/constants.js';
 import { BRIDGE_JS } from './bridge.js';
 import { swapOrigin } from './url.js';
+import { CookieJar, FORWARD_PATH, forwardRequest } from './forward.js';
 
 const BRIDGE_TAG = `<script src="${BRIDGE_SCRIPT_PATH}"></script>`;
 /** Headers that stop a page from being framed (or pin it to https). */
@@ -31,7 +32,15 @@ export function startProxy(target: URL): Promise<PreviewProxy> {
   const toTarget = (v: string) => swapOrigin(v, origin, target.origin);
   const toProxy = (v: string) => swapOrigin(v, target.origin, origin);
 
+  const jar = new CookieJar();
   const server = http.createServer((req, res) => {
+    if (req.url?.startsWith(`${FORWARD_PATH}?`)) {
+      forwardRequest(req, res, target.origin, jar).catch(() => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end();
+      });
+      return;
+    }
     if (req.url?.startsWith(BRIDGE_SCRIPT_PATH)) {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       res.end(BRIDGE_JS);
@@ -92,13 +101,41 @@ export function startProxy(target: URL): Promise<PreviewProxy> {
     socket.on('error', () => upstream.destroy());
   });
 
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, BIND_HOST, () => {
-      origin = `http://${BIND_HOST}:${(server.address() as net.AddressInfo).port}`;
-      resolve({ server, origin, target, close: () => server.close() });
+  // Same port for the same site across restarts, so its origin (and the page's localStorage) stays put.
+  const listen = (p: number) =>
+    new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(p, BIND_HOST, () => {
+        server.off('error', reject);
+        resolve();
+      });
     });
-  });
+  return listen(preferredPort(target))
+    .catch(() => listen(0))
+    .then(() => {
+      origin = `http://${proxyHostname(target)}:${(server.address() as net.AddressInfo).port}`;
+      return { server, origin, target, close: () => server.close() };
+    });
+}
+
+/**
+ * Hostname the page is served under: `localhost`, the same site as the AgentRoom UI (so the frame
+ * keeps its cookies and storage), and what apps expect when they check `location.hostname`.
+ * `*.localhost` targets keep their name.
+ */
+export function proxyHostname(target: URL): string {
+  const h = target.hostname.toLowerCase();
+  return h.endsWith('.localhost') ? h : PUBLIC_HOST;
+}
+
+const PORT_BASE = 41000;
+const PORT_SPAN = 2000;
+
+/** A stable port for a site (hash of its origin), so reopening it after a restart keeps the same origin. */
+export function preferredPort(target: URL): number {
+  let h = 0;
+  for (const ch of target.origin) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return PORT_BASE + (h % PORT_SPAN);
 }
 
 export function injectBridge(html: string): string {

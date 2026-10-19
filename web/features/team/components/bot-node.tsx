@@ -9,6 +9,7 @@ import { BotTab, DragType, isBusy, STATUS_META } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { previewUrl, stripScheme } from "@/lib/store/selectors"
 import { BotAvatar } from "@/components/shared/bot-avatar"
+import { ToneDot } from "@/components/kit/badge"
 import { useBotModelLabel } from "@/features/models/components/model-label"
 import { assignSkill } from "@/features/skills/lib/assign"
 import { endSkillDrag } from "@/features/skills/lib/drag"
@@ -33,6 +34,9 @@ export const BotNode = memo(function BotNode({ data }: NodeProps<Node<BotNodeDat
   const hasDragged = !!dragging && (bot.skills.includes(dragging) || bot.localSkills.some((s) => s.name === dragging))
   const target = !!dragging && !hasDragged
 
+  const waiting = st.status === BotStatus.Waiting
+  const failed = st.status === BotStatus.Error
+
   return (
     <div
       onClick={() => select(bot.id)}
@@ -51,27 +55,32 @@ export const BotNode = memo(function BotNode({ data }: NodeProps<Node<BotNodeDat
       }}
       style={{ ["--bot" as string]: bot.color }}
       className={cn(
-        "relative w-64 cursor-pointer overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm transition-all duration-200 hover:shadow-md",
-        selected && "ring-2 ring-[var(--bot)]",
-        active && "shadow-[0_0_0_4px_color-mix(in_oklch,var(--bot)_18%,transparent)]",
-        target && !over && "-translate-y-1 border-dashed border-[var(--bot)] shadow-lg ring-2 ring-[color-mix(in_oklch,var(--bot)_35%,transparent)]",
-        target && over && "-translate-y-1 scale-[1.04] border-[var(--bot)] shadow-xl ring-4 ring-[var(--bot)]",
+        "relative w-64 cursor-pointer rounded-xl border bg-card text-card-foreground shadow-xs transition-[box-shadow,transform,opacity] duration-200 hover:shadow-md",
+        selected && "ring-2 ring-brand ring-offset-2 ring-offset-background",
+        waiting && !selected && "tone-warning ring-2 ring-[var(--tone)]",
+        failed && !selected && "tone-danger ring-2 ring-[var(--tone)]",
+        target && !over && "-translate-y-1 border-dashed border-brand shadow-lg",
+        target && over && "-translate-y-1 scale-[1.03] border-brand shadow-xl ring-2 ring-brand",
         hasDragged && "opacity-60"
       )}
     >
+      {/* Working: a slow breathing outline in the brand colour. */}
+      {active && !waiting && (
+        <span aria-hidden className="pointer-events-none absolute -inset-px animate-pulse rounded-xl border border-brand/60 [animation-duration:2.4s]" />
+      )}
       {dragging && <DropHint skill={dragging} accepts={target} over={over} />}
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <div className="flex items-center gap-3 p-3 pb-2">
-        <BotAvatar bot={bot} className="size-10 rounded-xl text-xl" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate leading-tight font-medium">{bot.name}</div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className={cn("size-1.5 rounded-full", meta.dot, active && "animate-pulse")} />
-            {meta.label}
-            <span className="opacity-50">·</span>
-            <span className="truncate">{bot.role}</span>
+      <div className="flex items-start gap-3 p-3 pb-2">
+        <BotAvatar bot={bot} className="size-10 rounded-lg text-xl" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate leading-tight font-semibold tracking-tight">{bot.name}</span>
+            <ToneDot tone={meta.tone} pulse={active} />
           </div>
-          <div className="truncate text-[10px] text-muted-foreground/70">{modelLabel}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {meta.label} · {bot.role}
+          </div>
+          <div className="truncate text-xs text-muted-foreground/80">{modelLabel}</div>
         </div>
       </div>
 
@@ -83,16 +92,19 @@ export const BotNode = memo(function BotNode({ data }: NodeProps<Node<BotNodeDat
             e.stopPropagation()
             select(bot.id, BotTab.Browser)
           }}
-          className="mx-3 mb-2 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg border bg-muted/40 px-2 py-1.5 text-left font-mono text-[10px] text-muted-foreground hover:bg-muted"
-          title="Open live browser"
+          aria-label="Open live browser"
+          className="mx-3 mb-2 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg border bg-sunken px-2 py-1.5 text-left font-mono text-xs text-muted-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
-          <GlobeIcon className="size-3 shrink-0 text-sky-500" />
+          <GlobeIcon className="size-3.5 shrink-0 text-info" />
           <span className="truncate">{stripScheme(previewUrl(preview))}</span>
         </button>
       )}
 
-      <div className="mx-3 mb-2 h-4 truncate font-mono text-[11px] text-muted-foreground" title={st.activity}>
-        {active ? (st.activity ?? "") : ""}
+      <div
+        className={cn("mx-3 mb-2 h-4 truncate font-mono text-xs", active ? "text-foreground/80" : "text-muted-foreground/60")}
+        title={st.activity}
+      >
+        {active ? (st.activity ?? "Working…") : "Idle"}
       </div>
 
       <SkillChips bot={bot} />
@@ -107,8 +119,8 @@ function DropHint({ skill, accepts, over }: { skill: string; accepts: boolean; o
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
       <span
         className={cn(
-          "animate-in rounded-full px-2.5 py-1 text-[11px] font-medium shadow-sm duration-150 fade-in-0 zoom-in-95",
-          accepts ? "bg-[var(--bot)] text-white" : "bg-muted text-muted-foreground",
+          "animate-in rounded-full px-2.5 py-1 text-xs font-medium shadow-sm duration-150 fade-in-0 zoom-in-95",
+          accepts ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground",
           accepts && over && "scale-105"
         )}
       >

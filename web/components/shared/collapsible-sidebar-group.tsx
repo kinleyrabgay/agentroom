@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDownIcon } from "lucide-react"
+import { ChevronRightIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePersistentFlag } from "@/hooks/use-persistent-flag"
 import {
@@ -17,12 +17,15 @@ import { SidebarGroup, SidebarGroupLabel } from "@/components/ui/sidebar"
 export function CollapsibleSidebarGroup({
   id,
   label,
+  count,
   action,
   className,
   children,
 }: {
   id: string
   label: string
+  /** Shown after the label in muted text (e.g. number of bots). */
+  count?: number
   /** Rendered next to the label (e.g. a SidebarGroupAction); stays visible when collapsed. */
   action?: React.ReactNode
   className?: string
@@ -38,17 +41,21 @@ export function CollapsibleSidebarGroup({
     >
       <SidebarGroup className={className}>
         <SidebarGroupLabel asChild>
+          {/* Looks like the plain group labels; the chevron at the far right says it folds. */}
           <CollapsibleTrigger
+            aria-label={`${open ? "Collapse" : "Expand"} ${label}`}
             className={cn(
-              "w-full cursor-pointer gap-1 rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+              "group/label w-full cursor-pointer gap-1.5 rounded-md outline-none transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring",
               action && "pr-8"
             )}
           >
-            {label}
-            <ChevronDownIcon
+            <span>{label}</span>
+            {count !== undefined && count > 0 && <span className="tabular-nums opacity-60">{count}</span>}
+            <ChevronRightIcon
+              aria-hidden
               className={cn(
-                "size-3.5 transition-transform",
-                !open && "-rotate-90"
+                "ml-auto size-3.5 opacity-50 transition-[transform,opacity] group-hover/label:opacity-100",
+                open && "rotate-90"
               )}
             />
           </CollapsibleTrigger>

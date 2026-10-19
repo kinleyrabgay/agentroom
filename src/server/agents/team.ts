@@ -13,6 +13,7 @@ import { buildHostTools } from './tools/index.js';
 import { expandSkillCommands } from './skill-commands.js';
 import type { SecurityService } from '../security/security.service.js';
 import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
+import type { McpService } from '../services/mcp/mcp.service.js';
 
 export interface TeamDeps {
   project: Project;
@@ -30,6 +31,8 @@ export interface TeamDeps {
   security?: SecurityService;
   /** Files the human attached to messages. */
   uploads?: UploadStore;
+  /** External MCP servers (Sentry, …) added in AgentRoom. */
+  mcp?: McpService;
 }
 
 /**
@@ -39,6 +42,10 @@ export interface TeamDeps {
 export type DispatchOptions = RunContext & {
   /** Upload ids attached to this message (images, PDFs, files). */
   attachments?: readonly string[];
+  /** Folder the bot works in (a goal's own worktree); defaults to the project root. */
+  cwd?: string;
+  /** Stop the run once it has spent this much (USD). */
+  maxBudgetUsd?: number;
 };
 
 /** Outcome of one bot run. */
@@ -98,6 +105,19 @@ export class Team {
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
     const { project, hub, provider, permissions, sessions, previews } = this.deps;
     const team = project.bots.list();
+    // Chats outside goals obey the daily cap (goal runs are checked by the goal engine).
+    const dayLeft = opts.goalId ? undefined : this.dayRemaining();
+    if (dayLeft !== undefined && dayLeft < 0.01) {
+      const cap = project.settings.get().budgets.perDayUsd ?? 0;
+      hub.emit({ type: AgentEventType.UserMessage, botId: bot.id, text, from });
+      hub.emit({
+        type: AgentEventType.Message,
+        botId: bot.id,
+        text: `Today's budget of $${cap.toFixed(2)} is used up, so I won't start. Raise it in Settings → Budgets, or try again tomorrow.`,
+      });
+      return { ok: false, text: 'Daily budget used up.', aborted: false };
+    }
+    const maxBudgetUsd = opts.maxBudgetUsd ?? dayLeft;
     const controller = new AbortController();
     this.controllers.set(bot.id, controller);
     hub.setRunContext(bot.id, { goalId: opts.goalId, taskId: opts.taskId, phase: opts.phase });
@@ -123,11 +143,13 @@ export class Team {
         bot,
         prompt,
         ...(attachments.length ? { attachments } : {}),
-        cwd: project.root,
+        cwd: opts.cwd ?? project.root,
+        ...(maxBudgetUsd !== undefined && Number.isFinite(maxBudgetUsd) ? { maxBudgetUsd } : {}),
         model,
         effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
-        context: buildContext(bot, team, project.paths.claudeMd),
+        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot)),
+        mcpServers: this.deps.mcp?.forBot(bot),
         resumeSessionId: sessions.get(bot.id),
         hostTools: buildHostTools(bot, team, {
           tasks: project.tasks,
@@ -138,6 +160,7 @@ export class Team {
           boardChanged: this.deps.boardChanged,
           goalId: opts.goalId,
           security: this.deps.security,
+          memory: project.memory,
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.
@@ -169,6 +192,13 @@ export class Team {
       if (this.controllers.get(bot.id) === controller) this.controllers.delete(bot.id);
       hub.setRunContext(bot.id, null);
     }
+  }
+
+  /** USD left of today's cap, or undefined when there's no daily cap. */
+  private dayRemaining(): number | undefined {
+    const cap = this.deps.project.settings.get().budgets.perDayUsd;
+    if (cap === null || !this.deps.ledger) return undefined;
+    return cap - this.deps.ledger.spentToday();
   }
 
   /**
