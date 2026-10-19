@@ -87,6 +87,26 @@ export const GoalSchema = z.object({
       }),
     )
     .default([]),
+  /** Security review for this goal: auto (risk-based), always, or off. */
+  securityReview: z.enum(values(SecurityReviewMode)).default(SecurityReviewMode.Auto),
+  /** Commit the goal started from (diffs, risk and scans are relative to it). */
+  baseRef: z.string().optional(),
+  /** Latest risk assessment of the goal's diff. */
+  risk: z
+    .object({
+      score: z.number(),
+      level: z.enum(['low', 'medium', 'high']),
+      factors: z.array(z.object({ label: z.string(), points: z.number() })),
+      files: z.number(),
+      additions: z.number(),
+      deletions: z.number(),
+      computedAt: z.string(),
+    })
+    .optional(),
+  /** Round in which the security review last completed (re-reviewed after each fix round). */
+  securityReviewedRound: z.number().optional(),
+  /** The human approved a high-risk diff at this score (re-asked if the score grows). */
+  riskApproval: z.object({ score: z.number(), at: z.string(), by: z.string() }).optional(),
   /** Build/test rounds completed (bug-fix loops). */
   round: z.number().default(0),
   /** Why the goal paused/failed. */

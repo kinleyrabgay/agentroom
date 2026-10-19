@@ -2,20 +2,27 @@ import { CheckIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PHASES } from "../constants"
 
-/** Plan → Review → Build → Test → Report → Done. `stopped` freezes the current step (paused/failed/cancelled). */
+/**
+ * Plan → Review → Build → Security → Test → Report → Done. `stopped` freezes the current step
+ * (paused/failed/cancelled). `skipped` marks steps that don't run for this goal (e.g. "security": "off").
+ */
 export function PhaseStepper({
   current,
   stopped,
+  skipped = {},
 }: {
   current: number
   stopped: boolean
+  /** Step key → short reason shown instead of a check, e.g. { security: "off" }. */
+  skipped?: Partial<Record<(typeof PHASES)[number]["key"], string>>
 }) {
   const last = PHASES.length - 1
   return (
     <ol className="flex items-center gap-1.5" aria-label="Goal progress">
       {PHASES.map((p, i) => {
-        const done = i < current || (i === last && current === last)
-        const active = i === current && current !== last
+        const skip = skipped[p.key]
+        const done = !skip && (i < current || (i === last && current === last))
+        const active = !skip && i === current && current !== last
         return (
           <li key={p.key} className="flex items-center gap-1.5">
             <span
@@ -30,8 +37,10 @@ export function PhaseStepper({
                 active &&
                   stopped &&
                   "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                !done && !active && "text-muted-foreground"
+                !done && !active && "text-muted-foreground",
+                skip && "border-dashed opacity-60"
               )}
+              title={skip ? `${p.label}: ${skip}` : undefined}
             >
               {done ? (
                 <CheckIcon className="size-3" />
@@ -44,6 +53,7 @@ export function PhaseStepper({
                 />
               ) : null}
               {p.label}
+              {skip && <span className="font-normal"> · {skip}</span>}
             </span>
             {i < last && (
               <span

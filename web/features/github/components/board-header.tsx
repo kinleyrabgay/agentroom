@@ -12,7 +12,7 @@ import { AssigneeFilter } from "../constants"
 import { loadBoard } from "../lib/actions"
 import { facets, isAuthError } from "../lib/board-view"
 import { setAssignee, setGithub, useGithubStore } from "../lib/github-store"
-import { useNow } from "../hooks/use-now"
+import { useNow } from "@/hooks/use-now"
 import { BoardSettings } from "./board-settings"
 import { LabelPill } from "./label-pill"
 

@@ -3,7 +3,8 @@ import type { Bot } from '../../shared/types/index.js';
 import type { Project } from '../../core/project.js';
 import type { PreviewService } from '../preview/preview.service.js';
 import type { Provider } from '../providers/provider.js';
-import type { Hub } from '../realtime/hub.js';
+import type { Hub, RunContext } from '../realtime/hub.js';
+import { RunTally, type LedgerService } from '../services/ledger.service.js';
 import type { NotificationService } from '../services/notification.service.js';
 import { buildContext } from './context-builder.js';
 import type { PermissionGate } from './permission-gate.js';
@@ -21,12 +22,15 @@ export interface TeamDeps {
   notifications: NotificationService;
   /** Board written by a bot — push it to the UI. */
   boardChanged: () => void;
+  /** Records one row per finished run. */
+  ledger?: LedgerService;
 }
 
-export interface DispatchOptions {
-  /** Goal this run belongs to (task_create defaults to it). */
-  goalId?: string;
-}
+/**
+ * What a run is part of: the goal (task_create defaults to it; events are stamped with it),
+ * the task, and the workflow phase (selects the phase's model/effort from settings).
+ */
+export type DispatchOptions = RunContext;
 
 /** Outcome of one bot run. */
 export interface RunOutcome {
@@ -75,10 +79,16 @@ export class Team {
 
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions): Promise<RunOutcome> {
     const { project, hub, provider, permissions, sessions, previews } = this.deps;
-    const config = project.config.get();
     const team = project.bots.list();
     const controller = new AbortController();
     this.controllers.set(bot.id, controller);
+    hub.setRunContext(bot.id, opts);
+    const { model, effort } = this.modelFor(bot, opts);
+    const tally = new RunTally(bot.id, model, opts);
+    const finish = (out: RunOutcome): RunOutcome => {
+      this.deps.ledger?.record(tally.finish({ ok: out.ok, aborted: out.aborted, error: out.ok ? undefined : out.text }));
+      return out;
+    };
     hub.emit({ type: AgentEventType.UserMessage, botId: bot.id, text, from });
     hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: BotStatus.Thinking });
 
@@ -89,8 +99,8 @@ export class Team {
         bot,
         prompt,
         cwd: project.root,
-        model: bot.model ?? config.model,
-        effort: bot.effort ?? config.effort,
+        model,
+        effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
         context: buildContext(bot, team, project.paths.claudeMd),
         resumeSessionId: sessions.get(bot.id),
@@ -104,26 +114,46 @@ export class Team {
           goalId: opts.goalId,
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
-            return this.dispatch(to, instruction, bot.id, opts).then((o) => o.text);
+            // The delegate works for the same goal, but its own phase/task isn't implied.
+            return this.dispatch(to, instruction, bot.id, { goalId: opts.goalId }).then((o) => o.text);
           },
         }, controller.signal),
         signal: controller.signal,
-        emit: (e) => hub.emit(e),
+        emit: (e) => {
+          tally.observe(e);
+          hub.emit(e);
+        },
         stream: (d) => hub.stream(bot.id, d),
         askPermission: (tool, input, signal) => permissions.ask(bot.id, tool, input, signal),
       });
       if (res.sessionId) sessions.set(bot.id, res.sessionId);
       hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: res.ok ? BotStatus.Idle : BotStatus.Error });
-      return { ok: res.ok, text: res.result, aborted: controller.signal.aborted };
+      return finish({ ok: res.ok, text: res.result, aborted: controller.signal.aborted });
     } catch (err) {
       const aborted = controller.signal.aborted;
       const message = aborted ? 'Stopped by human.' : (err as Error).message;
       if (aborted) hub.emit({ type: AgentEventType.Message, botId: bot.id, text: '⏹ Stopped.' });
       else hub.emit({ type: AgentEventType.Error, botId: bot.id, message });
       hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: aborted ? BotStatus.Idle : BotStatus.Error });
-      return { ok: false, text: message, aborted };
+      return finish({ ok: false, text: message, aborted });
     } finally {
       if (this.controllers.get(bot.id) === controller) this.controllers.delete(bot.id);
+      hub.setRunContext(bot.id, null);
     }
+  }
+
+  /**
+   * Model/effort for a run. Inside a goal run the phase setting (settings.models[phase]) wins,
+   * so a team can say "Opus for planning, Haiku for QA" regardless of each bot's default.
+   * Direct chats (no phase) use the bot's own setting, then the project default.
+   */
+  private modelFor(bot: Bot, opts: DispatchOptions) {
+    const config = this.deps.project.config.get();
+    const phases = this.deps.project.settings.get().models as Record<string, { model?: string; effort?: Bot['effort'] } | undefined>;
+    const phase = opts.phase ? phases[opts.phase] : undefined;
+    return {
+      model: phase?.model ?? bot.model ?? config.model,
+      effort: phase?.effort ?? bot.effort ?? config.effort,
+    };
   }
 }

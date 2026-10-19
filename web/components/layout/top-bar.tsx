@@ -19,6 +19,9 @@ const TITLES: Record<View, [string, string]> = {
   [View.Board]: ["Board", "Your GitHub project. Pick cards and hand them to the team."],
   [View.Tasks]: ["Tasks", "What the bots are building: plans, sub-tasks and progress."],
   [View.Browser]: ["Browser", "Your app, live. Bots browse it; you can pick elements and check the console."],
+  [View.Security]: ["Security", "Findings from the scanner, dependency guard, security reviews and injection guard."],
+  [View.Audit]: ["Audit log", "Every command, file write, push and approval — and who decided."],
+  [View.Settings]: ["Settings", "Team-wide defaults, your alerts, and integrations."],
 }
 
 export function TopBar() {

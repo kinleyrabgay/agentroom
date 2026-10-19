@@ -108,6 +108,8 @@ function applyState(ev: StateEvent) {
       return set({ goals: ev.goals })
     case StateType.Settings:
       return set({ settings: ev.settings })
+    case StateType.Findings:
+      return set({ findings: ev.findings })
     case StateType.Config:
       return set((s) => ({ info: s.info ? { ...s.info, config: ev.config, model: ev.config.model } : s.info }))
   }

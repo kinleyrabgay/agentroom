@@ -9,8 +9,13 @@ export const ApprovalGroup = {
   BrowserJs: 'Browser JS',
 } as const;
 
-/** `group` is the key "Always allow" applies to. `sticky` asks can never be session-allowed. */
-export type Decision = { action: 'allow' } | { action: 'ask'; reason: string; sticky: boolean; group: string };
+/**
+ * `group` is the key "Always allow" applies to. `sticky` asks can never be session-allowed.
+ * Allows say why: by the policy (with the rule) or by a session "Always allow" (rule = group).
+ */
+export type Decision =
+  | { action: 'allow'; by: 'policy' | 'session'; rule: string }
+  | { action: 'ask'; reason: string; sticky: boolean; group: string };
 
 const READ_ONLY = new Set<string>([ToolName.Read, ToolName.Grep, ToolName.Glob, 'LS', ToolName.WebSearch, ToolName.WebFetch, ToolName.TodoWrite, ToolName.Skill, 'NotebookRead']);
 const WRITES = new Set<string>([ToolName.Edit, ToolName.Write, ToolName.MultiEdit, ToolName.NotebookEdit]);
@@ -37,7 +42,7 @@ export function matchesAlwaysAsk(command: string, patterns: string[]): string | 
 export function decide(tool: string, input: Record<string, unknown>, config: Config, sessionAllowed: ReadonlySet<string>): Decision {
   const hostTool = tool.startsWith(HOST_TOOL_PREFIX) ? tool.slice(HOST_TOOL_PREFIX.length) : null;
   const browser = hostTool?.startsWith('browser_') ? hostTool : null;
-  if (hostTool && !browser) return { action: 'allow' };
+  if (hostTool && !browser) return { action: 'allow', by: 'policy', rule: 'AgentRoom host tool' };
 
   if (tool === ToolName.Bash) {
     const hit = matchesAlwaysAsk(String(input.command ?? ''), config.alwaysAsk);
@@ -46,10 +51,10 @@ export function decide(tool: string, input: Record<string, unknown>, config: Con
 
   const group = browser ? (browser === HostTool.BrowserEval ? ApprovalGroup.BrowserJs : ApprovalGroup.Browser) : tool;
 
-  if (config.permissionMode === PermissionMode.Auto) return { action: 'allow' };
-  if (sessionAllowed.has(group)) return { action: 'allow' };
+  if (config.permissionMode === PermissionMode.Auto) return { action: 'allow', by: 'policy', rule: 'auto mode' };
+  if (sessionAllowed.has(group)) return { action: 'allow', by: 'session', rule: group };
   if (config.permissionMode === PermissionMode.AskWrites && (READ_ONLY.has(tool) || (browser && BROWSER_READ.has(browser)))) {
-    return { action: 'allow' };
+    return { action: 'allow', by: 'policy', rule: browser ? 'ask-writes: page read' : 'ask-writes: read-only tool' };
   }
 
   const reason = browser ? 'acts on a web page' : WRITES.has(tool) ? 'modifies files' : tool === ToolName.Bash ? 'runs a shell command' : 'needs approval';

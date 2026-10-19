@@ -5,6 +5,7 @@ import {
   ClipboardCheckIcon,
   MessageCircleQuestionIcon,
   OctagonXIcon,
+  ShieldAlertIcon,
   type LucideIcon,
 } from "lucide-react"
 import { NotificationKind } from "@shared"
@@ -28,6 +29,11 @@ export const NOTIFICATION_META: Record<
     icon: CircleAlertIcon,
     tone: "text-amber-600 dark:text-amber-300",
     action: "Open task",
+  },
+  [NotificationKind.Security]: {
+    icon: ShieldAlertIcon,
+    tone: "text-red-600 dark:text-red-300",
+    action: "Review",
   },
   [NotificationKind.GoalDone]: {
     icon: CircleCheckIcon,

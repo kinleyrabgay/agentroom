@@ -9,13 +9,22 @@ import { CommandBar } from "@/features/command/components/command-bar"
 import { TaskBoard } from "@/features/tasks/components/task-board"
 import { GithubBoard } from "@/features/github/components/github-board"
 import { TeamCanvas } from "@/features/team/components/team-canvas"
+import { AuditPage } from "@/features/audit/components/audit-page"
+import { SecurityPage } from "@/features/security/components/security-page"
+import { SettingsPage } from "@/features/settings/components/settings-page"
 
 const VIEWS: Record<View, React.ComponentType> = {
   [View.Team]: TeamCanvas,
   [View.Board]: GithubBoard,
   [View.Tasks]: TaskBoard,
   [View.Browser]: BrowserWorkspace,
+  [View.Security]: SecurityPage,
+  [View.Audit]: AuditPage,
+  [View.Settings]: SettingsPage,
 }
+
+/** Views that take a goal from the command bar. */
+const WITH_COMMAND_BAR = new Set<View>([View.Team, View.Tasks])
 
 /** Main view on the left, the selected bot's panel on the right (resizable). */
 export function Workspace() {
@@ -30,7 +39,7 @@ export function Workspace() {
           <div className="relative min-h-0 flex-1">
             <Main />
           </div>
-          {view !== View.Browser && view !== View.Board && <CommandBar />}
+          {WITH_COMMAND_BAR.has(view) && <CommandBar />}
         </div>
       </ResizablePanel>
       {selected && (

@@ -1,4 +1,4 @@
-import type { AuditPage, AuditQuery, IntegrationSecrets, IntegrationStatus, LedgerEntry, Settings, SettingsPatch, AlertCapabilities, AlertPrefs, Bot, BotPatch, GithubBoard, GithubItem, GithubItemDetail, GithubProjectConfig, HandoffInput, HandoffResult, Config, EffortLevel, Goal, GoalPatch, NewTaskInput, ProjectInfo, ProviderModels, Skill, SkillInput, Task, TaskPatch } from "@shared"
+import type { FindingQuery, SecurityFinding, SecurityReviewMode, AuditPage, AuditQuery, IntegrationSecrets, IntegrationStatus, LedgerEntry, Settings, SettingsPatch, AlertCapabilities, AlertPrefs, Bot, BotPatch, GithubBoard, GithubItem, GithubItemDetail, GithubProjectConfig, HandoffInput, HandoffResult, Config, EffortLevel, Goal, GoalPatch, NewTaskInput, ProjectInfo, ProviderModels, Skill, SkillInput, Task, TaskPatch } from "@shared"
 import { request } from "./client"
 
 const seg = encodeURIComponent
@@ -9,6 +9,9 @@ export type BotUpdate = Omit<BotPatch, "model" | "effort" | "reportsTo"> & {
   effort?: EffortLevel | null
   reportsTo?: string | null
 }
+
+/** A goal patch; the server also accepts the per-goal security review mode. */
+export type GoalUpdate = GoalPatch & { securityReview?: SecurityReviewMode }
 
 /** Typed REST calls. File changes come back through the realtime `state` push, so callers rarely need the result. */
 export const projectApi = {
@@ -56,8 +59,9 @@ export const taskApi = {
 /** Goal runs: plan → human review → build → test → report. */
 export const goalApi = {
   list: () => request<Goal[]>("GET", "/goals"),
-  create: (brief: string, title?: string) => request<Goal>("POST", "/goals", { brief, title }),
-  update: (id: string, patch: GoalPatch) => request<Goal>("PATCH", `/goals/${seg(id)}`, patch),
+  create: (brief: string, title?: string, securityReview?: SecurityReviewMode) =>
+    request<Goal>("POST", "/goals", { brief, title, securityReview }),
+  update: (id: string, patch: GoalUpdate) => request<Goal>("PATCH", `/goals/${seg(id)}`, patch),
   approve: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/approve`),
   replan: (id: string, feedback: string) => request<Goal>("POST", `/goals/${seg(id)}/replan`, { feedback }),
   pause: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/pause`),
@@ -121,4 +125,12 @@ export const ledgerApi = {
 export const integrationsApi = {
   get: () => request<IntegrationStatus>("GET", "/integrations"),
   update: (patch: Partial<IntegrationSecrets>) => request<IntegrationStatus>("PUT", "/integrations", patch),
+}
+
+/** Security findings: scanner, dependency guard, security review, prompt-injection guard. */
+export const securityApi = {
+  findings: (query: FindingQuery) => request<SecurityFinding[]>("GET", `/security/findings${qs({ ...query })}`),
+  resolve: (id: string, status: "approved" | "dismissed", note?: string) =>
+    request<SecurityFinding>("POST", `/security/findings/${seg(id)}/resolve`, { status, note }),
+  scan: (goalId?: string) => request<SecurityFinding[]>("POST", "/security/scan", goalId ? { goalId } : {}),
 }

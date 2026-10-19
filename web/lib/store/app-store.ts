@@ -12,6 +12,7 @@ import {
   type PreviewState,
   type ProjectInfo,
   type ProviderModels,
+  type SecurityFinding,
   type Settings,
   type Skill,
   type StampedEvent,
@@ -19,7 +20,7 @@ import {
   type Task,
   type UsageSummary,
 } from "@shared"
-import { BotTab, View } from "@/lib/constants"
+import { BotTab, GoalTab, View } from "@/lib/constants"
 import type { LiveReply } from "./live-reply"
 
 export interface AppState {
@@ -43,6 +44,8 @@ export interface AppState {
   previews: Record<string, PreviewState>
   consoles: Record<string, ConsoleLine[]>
   live: Record<string, LiveReply>
+  /** Security findings across goals (StateType.Findings push, or the initial fetch). */
+  findings: SecurityFinding[]
   /** Team-wide settings (`.agentroom/settings.json`); null until loaded. */
   settings: Settings | null
   /** Models the current provider offers (GET /api/models), fetched once. */
@@ -63,6 +66,10 @@ export interface AppState {
   selectedGoalId: string | null
   /** Task open in the detail sheet. */
   selectedTaskId: string | null
+  /** Tab shown under the selected goal's header. */
+  goalTab: GoalTab
+  /** Goal filter applied when opening the Security view from elsewhere (null = all goals). */
+  securityGoalId: string | null
 }
 
 /** Tasks-view selection meaning "tasks that don't belong to any goal". */
@@ -82,6 +89,9 @@ export interface AppActions {
   openTask: (id: string | null) => void
   /** Jump to the Tasks view, optionally focusing a goal and/or task. */
   showOnTasks: (target: { goalId?: string; taskId?: string }) => void
+  setGoalTab: (tab: GoalTab) => void
+  /** Jump to the Security view, optionally filtered to one goal. */
+  showSecurity: (goalId?: string | null) => void
 }
 
 const initialState: AppState = {
@@ -101,6 +111,7 @@ const initialState: AppState = {
   previews: {},
   consoles: {},
   live: {},
+  findings: [],
   settings: null,
   models: null,
   modelsStatus: LoadStatus.Idle,
@@ -114,6 +125,8 @@ const initialState: AppState = {
   view: View.Team,
   selectedGoalId: null,
   selectedTaskId: null,
+  goalTab: GoalTab.Tasks,
+  securityGoalId: null,
 }
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
@@ -130,5 +143,8 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
       view: View.Tasks,
       selectedGoalId: goalId ?? s.selectedGoalId,
       selectedTaskId: taskId ?? null,
+      goalTab: taskId ? GoalTab.Tasks : s.goalTab,
     })),
+  setGoalTab: (goalTab) => set({ goalTab }),
+  showSecurity: (goalId) => set({ view: View.Security, securityGoalId: goalId ?? null }),
 }))

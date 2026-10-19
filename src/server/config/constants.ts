@@ -60,3 +60,8 @@ export const GITHUB_MAX_PAGES = 20;
 export const HANDOFF_COMMENTS = 5;
 /** Max files returned by GET /api/files. */
 export const FILES_LIMIT_MAX = 100;
+
+/** Audit entries kept in memory for fast queries; older ones are read from disk on demand. */
+export const AUDIT_MEMORY_LIMIT = 20_000;
+export const AUDIT_PAGE_DEFAULT = 50;
+export const AUDIT_PAGE_MAX = 500;

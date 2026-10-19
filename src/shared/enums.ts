@@ -40,6 +40,8 @@ export const GoalStatus = {
   Planning: 'planning',
   AwaitingApproval: 'awaiting_approval',
   Building: 'building',
+  /** Security Auditor reviewing the diff (between Build and Test). */
+  Securing: 'securing',
   Testing: 'testing',
   Reporting: 'reporting',
   /** Waiting on the human (blocked task or question) or paused by them. */
@@ -57,6 +59,8 @@ export const NotificationKind = {
   Question: 'question',
   /** A bot is blocked and needs the human. */
   Blocked: 'blocked',
+  /** Security findings need a decision. */
+  Security: 'security',
   /** A goal finished. */
   GoalDone: 'goal_done',
   /** A goal failed. */
@@ -125,6 +129,56 @@ export const SecurityReviewMode = {
 } as const;
 export type SecurityReviewMode = ValueOf<typeof SecurityReviewMode>;
 
+export const FindingSeverity = {
+  /** Blocks commits/PRs until a human approves (by default). */
+  Critical: 'critical',
+  /** Needs acknowledgement. */
+  Warning: 'warning',
+  Info: 'info',
+} as const;
+export type FindingSeverity = ValueOf<typeof FindingSeverity>;
+
+export const FindingCategory = {
+  Secret: 'secret',
+  Injection: 'injection',
+  Crypto: 'crypto',
+  Auth: 'auth',
+  Cors: 'cors',
+  Vulnerability: 'vulnerability',
+  Typosquat: 'typosquat',
+  InstallScript: 'install_script',
+  PromptInjection: 'prompt_injection',
+  Other: 'other',
+} as const;
+export type FindingCategory = ValueOf<typeof FindingCategory>;
+
+/** Where a finding came from. */
+export const FindingSource = {
+  Scanner: 'scanner',
+  Dependency: 'dependency',
+  Review: 'review',
+  Injection: 'injection',
+} as const;
+export type FindingSource = ValueOf<typeof FindingSource>;
+
+export const FindingStatus = {
+  Open: 'open',
+  /** A human accepted the risk. */
+  Approved: 'approved',
+  /** A human marked it a false positive. */
+  Dismissed: 'dismissed',
+  /** No longer present in the diff. */
+  Fixed: 'fixed',
+} as const;
+export type FindingStatus = ValueOf<typeof FindingStatus>;
+
+export const RiskLevel = {
+  Low: 'low',
+  Medium: 'medium',
+  High: 'high',
+} as const;
+export type RiskLevel = ValueOf<typeof RiskLevel>;
+
 /** How much a bot may do without asking the human. */
 export const PermissionMode = {
   /** Every tool call needs approval. */
@@ -184,6 +238,7 @@ export const HostTool = {
   TaskGet: 'task_get',
   TaskDelete: 'task_delete',
   PlanOverview: 'plan_overview',
+  SecurityFinding: 'security_finding',
   NotifyHuman: 'notify_human',
   AskHuman: 'ask_human',
   Delegate: 'delegate',
@@ -272,6 +327,7 @@ export const StateType = {
   Tasks: 'tasks',
   Goals: 'goals',
   Settings: 'settings',
+  Findings: 'findings',
   Config: 'config',
 } as const;
 export type StateType = ValueOf<typeof StateType>;

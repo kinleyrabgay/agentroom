@@ -20,6 +20,11 @@ import type { HandoffService } from '../integrations/github/handoff.service.js';
 import type { AlertService } from '../services/alerts/alert.service.js';
 import { taskRoutes } from './routes/tasks.routes.js';
 import { findUiDir, serveUi } from './static.js';
+import { settingsRoutes } from './routes/settings.routes.js';
+import { governanceRoutes } from './routes/governance.routes.js';
+import type { AuditService, HumanAudit } from '../services/audit.service.js';
+import type { LedgerService } from '../services/ledger.service.js';
+import type { SecretsStore } from '../services/secrets.store.js';
 
 export interface AppDeps {
   token: string;
@@ -31,6 +36,11 @@ export interface AppDeps {
   alerts: AlertService;
   github: GithubProjectService;
   handoff: HandoffService;
+  ledger: LedgerService;
+  audit: AuditService;
+  /** Records actions the human takes through the API. */
+  humanAudit: HumanAudit;
+  secrets: SecretsStore;
   /** Push the board to the UI right after a REST write. */
   boardChanged: () => void;
   router: ClientMessageRouter;
@@ -51,9 +61,11 @@ export function createApp(deps: AppDeps) {
   botRoutes(api, deps.project, deps.team);
   skillRoutes(api, deps.project);
   taskRoutes(api, deps.project, deps.boardChanged);
-  goalRoutes(api, deps.goals);
+  goalRoutes(api, deps.goals, deps.humanAudit);
+  settingsRoutes(api, deps.project, deps.secrets, deps.hub, deps.humanAudit);
+  governanceRoutes(api, deps.ledger, deps.audit);
   alertRoutes(api, deps.alerts);
-  githubRoutes(api, deps.github, deps.handoff, deps.project.root);
+  githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   app.route(API_PREFIX, api);
 
   app.get(

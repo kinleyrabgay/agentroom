@@ -1,4 +1,4 @@
-import { AgentEventType, BotStatus, GoalStatus, NotificationKind, TaskKind, TaskStatus } from '../../shared/enums.js';
+import { AgentEventType, BotStatus, GoalStatus, NotificationKind, TaskKind, TaskStatus, WorkPhase } from '../../shared/enums.js';
 import type { Bot, Goal, GoalPatch, GoalSource, Task } from '../../shared/types/index.js';
 import type { Project } from '../../core/project.js';
 import type { RunOutcome, Team } from '../agents/team.js';
@@ -203,7 +203,7 @@ export class GoalRunner {
 
   private async planPhase(goal: Goal, roles: TeamRoles) {
     this.leadStatus(BotStatus.Working, `${goal.id} · Planning with ${roles.planner.name}`);
-    const out = await this.run(goal, roles, roles.planner, planPrompt(goal, roles, this.tasksOf(goal.id)), `Plan ${goal.id}: ${goal.title}`);
+    const out = await this.run(goal, roles, roles.planner, planPrompt(goal, roles, this.tasksOf(goal.id)), `Plan ${goal.id}: ${goal.title}`, { phase: WorkPhase.Planning });
     if (this.interrupted(goal.id, out.aborted)) return;
 
     const tasks = this.tasksOf(goal.id);
@@ -247,7 +247,10 @@ export class GoalRunner {
     this.changed();
 
     this.leadStatus(BotStatus.Working, `${goal.id} · Building ${task.id} with ${roles.developer.name}`);
-    const out = await this.run(goal, roles, roles.developer, buildPrompt(goal, repo.get(task.id)!, previousBlock), `Build ${task.id}: ${task.title}`);
+    const out = await this.run(goal, roles, roles.developer, buildPrompt(goal, repo.get(task.id)!, previousBlock), `Build ${task.id}: ${task.title}`, {
+      phase: WorkPhase.Build,
+      taskId: task.id,
+    });
     if (out.aborted) return 'aborted';
 
     const after = repo.get(task.id);
@@ -273,7 +276,10 @@ export class GoalRunner {
 
     this.leadStatus(BotStatus.Working, `${goal.id} · Testing ${task.id} with ${roles.qa.name}`);
     const devTasks = tasks.filter((t) => WORK_KINDS.includes(t.kind));
-    const out = await this.run(goal, roles, roles.qa, testPrompt(goal, task, devTasks, roles), `Test ${task.id}: ${task.title}`);
+    const out = await this.run(goal, roles, roles.qa, testPrompt(goal, task, devTasks, roles), `Test ${task.id}: ${task.title}`, {
+      phase: WorkPhase.Testing,
+      taskId: task.id,
+    });
     return out.aborted ? 'aborted' : 'progress';
   }
 
@@ -299,7 +305,7 @@ export class GoalRunner {
   }
 
   private async reportPhase(goal: Goal, roles: TeamRoles) {
-    const out = await this.run(goal, roles, roles.lead, reportPrompt(goal, this.tasksOf(goal.id)), `Report on ${goal.id}`);
+    const out = await this.run(goal, roles, roles.lead, reportPrompt(goal, this.tasksOf(goal.id)), `Report on ${goal.id}`, { phase: WorkPhase.Reporting });
     if (this.interrupted(goal.id, out.aborted)) return;
     this.set(goal.id, { status: GoalStatus.Done, summary: out.text, reason: null });
     this.deps.notifications.create({
@@ -315,13 +321,20 @@ export class GoalRunner {
   // ---------- helpers ----------
 
   /** Hand a prompt to a bot as the Team Lead and wait. Throws if the run fails (not when stopped). */
-  private async run(goal: Goal, roles: TeamRoles, bot: Bot, prompt: string, label: string): Promise<RunOutcome> {
+  private async run(
+    goal: Goal,
+    roles: TeamRoles,
+    bot: Bot,
+    prompt: string,
+    label: string,
+    ctx: { phase: WorkPhase; taskId?: string },
+  ): Promise<RunOutcome> {
     const ctl = this.control(goal.id);
     ctl.currentBot = bot.id;
     const fromLead = bot.id !== roles.lead.id;
-    if (fromLead) this.deps.hub.emit({ type: AgentEventType.Delegation, from: roles.lead.id, to: bot.id, instruction: label });
+    if (fromLead) this.deps.hub.emit({ type: AgentEventType.Delegation, from: roles.lead.id, to: bot.id, instruction: label }, { goalId: goal.id });
     try {
-      const out = await this.deps.team.dispatch(bot.id, prompt, fromLead ? roles.lead.id : ENGINE, { goalId: goal.id });
+      const out = await this.deps.team.dispatch(bot.id, prompt, fromLead ? roles.lead.id : ENGINE, { goalId: goal.id, ...ctx });
       if (!out.ok && !out.aborted) throw new Error(`${bot.name} failed: ${clip(out.text, 300)}`);
       return out;
     } finally {

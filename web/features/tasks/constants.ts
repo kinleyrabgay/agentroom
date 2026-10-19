@@ -69,6 +69,10 @@ export const GOAL_STATUS_META: Record<
     dot: "bg-amber-400 animate-pulse",
   },
   [GoalStatus.Building]: { label: "Building", dot: "bg-sky-400 animate-pulse" },
+  [GoalStatus.Securing]: {
+    label: "Security review",
+    dot: "bg-red-400 animate-pulse",
+  },
   [GoalStatus.Testing]: {
     label: "Testing",
     dot: "bg-violet-400 animate-pulse",
@@ -88,6 +92,7 @@ export const PHASES = [
   { key: "plan", label: "Plan" },
   { key: "review", label: "Review" },
   { key: "build", label: "Build" },
+  { key: "security", label: "Security" },
   { key: "test", label: "Test" },
   { key: "report", label: "Report" },
   { key: "done", label: "Done" },

@@ -4,7 +4,7 @@ import { useAppStore } from "@/lib/store/app-store"
 
 /** Take the human to whatever a notification is about. */
 export function openNotificationTarget(n: Notification) {
-  const { showOnTasks, select } = useAppStore.getState()
+  const { showOnTasks, select, showSecurity } = useAppStore.getState()
   switch (n.kind) {
     case NotificationKind.Question:
       if (n.botId) select(n.botId, BotTab.Chat)
@@ -13,6 +13,9 @@ export function openNotificationTarget(n: Notification) {
     case NotificationKind.GoalDone:
     case NotificationKind.GoalFailed:
       if (n.goalId) showOnTasks({ goalId: n.goalId })
+      return
+    case NotificationKind.Security:
+      showSecurity(n.goalId)
       return
     case NotificationKind.Blocked:
       showOnTasks({ goalId: n.goalId, taskId: n.taskId })

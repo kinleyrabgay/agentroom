@@ -13,8 +13,8 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { ConfirmDelete } from "@/components/shared/confirm-delete"
 import { OPTION_COLORS } from "../constants"
-import { setGithub, SetupState, useGithubStore } from "../lib/github-store"
-import { loadBoard } from "../lib/actions"
+import { setGithub, useGithubStore } from "../lib/github-store"
+import { disconnectBoard, syncColumns } from "../lib/actions"
 
 /** Gear menu: which columns show, hide empty ones, re-sync columns from GitHub, disconnect. */
 export function BoardSettings({ project }: { project: GithubProjectConfig }) {
@@ -34,24 +34,8 @@ export function BoardSettings({ project }: { project: GithubProjectConfig }) {
 
   const sync = async () => {
     setSyncing(true)
-    try {
-      setGithub({ project: await githubApi.syncColumns() })
-      await loadBoard(true)
-      toast.success("Columns synced from GitHub")
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const disconnect = async () => {
-    try {
-      await githubApi.disconnect()
-      setGithub({ project: null, board: null, setup: SetupState.None, selected: [], openItemId: null })
-    } catch (e) {
-      toast.error((e as Error).message)
-    }
+    await syncColumns()
+    setSyncing(false)
   }
 
   return (
@@ -91,7 +75,7 @@ export function BoardSettings({ project }: { project: GithubProjectConfig }) {
               title="Disconnect this board?"
               description="Removes .agentroom/github/project.json for everyone on the team once committed. Nothing changes on GitHub."
               label="Disconnect"
-              onConfirm={disconnect}
+              onConfirm={disconnectBoard}
             />
           </div>
         </div>

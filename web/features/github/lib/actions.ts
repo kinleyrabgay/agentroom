@@ -58,3 +58,26 @@ export async function setAssigned(item: GithubItem, assign: boolean) {
     toast.error(message(e))
   }
 }
+
+/** Re-read the Status columns from GitHub, then refresh cards. Returns false on failure (toast shown). */
+export async function syncColumns(): Promise<boolean> {
+  try {
+    setGithub({ project: await githubApi.syncColumns() })
+    await loadBoard(true)
+    toast.success("Columns synced from GitHub")
+    return true
+  } catch (e) {
+    toast.error(message(e))
+    return false
+  }
+}
+
+/** Forget the connected board (removes .agentroom/github/project.json). Nothing changes on GitHub. */
+export async function disconnectBoard() {
+  try {
+    await githubApi.disconnect()
+    setGithub({ project: null, board: null, setup: SetupState.None, selected: [], openItemId: null })
+  } catch (e) {
+    toast.error(message(e))
+  }
+}

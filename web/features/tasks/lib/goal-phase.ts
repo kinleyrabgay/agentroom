@@ -4,9 +4,10 @@ const PHASE_OF: Partial<Record<GoalStatus, number>> = {
   [GoalStatus.Planning]: 0,
   [GoalStatus.AwaitingApproval]: 1,
   [GoalStatus.Building]: 2,
-  [GoalStatus.Testing]: 3,
-  [GoalStatus.Reporting]: 4,
-  [GoalStatus.Done]: 5,
+  [GoalStatus.Securing]: 3,
+  [GoalStatus.Testing]: 4,
+  [GoalStatus.Reporting]: 5,
+  [GoalStatus.Done]: 6,
 }
 
 /** Index into PHASES for a goal. Paused/failed/cancelled goals stay on the step where they stopped. */
@@ -15,7 +16,7 @@ export function phaseIndex(goal: Goal, tasks: Task[]): number {
   if (direct !== undefined) return direct
   // Infer where a stopped goal got to from its tasks.
   if (!tasks.length) return 0
-  if (tasks.every((t) => t.status === TaskStatus.Done)) return 4
+  if (tasks.every((t) => t.status === TaskStatus.Done)) return 5
   if (tasks.some((t) => t.status !== TaskStatus.Todo)) return 2
   return 1
 }
@@ -23,6 +24,7 @@ export function phaseIndex(goal: Goal, tasks: Task[]): number {
 export const isRunning = (s: GoalStatus) =>
   s === GoalStatus.Planning ||
   s === GoalStatus.Building ||
+  s === GoalStatus.Securing ||
   s === GoalStatus.Testing ||
   s === GoalStatus.Reporting
 

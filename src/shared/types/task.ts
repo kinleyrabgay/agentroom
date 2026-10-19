@@ -8,7 +8,7 @@ export type Goal = z.infer<typeof GoalSchema>;
 export type Board = z.infer<typeof BoardSchema>;
 
 export type TaskPatch = Partial<Omit<Task, 'id' | 'createdAt'>>;
-export type GoalPatch = Partial<Pick<Goal, 'title' | 'plan'>>;
+export type GoalPatch = Partial<Pick<Goal, 'title' | 'plan' | 'securityReview'>>;
 
 export interface NewTaskInput {
   title: string;

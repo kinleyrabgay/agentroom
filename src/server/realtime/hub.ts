@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { AgentEventType, ServerMessageKind } from '../../shared/enums.js';
+import { AgentEventType, ServerMessageKind, type WorkPhase } from '../../shared/enums.js';
 import { applyRateLimit, applyUsage, emptyUsage } from '../../shared/usage/reducer.js';
 import type {
   AccountUsage,
@@ -22,7 +22,15 @@ export interface Client {
   send(data: string): void;
 }
 
-export type EventListener = (event: AgentEvent) => void;
+/** Listeners get the stamped event (with goalId when it happened inside a goal run). */
+export type EventListener = (event: StampedEvent) => void;
+
+/** What a bot is currently working on; events from that bot are attributed to it. */
+export interface RunContext {
+  goalId?: string;
+  taskId?: string;
+  phase?: WorkPhase;
+}
 
 /**
  * The realtime hub: fans events out to every connected UI, keeps the state a newly
@@ -41,6 +49,8 @@ export class Hub {
   private readonly logFile: string;
   private consoles: Record<string, ConsoleLine[]> = {};
   private notifications: () => Notification[] = () => [];
+  /** Current run context per bot (set by the Team for the duration of a run). */
+  private contexts = new Map<string, RunContext>();
 
   readonly statuses: StatusMap = {};
   readonly previews: Record<string, PreviewState> = {};
@@ -107,14 +117,30 @@ export class Hub {
 
   // ---------- events ----------
 
-  emit(event: AgentEvent) {
-    const stamped = { ...event, ts: Date.now(), seq: ++this.seq } as StampedEvent;
+  /**
+   * Broadcast, record and log an event. It is stamped with a goalId from `ctx`, or else from the
+   * run context of the bot it concerns (so permission requests, tool calls and delegations made
+   * during a goal run are attributed to that goal without every emitter knowing about goals).
+   */
+  emit(event: AgentEvent, ctx?: RunContext) {
+    const goalId = ctx?.goalId ?? this.contextOf(subjectBot(event))?.goalId;
+    const stamped = { ...event, ts: Date.now(), seq: ++this.seq, ...(goalId ? { goalId } : {}) } as StampedEvent;
     this.reduce(event);
     this.history.push(stamped);
     if (this.history.length > HISTORY_LIMIT) this.history.splice(0, this.history.length - HISTORY_LIMIT);
     fs.appendFile(this.logFile, JSON.stringify(stamped) + '\n', () => {});
     this.broadcast({ kind: ServerMessageKind.Event, event: stamped });
-    for (const fn of this.listeners) fn(event);
+    for (const fn of this.listeners) fn(stamped);
+  }
+
+  /** Attribute a bot's events to a goal/task/phase until cleared (pass null). */
+  setRunContext(botId: string, ctx: RunContext | null) {
+    if (ctx && (ctx.goalId || ctx.taskId || ctx.phase)) this.contexts.set(botId, ctx);
+    else this.contexts.delete(botId);
+  }
+
+  contextOf(botId: string | undefined): RunContext | undefined {
+    return botId ? this.contexts.get(botId) : undefined;
   }
 
   onEvent(fn: EventListener): () => void {
@@ -213,4 +239,10 @@ export class Hub {
       }
     }
   }
+}
+
+/** The bot an event is about (delegations: the delegating bot). */
+function subjectBot(event: AgentEvent): string | undefined {
+  if (event.type === AgentEventType.Delegation) return event.from;
+  return 'botId' in event ? event.botId : undefined;
 }

@@ -8,6 +8,7 @@ export const View = {
   Board: "board",
   Tasks: "tasks",
   Browser: "browser",
+  Security: "security",
   Audit: "audit",
   Settings: "settings",
 } as const
@@ -22,6 +23,13 @@ export const BotTab = {
   Config: "config",
 } as const
 export type BotTab = ValueOf<typeof BotTab>
+
+/** Tabs under a goal's header in the Tasks view, in display order (P2 adds Changes and Timeline). */
+export const GoalTab = {
+  Tasks: "tasks",
+  Security: "security",
+} as const
+export type GoalTab = ValueOf<typeof GoalTab>
 
 /** Base URL of the AgentRoom server. Empty in production (same origin); set by `npm run dev:web`. */
 export const API_BASE = process.env.NEXT_PUBLIC_AGENTROOM_API ?? ""

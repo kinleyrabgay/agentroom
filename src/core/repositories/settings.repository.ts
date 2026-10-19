@@ -27,13 +27,24 @@ export class FsSettingsRepository implements SettingsRepository {
   update(patch: SettingsPatch): Settings {
     let next: Settings;
     try {
-      next = SettingsSchema.parse(deepMerge(this.get(), patch));
+      next = SettingsSchema.parse(deepMerge(withReplacedPhases(this.get(), patch), patch));
     } catch (err) {
       throw new Error(`Invalid settings: ${describe(err)}`);
     }
     writeJson(this.file, next);
     return next;
   }
+}
+
+/**
+ * A phase's model/effort is one choice: the patch's phase object replaces the stored one instead of
+ * merging into it, so `{ models: { build: {} } }` clears Build back to "bot's own setting".
+ */
+function withReplacedPhases(current: Settings, patch: SettingsPatch): Settings {
+  if (!patch.models) return current;
+  const models = { ...current.models };
+  for (const phase of Object.keys(patch.models) as (keyof Settings['models'])[]) models[phase] = {};
+  return { ...current, models };
 }
 
 function describe(err: unknown): string {

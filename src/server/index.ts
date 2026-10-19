@@ -20,6 +20,10 @@ import { GithubProjectService } from './integrations/github/github-project.servi
 import { HandoffService } from './integrations/github/handoff.service.js';
 import { pushBoard, pushProjectState, watchProject } from './watch/project-watcher.js';
 import { GoalRunner } from './workflow/goal-runner.js';
+import { gitUser } from '../core/git.js';
+import { AuditService, humanAudit } from './services/audit.service.js';
+import { LedgerService } from './services/ledger.service.js';
+import { SecretsStore } from './services/secrets.store.js';
 
 export interface StartOptions {
   root: string;
@@ -44,11 +48,18 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
 
   const hub = new Hub(project.paths.runs);
   const previews = new PreviewService(hub);
-  const permissions = new PermissionGate(hub, () => project.config.get(), project.root);
+  const audit = new AuditService(project.paths.auditFile, project.settings.get().audit.retentionDays);
+  const humanName = () => gitUser(project.root);
+  const ledger = new LedgerService(project.paths.ledgerFile);
+  const secrets = new SecretsStore(project.paths.secretsFile);
+  const permissions = new PermissionGate(hub, () => project.config.get(), project.root, {
+    record: (e) => audit.record(e),
+    humanName,
+  });
   const sessions = new SessionStore(project.paths.sessionsFile);
   const notifications = new NotificationService(hub, project.paths.inboxFile);
   const boardChanged = () => pushBoard(project, hub);
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger });
   const goals = new GoalRunner({ project, team, hub, notifications, boardChanged });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
@@ -85,6 +96,10 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     alerts,
     github,
     handoff,
+    ledger,
+    audit,
+    humanAudit: humanAudit(audit, humanName),
+    secrets,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),
     onConnect: () => pushProjectState(project, hub),

@@ -11,9 +11,34 @@ const components: Components = {
   h2: ({ children }) => <h3 className="mt-4 mb-2 text-[15px] font-semibold first:mt-0">{children}</h3>,
   h3: ({ children }) => <h4 className="mt-3 mb-1.5 font-semibold first:mt-0">{children}</h4>,
   h4: ({ children }) => <h4 className="mt-3 mb-1 font-medium first:mt-0">{children}</h4>,
-  ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5 marker:text-muted-foreground">{children}</ul>,
+  // GitHub task lists ("- [x] done") render as checkboxes without bullets.
+  ul: ({ className, children }) => (
+    <ul className={cn("my-2 space-y-1 marker:text-muted-foreground", className?.includes("contains-task-list") ? "list-none pl-0.5" : "list-disc pl-5")}>
+      {children}
+    </ul>
+  ),
   ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5 marker:text-muted-foreground">{children}</ol>,
-  li: ({ children }) => <li className="pl-0.5 leading-relaxed">{children}</li>,
+  li: ({ className, children }) => (
+    <li className={cn("leading-relaxed", className?.includes("task-list-item") ? "flex items-start gap-2" : "pl-0.5")}>{children}</li>
+  ),
+  input: ({ checked, type }) =>
+    type === "checkbox" ? (
+      <span
+        role="checkbox"
+        aria-checked={!!checked}
+        aria-disabled
+        className={cn(
+          "mt-[0.3em] grid size-3.5 shrink-0 place-items-center rounded-[4px] border",
+          checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/50"
+        )}
+      >
+        {checked && (
+          <svg viewBox="0 0 12 12" className="size-2.5" aria-hidden>
+            <path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+    ) : null,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noreferrer noopener" className="font-medium underline underline-offset-2 hover:text-primary">

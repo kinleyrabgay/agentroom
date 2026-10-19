@@ -21,8 +21,25 @@ export interface ModelEffortValue {
 
 const DEFAULT_EFFORT = "__default__"
 
-/** Provider-aware model + effort picker. Unset fields fall back to the project defaults. */
-export function ModelEffortPicker({ value, onChange }: { value: ModelEffortValue; onChange: (v: ModelEffortValue) => void }) {
+/** What "unset" means where the picker is used, e.g. a workflow phase that falls back to each bot's own setting. */
+export interface InheritOption {
+  label: string
+  description: string
+}
+
+/**
+ * Provider-aware model + effort picker. Unset fields fall back to the project defaults,
+ * or to `inherit` when given (e.g. "Bot's own setting").
+ */
+export function ModelEffortPicker({
+  value,
+  onChange,
+  inherit,
+}: {
+  value: ModelEffortValue
+  onChange: (v: ModelEffortValue) => void
+  inherit?: InheritOption
+}) {
   const { models, status } = useModels()
   const info = useAppStore((s) => s.info)
   const [open, setOpen] = useState(false)
@@ -51,8 +68,17 @@ export function ModelEffortPicker({ value, onChange }: { value: ModelEffortValue
         <Button variant="outline" className="h-10 w-full justify-start gap-2 rounded-xl px-3 font-normal">
           <ProviderMark provider={provider} className="size-4" />
           <span className="truncate">
-            {current.inherited && <span className="text-muted-foreground">Project default · </span>}
-            {formatModel(current)}
+            {inherit && !value.model ? (
+              <>
+                <span className="text-muted-foreground">{inherit.label}</span>
+                {value.effort && ` · ${EFFORT_LABEL[value.effort]}`}
+              </>
+            ) : (
+              <>
+                {current.inherited && <span className="text-muted-foreground">Project default · </span>}
+                {formatModel(current)}
+              </>
+            )}
           </span>
           <ChevronsUpDownIcon className="ml-auto size-4 text-muted-foreground" />
         </Button>
@@ -63,8 +89,8 @@ export function ModelEffortPicker({ value, onChange }: { value: ModelEffortValue
         </div>
         <ul className="max-h-72 overflow-y-auto p-1" role="listbox">
           <ModelRow
-            label="Project default"
-            description={projectLabel}
+            label={inherit?.label ?? "Project default"}
+            description={inherit?.description ?? projectLabel}
             selected={!value.model}
             onSelect={() => onChange({ model: undefined, effort: value.effort })}
           />
