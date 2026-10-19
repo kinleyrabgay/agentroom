@@ -1,0 +1,57 @@
+import { HostTool, PermissionMode, ToolName } from '../../shared/enums.js';
+import type { Config } from '../../shared/types/index.js';
+import { HOST_TOOL_PREFIX } from '../config/constants.js';
+
+/** Approval groups that "Always allow" applies to. */
+export const ApprovalGroup = {
+  Browser: 'Browser',
+  /** Running JS is riskier than clicking, so "Always allow Browser" does not cover it. */
+  BrowserJs: 'Browser JS',
+} as const;
+
+/** `group` is the key "Always allow" applies to. `sticky` asks can never be session-allowed. */
+export type Decision = { action: 'allow' } | { action: 'ask'; reason: string; sticky: boolean; group: string };
+
+const READ_ONLY = new Set<string>([ToolName.Read, ToolName.Grep, ToolName.Glob, 'LS', ToolName.WebSearch, ToolName.WebFetch, ToolName.TodoWrite, ToolName.Skill, 'NotebookRead']);
+const WRITES = new Set<string>([ToolName.Edit, ToolName.Write, ToolName.MultiEdit, ToolName.NotebookEdit]);
+/** In-app browser tools that only look or move between pages; the rest act on the page. */
+const BROWSER_READ = new Set<string>([HostTool.BrowserOpen, HostTool.BrowserSnapshot, HostTool.BrowserConsole, HostTool.BrowserWaitFor, HostTool.BrowserBack]);
+
+/** First `alwaysAsk` pattern that starts any command segment (split on ; && || | newlines), or null. */
+export function matchesAlwaysAsk(command: string, patterns: string[]): string | null {
+  const segments = command.split(/;|&&|\|\||\||\n/).map((s) => s.trim().replace(/\s+/g, ' '));
+  for (const seg of segments) {
+    // Strip leading env assignments and common wrappers, e.g. `FOO=1 sudo git push`.
+    const cmd = seg.replace(/^(\w+=\S*\s+)*/, '').replace(/^(sudo|command|exec|env)\s+/, '');
+    for (const p of patterns) {
+      if (cmd === p || cmd.startsWith(p + ' ')) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Decide whether a tool call can run without asking the human.
+ * `sessionAllowed` holds groups the human chose "Always allow" for during this server session.
+ */
+export function decide(tool: string, input: Record<string, unknown>, config: Config, sessionAllowed: ReadonlySet<string>): Decision {
+  const hostTool = tool.startsWith(HOST_TOOL_PREFIX) ? tool.slice(HOST_TOOL_PREFIX.length) : null;
+  const browser = hostTool?.startsWith('browser_') ? hostTool : null;
+  if (hostTool && !browser) return { action: 'allow' };
+
+  if (tool === ToolName.Bash) {
+    const hit = matchesAlwaysAsk(String(input.command ?? ''), config.alwaysAsk);
+    if (hit) return { action: 'ask', reason: `"${hit}" always requires approval`, sticky: true, group: tool };
+  }
+
+  const group = browser ? (browser === HostTool.BrowserEval ? ApprovalGroup.BrowserJs : ApprovalGroup.Browser) : tool;
+
+  if (config.permissionMode === PermissionMode.Auto) return { action: 'allow' };
+  if (sessionAllowed.has(group)) return { action: 'allow' };
+  if (config.permissionMode === PermissionMode.AskWrites && (READ_ONLY.has(tool) || (browser && BROWSER_READ.has(browser)))) {
+    return { action: 'allow' };
+  }
+
+  const reason = browser ? 'acts on a web page' : WRITES.has(tool) ? 'modifies files' : tool === ToolName.Bash ? 'runs a shell command' : 'needs approval';
+  return { action: 'ask', reason, sticky: false, group };
+}

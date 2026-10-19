@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "provider": "claude",
+  "model": "claude-opus-5-5",
+  "port": 4317,
+  "permissionMode": "ask-writes",
+  "alwaysAsk": ["git push", "git reset --hard", "git clean", "rm -rf", "gh pr merge", "gh repo delete", "npm publish"]
+}
