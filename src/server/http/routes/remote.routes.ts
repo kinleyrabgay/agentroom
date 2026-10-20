@@ -11,10 +11,14 @@ export const REMOTE_TOKEN_HEADER = 'x-remote-token';
 /** True for requests that came in through Cloudflare (the phone tunnel), not from this machine. */
 export const viaTunnel = (c: Context) => !!(c.req.header('cf-ray') || c.req.header('cf-connecting-ip'));
 
-/** Through the tunnel only the phone page and its API exist. */
-export function tunnelGuard(): MiddlewareHandler {
+/**
+ * Through the tunnel only the phone page and its API exist, unless the team room tunnel is on
+ * (`roomOpen`): then members reach the UI too, and the API still needs a member link (the owner's
+ * session token is never accepted through the tunnel).
+ */
+export function tunnelGuard(roomOpen: () => boolean = () => false): MiddlewareHandler {
   return async (c, next) => {
-    if (viaTunnel(c) && !REMOTE_PUBLIC_PATH.test(c.req.path)) return c.text('Not found', 404);
+    if (viaTunnel(c) && !REMOTE_PUBLIC_PATH.test(c.req.path) && !roomOpen()) return c.text('Not found', 404);
     await next();
   };
 }

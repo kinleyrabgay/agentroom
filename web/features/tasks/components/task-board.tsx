@@ -19,6 +19,8 @@ import { GoalTabs } from "./goal-tabs"
 import { ChangesPanel } from "./changes-panel"
 import { GoalTimeline } from "@/features/replay/components/goal-timeline"
 import { ProofPanel } from "@/features/proof/components/proof-panel"
+import { GoalDiscussion } from "@/features/room/components/goal-discussion"
+import { canDecide, isMember, useRoomStore } from "@/features/room/lib/room-store"
 import { NewGoalDialog } from "./new-goal-dialog"
 import { QuickAddTask } from "./quick-add-task"
 import { TaskColumn } from "./task-column"
@@ -40,9 +42,11 @@ export function TaskBoard() {
   // Tasks without a (still existing) goal.
   const loose = useMemo(() => tasks.filter((t) => !t.goalId || !goals.some((g) => g.id === t.goalId)), [tasks, goals])
   const visible = useMemo(() => (current ? tasks.filter((t) => t.goalId === current.id) : loose).sort(byOrder), [tasks, loose, current])
+  const member = useRoomStore((s) => isMember(s.me))
+  const decides = useRoomStore((s) => canDecide(s.me))
   const nextOrder = visible.reduce((m, t) => Math.max(m, t.order), 0) + 1
 
-  const actions = (
+  const actions = !decides ? null : (
     <PageActions>
       <Button size="sm" onClick={() => setCreating(true)}>
         <PlusIcon data-icon="inline-start" /> New goal
@@ -96,7 +100,7 @@ export function TaskBoard() {
 
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-y bg-background/95 px-6 py-2.5 backdrop-blur">
           {current && <GoalTabs goalId={current.id} />}
-          {(!current || goalTab === GoalTab.Tasks) && <QuickAddTask goalId={current?.id} nextOrder={nextOrder} />}
+          {(!current || goalTab === GoalTab.Tasks) && !member && <QuickAddTask goalId={current?.id} nextOrder={nextOrder} />}
         </div>
 
         {current && goalTab === GoalTab.Security ? (
@@ -115,6 +119,12 @@ export function TaskBoard() {
           <div className="px-6 py-4">
             <ErrorBoundary label="Proof" key={current.id}>
               <ProofPanel goal={current} />
+            </ErrorBoundary>
+          </div>
+        ) : current && goalTab === GoalTab.Discussion ? (
+          <div className="px-6 py-4">
+            <ErrorBoundary label="Discussion" key={current.id}>
+              <GoalDiscussion goal={current} />
             </ErrorBoundary>
           </div>
         ) : current && goalTab === GoalTab.Timeline ? (

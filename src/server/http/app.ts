@@ -41,6 +41,10 @@ import type { AutomationService } from '../automation/automation.service.js';
 import { automationRoutes, type RunnerControls } from './routes/automation.routes.js';
 import { goalTemplateRoutes } from './routes/goal-templates.routes.js';
 import { contextRoutes } from './routes/context.routes.js';
+import { roomRoutes } from './routes/room.routes.js';
+import type { RoomService } from '../room/room.service.js';
+import { requireRoomAuth, roomHostGuard } from '../room/auth.js';
+import { roomSocket } from '../room/socket.js';
 import { packRoutes } from './routes/packs.routes.js';
 import { RegistryService } from '../registry/registry.service.js';
 import type { ContextService } from '../context/context.service.js';
@@ -78,6 +82,8 @@ export interface AppDeps {
   context?: ContextService;
   /** Proof of work (Verify phase, Proof tab). */
   proof?: ProofService;
+  /** Shared team room (members over the LAN or a tunnel). */
+  room?: RoomService;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -93,7 +99,9 @@ export function createApp(deps: AppDeps) {
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
   // Through the phone tunnel only the approvals page and its API exist.
-  app.use('*', tunnelGuard());
+  app.use('*', tunnelGuard(() => !!deps.room?.tunnelOpen()));
+  // LAN listener: only requests addressed to the bound LAN host (DNS-rebinding guard).
+  if (deps.room) app.use('*', roomHostGuard(deps.room));
 
   // Opened as 127.0.0.1? Move the page to localhost, the same site as the previews (see PUBLIC_HOST).
   app.use('*', async (c, next) => {
@@ -108,7 +116,7 @@ export function createApp(deps: AppDeps) {
   const api = new Hono();
   const cors = devCors(process.env.AGENTROOM_DEV_ORIGIN);
   if (cors) api.use('*', cors);
-  api.use('*', requireToken(deps.token));
+  api.use('*', deps.room ? requireRoomAuth(deps.token, deps.room) : requireToken(deps.token));
   infoRoutes(api, deps.project, deps.models);
   botRoutes(api, deps.project, deps.team);
   skillRoutes(api, deps.project);
@@ -130,6 +138,7 @@ export function createApp(deps: AppDeps) {
   if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);
+  if (deps.room) roomRoutes(api, deps.room);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
   api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));
   app.route(API_PREFIX, api);
@@ -137,6 +146,7 @@ export function createApp(deps: AppDeps) {
   app.get(
     WS_PATH,
     upgradeWebSocket((c) => {
+      if (deps.room) return roomSocket(c, { ...deps, room: deps.room });
       const ok = tokenMatches(deps.token, c.req.query(TOKEN_QUERY));
       const client = { send: (_: string) => {} };
       return {

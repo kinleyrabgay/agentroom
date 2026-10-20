@@ -16,6 +16,7 @@ import { emitNotification } from "./notification-bus"
 import { send } from "./socket"
 import { normalizeGoals, normalizeTasks } from "./normalize"
 import { applyContextStatus } from "@/features/context/lib/context-store"
+import { applyRoom } from "@/features/room/lib/room-store"
 
 const set = useAppStore.setState
 
@@ -95,6 +96,10 @@ export function handleServerMessage(msg: ServerMessage) {
       if (isNew) emitNotification(n)
       return
     }
+
+    case ServerMessageKind.Room:
+      applyRoom(msg.room)
+      return
   }
 }
 

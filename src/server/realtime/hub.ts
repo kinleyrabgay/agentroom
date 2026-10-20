@@ -16,10 +16,13 @@ import type {
   UsageSummary,
 } from '../../shared/types/index.js';
 import { CONSOLE_LIMIT, CONSOLE_TAIL, HISTORY_LIMIT } from '../config/constants.js';
+import { hiddenFromMembers } from '../room/access.js';
 
 /** A connected UI. */
 export interface Client {
   send(data: string): void;
+  /** A team room member's tab: never the primary (bridge) tab, never counts as "the human is here", no private pushes. */
+  guest?: boolean;
 }
 
 /** Listeners get the stamped event (with goalId when it happened inside a goal run). */
@@ -67,14 +70,14 @@ export class Hub {
 
   add(client: Client) {
     this.clients.add(client);
-    this.primary ??= client;
+    if (!client.guest) this.primary ??= client;
     this.sendTo(client, {
       kind: ServerMessageKind.Hello,
       history: this.history,
       statuses: this.statuses,
       costUsd: this.costUsd,
       usage: this.usage,
-      account: this.account,
+      account: client.guest ? null : this.account,
       previews: this.previews,
       consoles: this.consoles,
       notifications: this.notifications(),
@@ -85,12 +88,12 @@ export class Hub {
     const before = this.isActive;
     this.clients.delete(client);
     this.active.delete(client);
-    if (this.primary === client) this.primary = [...this.clients].at(-1) ?? null;
+    if (this.primary === client) this.primary = [...this.clients].filter((c) => !c.guest).at(-1) ?? null;
     if (before !== this.isActive) for (const fn of this.presenceListeners) fn();
   }
 
   focus(client: Client) {
-    if (this.clients.has(client)) this.primary = client;
+    if (this.clients.has(client) && !client.guest) this.primary = client;
   }
 
   private presenceListeners: (() => void)[] = [];
@@ -102,7 +105,7 @@ export class Hub {
 
   /** A UI tab reports whether it is visible and focused. */
   setPresence(client: Client, active: boolean) {
-    if (!this.clients.has(client)) return;
+    if (!this.clients.has(client) || client.guest) return;
     const before = this.isActive;
     if (active) {
       this.active.add(client);
@@ -116,8 +119,10 @@ export class Hub {
     return this.active.size > 0;
   }
 
+  /** An owner tab is open (members' tabs can't run the in-app browser). */
   get hasUi() {
-    return this.clients.size > 0;
+    for (const c of this.clients) if (!c.guest) return true;
+    return false;
   }
 
   /** Send to the primary UI only. Returns false when no UI is open. */
@@ -242,7 +247,9 @@ export class Hub {
 
   private broadcast(msg: ServerMessage) {
     const data = JSON.stringify(msg);
+    const hidden = hiddenFromMembers(msg);
     for (const c of this.clients) {
+      if (hidden && c.guest) continue;
       try {
         c.send(data);
       } catch {

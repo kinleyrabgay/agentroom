@@ -50,6 +50,8 @@ export const GoalTab = {
   Timeline: "timeline",
   /** Proof of work: recording, before/after, quality checks. */
   Proof: "proof",
+  /** Team room comments on the goal and its plan. */
+  Discussion: "discussion",
 } as const
 export type GoalTab = ValueOf<typeof GoalTab>
 

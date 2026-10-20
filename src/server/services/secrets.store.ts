@@ -60,6 +60,11 @@ export class SecretsStore {
     this.write(next);
   }
 
+  /** Team room signing key (never sent over the API). */
+  setRoomSecret(value: string) {
+    this.write({ ...this.read(), roomSecret: value });
+  }
+
   private write(value: IntegrationSecrets) {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(value, null, 2) + '\n', { mode: FILE_MODE });

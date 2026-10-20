@@ -12,6 +12,8 @@ export interface IntegrationSecrets {
   smtp?: { host: string; port: number; secure: boolean; user?: string; pass?: string; from: string; to: string };
   /** Values for `${secret:NAME}` references in mcp.json (tokens, API keys). */
   mcp?: Record<string, string>;
+  /** HMAC key that signs team room member links. Rotating it invalidates every link. */
+  roomSecret?: string;
 }
 
 /** What GET /api/integrations returns: which secrets are set, never their values. */

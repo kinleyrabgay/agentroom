@@ -344,6 +344,8 @@ export const ServerMessageKind = {
   BridgeCmd: 'bridge_cmd',
   Account: 'account',
   Notification: 'notification',
+  /** Shared team room: presence, comments, per-person notifications. */
+  Room: 'room',
 } as const;
 export type ServerMessageKind = ValueOf<typeof ServerMessageKind>;
 

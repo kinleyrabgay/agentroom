@@ -12,6 +12,7 @@ import type { McpSnapshot } from './mcp.js';
 import type { AutomationSnapshot } from './automation.js';
 import type { ContextStatus } from './context.js';
 import type { AccountUsage, UsageSummary } from './usage.js';
+import type { RoomPush } from './room.js';
 
 export type StatusMap = Record<string, { status: BotStatus; activity?: string }>;
 
@@ -51,7 +52,8 @@ export type ServerMessage =
   | { kind: typeof ServerMessageKind.BridgeCmd; botId: string; id: string; cmd: BridgeCmd; actor: BridgeActor }
   | { kind: typeof ServerMessageKind.Account; account: AccountUsage | null }
   /** New or updated notification (e.g. answered). */
-  | { kind: typeof ServerMessageKind.Notification; notification: Notification };
+  | { kind: typeof ServerMessageKind.Notification; notification: Notification }
+  | { kind: typeof ServerMessageKind.Room; room: RoomPush };
 
 /** UI → server. */
 export type ClientMessage =

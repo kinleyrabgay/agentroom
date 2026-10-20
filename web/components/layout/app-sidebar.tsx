@@ -37,8 +37,12 @@ import { useGithubStore } from "@/features/github/lib/github-store"
 import { myOpenCount } from "@/features/github/lib/board-view"
 import { useFindingCounts } from "@/features/security/hooks/use-finding-counts"
 import { cn } from "@/lib/utils"
+import { useIsMember } from "@/features/room/lib/room-store"
+import { OWNER_ONLY_VIEWS } from "@/features/room/components/room-presence"
 
 export function AppSidebar() {
+  // Teammates in the team room: no owner-only pages (sources on the owner's tokens, settings) or skill editing.
+  const member = useIsMember()
   return (
     <Sidebar variant="floating" collapsible="icon">
       <SidebarHeader className="gap-2">
@@ -48,14 +52,14 @@ export function AppSidebar() {
       <SidebarContent>
         <ErrorBoundary label="Navigation" compact>
           <PrimaryNav />
-          <SourcesNav />
+          {!member && <SourcesNav />}
           <OversightNav />
         </ErrorBoundary>
         <BotList />
-        <SkillLibrary />
+        {!member && <SkillLibrary />}
       </SidebarContent>
       <SidebarFooter>
-        <SettingsNav />
+        {!member && <SettingsNav />}
         <FooterStatus />
       </SidebarFooter>
       <SidebarRail />
@@ -116,13 +120,15 @@ function PrimaryNav() {
   const openTasks = useAppStore((s) => s.tasks.filter((t) => t.status !== TaskStatus.Done).length)
   const failedRuns = useAppStore((s) => s.automation?.failedSinceSeen ?? 0)
   const staleCards = useContextStore((s) => (s.status?.enabled ? s.status.cards.stale : 0))
-  const items: NavItem[] = [
+  const member = useIsMember()
+  const all: NavItem[] = [
     { view: View.Team, badge: 0 },
     { view: View.Inbox, badge: needs.total, tone: "warning", badgeLabel: `${needs.total} waiting on you` },
     { view: View.Work, badge: openTasks, badgeLabel: `${openTasks} open tasks`, alert: needs.plans > 0 && "a plan needs your review" },
     { view: View.Context, badge: 0, alert: staleCards > 0 && `${staleCards} module ${staleCards === 1 ? "card is" : "cards are"} out of date` },
     { view: View.Automation, badge: failedRuns, tone: "danger", badgeLabel: `${failedRuns} automation ${failedRuns === 1 ? "run" : "runs"} failed` },
   ]
+  const items = member ? all.filter((i) => !OWNER_ONLY_VIEWS.has(i.view)) : all
   return (
     <SidebarGroup className="pt-0">
       <SidebarGroupContent>

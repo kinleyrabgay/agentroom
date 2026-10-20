@@ -4,6 +4,12 @@ import { API_BASE, RECONNECT_DELAY_MS } from "@/lib/constants"
 import { setFindings, useAppStore } from "@/lib/store/app-store"
 import { handleServerMessage } from "./handlers"
 import { reportPresence, startPresence } from "./presence"
+import { roomApi } from "@/features/room/lib/room-api"
+import { isMember, useRoomStore } from "@/features/room/lib/room-store"
+
+/** Close codes: a team room member was removed, or the link stopped working. */
+const WS_REMOVED = 4403
+const WS_UNAUTHORIZED = 4401
 
 let ws: WebSocket | null = null
 let retry: ReturnType<typeof setTimeout> | undefined
@@ -27,6 +33,12 @@ export function connect() {
     .then((settings) => useAppStore.setState({ settings }))
     .catch(() => {})
 
+  // Team room: this person's mentions and comments (older servers don't have the route).
+  roomApi
+    .notifications()
+    .then((notifications) => useRoomStore.setState({ notifications }))
+    .catch(() => {})
+
   // Findings are pushed on change (StateType.Findings); fetch once so the badge is right from the start.
   securityApi
     .findings({})
@@ -43,9 +55,14 @@ export function connect() {
     startPresence()
     reportPresence(true)
   }
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     ws = null
     useAppStore.setState({ connected: false })
+    // A teammate's access ended: say so instead of reconnecting forever.
+    if (e.code === WS_REMOVED || (e.code === WS_UNAUTHORIZED && isMember(useRoomStore.getState().me))) {
+      useRoomStore.setState({ removed: true })
+      return
+    }
     clearTimeout(retry)
     retry = setTimeout(connect, RECONNECT_DELAY_MS)
   }
