@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { AuditKind, GoalStatus, NotificationKind, StateType } from '../../shared/enums.js';
 import { ScheduleSchema, TriggerSchema } from '../../shared/schemas.js';
 import type {
+  AutomationScope,
   AutomationAction,
   AutomationRun,
   AutomationSnapshot,
@@ -19,7 +20,7 @@ import type {
   TriggerView,
 } from '../../shared/types/index.js';
 import { readJson, writeJson } from '../../core/fs/json.js';
-import type { AutomationRepository } from '../../core/repositories/automation.repository.js';
+import { runsHere, type AutomationRepository } from '../../core/repositories/automation.repository.js';
 import { buildBrief, briefHasNews, digestText } from './brief.js';
 import { decide, localDay, movedCards, newSentryIssues, triggerBlocked, type ScheduleState } from './plan.js';
 import { cronError } from './time-parse.js';
@@ -101,8 +102,10 @@ export interface AutomationDeps {
   now?: () => Date;
 }
 
-type ScheduleInput = Omit<Schedule, 'id' | 'createdAt' | 'createdBy' | 'enabled' | 'runner'> & Partial<Pick<Schedule, 'enabled' | 'runner'>>;
-type TriggerInput = Omit<Trigger, 'id' | 'createdAt' | 'createdBy' | 'enabled' | 'runner' | 'limits'> &
+type ScheduleInput = Omit<Schedule, 'id' | 'createdAt' | 'createdBy' | 'enabled' | 'runner' | 'owner'> & Partial<Pick<Schedule, 'enabled' | 'runner'>> & OwnerPatch;
+/** `owner: 'me'` takes over a team item (it then runs on this machine). */
+type OwnerPatch = { owner?: 'me' };
+type TriggerInput = Omit<Trigger, 'id' | 'createdAt' | 'createdBy' | 'enabled' | 'runner' | 'limits' | 'owner'> & OwnerPatch &
   Partial<Pick<Trigger, 'enabled' | 'runner' | 'limits'>>;
 
 /**
@@ -152,7 +155,8 @@ export class AutomationService {
       const d = decide(s, st, this.now());
       return {
         ...s,
-        nextRunAt: s.enabled ? (st.nextRunAt ?? d.nextRunAt) : null,
+        runsHere: this.here(s),
+        nextRunAt: s.enabled && this.here(s) ? (st.nextRunAt ?? d.nextRunAt) : null,
         lastRunAt: st.lastRunAt ?? null,
         ...(st.lastOutcome ? { lastOutcome: st.lastOutcome } : {}),
         ...(s.action.type === 'message' || s.action.type === 'handoff' ? (s.action.botId ? { botId: s.action.botId } : {}) : {}),
@@ -161,7 +165,7 @@ export class AutomationService {
     const today = localDay(this.now());
     const triggers: TriggerView[] = this.deps.repo.triggers().map((t) => {
       const st = this.state.triggers[t.id];
-      return { ...t, runsToday: st?.runsByDay[today] ?? 0, lastRunAt: st?.lastRunAt ?? null, ...(st?.lastOutcome ? { lastOutcome: st.lastOutcome } : {}) };
+      return { ...t, runsHere: this.here(t), runsToday: st?.runsByDay[today] ?? 0, lastRunAt: st?.lastRunAt ?? null, ...(st?.lastOutcome ? { lastOutcome: st.lastOutcome } : {}) };
     });
     const seen = this.state.historySeenAt ?? '';
     return {
@@ -200,7 +204,7 @@ export class AutomationService {
 
   createSchedule(input: ScheduleInput): Schedule {
     const schedule = this.validateSchedule({
-      ...input,
+      ...this.scoped(input),
       id: `S-${randomBytes(3).toString('hex')}`,
       enabled: input.enabled ?? true,
       runner: input.runner ?? 'local',
@@ -217,7 +221,7 @@ export class AutomationService {
     const list = this.deps.repo.schedules();
     const cur = list.find((s) => s.id === id);
     if (!cur) throw new Error(`No schedule ${id}.`);
-    const next = this.validateSchedule({ ...cur, ...patch, id: cur.id, createdAt: cur.createdAt });
+    const next = this.validateSchedule({ ...cur, ...this.scoped(patch, cur), id: cur.id, createdAt: cur.createdAt });
     // Changing when it runs restarts its clock.
     if (patch.when || (patch.enabled && !cur.enabled)) delete this.state.schedules[id];
     this.deps.repo.saveSchedules(list.map((s) => (s.id === id ? next : s)));
@@ -245,10 +249,29 @@ export class AutomationService {
     return this.fireSchedule(s, false);
   }
 
+  /** This machine runs the item (personal, or team and owned by the current git user). */
+  private here(item: Schedule | Trigger) {
+    return runsHere(item, this.deps.repo.owner());
+  }
+
+  /**
+   * Resolve `scope` and `owner` for a create/patch: personal by default; a team item gets the
+   * current git user as owner when it becomes team, and `owner: 'me'` takes one over.
+   */
+  private scoped<T extends { scope?: AutomationScope; owner?: unknown }>(input: T, cur?: Schedule | Trigger) {
+    const { owner, ...rest } = input;
+    const scope: AutomationScope = rest.scope ?? cur?.scope ?? 'personal';
+    const me = this.deps.repo.owner();
+    if (scope === 'team' && !me.email) throw new Error('Set your git user.email first: team automation runs on its owner\'s machine.');
+    const nextOwner = scope === 'team' ? (owner === 'me' || !cur?.owner || cur.scope !== 'team' ? me : cur.owner) : undefined;
+    return { ...rest, scope, ...(nextOwner ? { owner: nextOwner } : { owner: undefined }) };
+  }
+
   private validateSchedule(raw: unknown): Schedule {
     const parsed = ScheduleSchema.safeParse(raw);
     if (!parsed.success) throw new Error(parsed.error.issues.map((i) => `${i.path.join('.') || 'schedule'}: ${i.message}`).join('; '));
-    const s = parsed.data as Schedule;
+    // `scope` isn't stored in the file (it's where the item lives), so the schema drops it: keep it.
+    const s = { ...parsed.data, scope: (raw as { scope?: AutomationScope }).scope ?? 'personal' } as Schedule;
     if (s.runner === 'cloud') throw new Error("The cloud runner isn't available yet. Use This Mac.");
     if (s.when.type === 'cron') {
       const err = cronError(s.when.cron);
@@ -261,7 +284,7 @@ export class AutomationService {
 
   createTrigger(input: TriggerInput): Trigger {
     const t = this.validateTrigger({
-      ...input,
+      ...this.scoped(input),
       id: `T-${randomBytes(3).toString('hex')}`,
       enabled: input.enabled ?? true,
       runner: input.runner ?? 'local',
@@ -279,7 +302,7 @@ export class AutomationService {
     const list = this.deps.repo.triggers();
     const cur = list.find((t) => t.id === id);
     if (!cur) throw new Error(`No trigger ${id}.`);
-    const next = this.validateTrigger({ ...cur, ...patch, id: cur.id, createdAt: cur.createdAt });
+    const next = this.validateTrigger({ ...cur, ...this.scoped(patch, cur), id: cur.id, createdAt: cur.createdAt });
     this.deps.repo.saveTriggers(list.map((t) => (t.id === id ? next : t)));
     this.deps.audit(`Trigger changed: ${next.name}`, { id, keys: Object.keys(patch) });
     this.push();
@@ -326,7 +349,7 @@ export class AutomationService {
   private validateTrigger(raw: unknown): Trigger {
     const parsed = TriggerSchema.safeParse(raw);
     if (!parsed.success) throw new Error(parsed.error.issues.map((i) => `${i.path.join('.') || 'trigger'}: ${i.message}`).join('; '));
-    const t = parsed.data as Trigger;
+    const t = { ...parsed.data, scope: (raw as { scope?: AutomationScope }).scope ?? 'personal' } as Trigger;
     if (t.runner === 'cloud') throw new Error("The cloud runner isn't available yet. Use This Mac.");
     if (t.then.type === 'message' && !t.then.botId) throw new Error('Pick the bot to message.');
     if (t.then.type === 'handoff' && t.when.source === 'goal') throw new Error('A failed goal can be sent to a bot as a message, not handed off.');
@@ -391,6 +414,8 @@ export class AutomationService {
     } else if (this.wasActive) this.presence();
 
     for (const s of this.deps.repo.schedules()) {
+      // Team schedules run only on their owner's machine.
+      if (!this.here(s)) continue;
       const st = this.state.schedules[s.id] ?? {};
       const d = decide(s, st, now);
       if (d.action === 'wait') {
@@ -488,7 +513,7 @@ export class AutomationService {
 
   /** Goal-failed triggers (from the goals themselves, no polling of anything external). */
   private goalFailures() {
-    const triggers = this.deps.repo.triggers().filter((t) => t.when.source === 'goal');
+    const triggers = this.deps.repo.triggers().filter((t) => t.when.source === 'goal' && this.here(t));
     const failed = this.deps.goals().filter((g) => g.status === GoalStatus.Failed);
     if (!this.state.failedGoalsSeen) {
       this.state.failedGoalsSeen = failed.map((g) => g.id);
@@ -506,7 +531,7 @@ export class AutomationService {
     if (this.polling) return;
     this.polling = true;
     try {
-      const triggers = this.deps.repo.triggers().filter((t) => t.enabled);
+      const triggers = this.deps.repo.triggers().filter((t) => t.enabled && this.here(t));
       if (triggers.some((t) => t.when.source === 'sentry') && this.deps.sentryIssues) {
         const issues = await this.deps.sentryIssues().catch(() => null);
         if (issues) {

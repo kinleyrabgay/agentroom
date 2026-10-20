@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CalendarClockIcon, ClockIcon, HistoryIcon, MoreHorizontalIcon, PlayIcon, PlusIcon, ZapIcon } from "lucide-react"
+import { CalendarClockIcon, ClockIcon, HistoryIcon, MonitorIcon, MoreHorizontalIcon, PlayIcon, PlusIcon, ZapIcon } from "lucide-react"
+import { firstName, ScopeBadge } from "./scope-field"
 import { toast } from "sonner"
 import type { AutomationOutcome, AutomationRun, ScheduleView, TriggerView } from "@shared"
 import { automationApi } from "@/lib/api/endpoints"
@@ -107,10 +108,13 @@ function Schedules({ list }: { list: ScheduleView[] }) {
             return (
               <tr key={s.id} className="border-b last:border-0 hover:bg-accent/30">
                 <td className="max-w-80 px-4 py-3">
-                  <button className="block w-full truncate text-left font-medium hover:underline" onClick={() => openSchedule({ id: s.id, name: s.name, when: s.when, action: s.action })}>
+                  <button className="block w-full truncate text-left font-medium hover:underline" onClick={() => openSchedule({ id: s.id, name: s.name, when: s.when, action: s.action, scope: s.scope, owner: s.owner })}>
                     {s.name}
                   </button>
-                  <span className="block truncate text-xs text-muted-foreground">{text}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs text-muted-foreground">{text}</span>
+                    <ScopeBadge scope={s.scope} owner={s.owner} runsHere={s.runsHere} />
+                  </span>
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">{describeWhen(s.when)}</td>
                 <td className="px-3 py-3">
@@ -122,7 +126,7 @@ function Schedules({ list }: { list: ScheduleView[] }) {
                     "—"
                   )}
                 </td>
-                <td className="px-3 py-3 whitespace-nowrap tabular-nums">{s.enabled ? formatRelative(s.nextRunAt) : <span className="text-muted-foreground">Off</span>}</td>
+                <td className="px-3 py-3 whitespace-nowrap tabular-nums">{!s.runsHere ? <span className="text-muted-foreground">On {s.owner ? firstName(s.owner) : "another"}&apos;s machine</span> : s.enabled ? formatRelative(s.nextRunAt) : <span className="text-muted-foreground">Off</span>}</td>
                 <td className="px-3 py-3">{s.lastOutcome ? <ToneBadge tone={OUTCOME[s.lastOutcome].tone} size="sm">{OUTCOME[s.lastOutcome].label}</ToneBadge> : <span className="text-muted-foreground">–</span>}</td>
                 <td className="px-3 py-3">
                   <div className="flex items-center justify-end gap-1.5">
@@ -137,7 +141,12 @@ function Schedules({ list }: { list: ScheduleView[] }) {
                         <DropdownMenuItem onSelect={() => run(automationApi.runNow(s.id), "Started")}>
                           <PlayIcon /> Run now
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => openSchedule({ id: s.id, name: s.name, when: s.when, action: s.action })}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => openSchedule({ id: s.id, name: s.name, when: s.when, action: s.action, scope: s.scope, owner: s.owner })}>Edit</DropdownMenuItem>
+                        {!s.runsHere && (
+                          <DropdownMenuItem onSelect={() => run(automationApi.updateSchedule(s.id, { owner: "me" }), "It runs on this machine now")}>
+                            <MonitorIcon /> Run it here instead
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onSelect={() => run(automationApi.deleteSchedule(s.id), "Schedule deleted")}>
                           Delete
@@ -197,7 +206,10 @@ function Triggers({ list }: { list: TriggerView[] }) {
               <ZapIcon className="size-4" />
             </span>
             <div className="min-w-0 flex-1 space-y-1">
-              <button className="text-left font-medium hover:underline" onClick={() => openTrigger(t)}>{t.name}</button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button className="text-left font-medium hover:underline" onClick={() => openTrigger(t)}>{t.name}</button>
+                <ScopeBadge scope={t.scope} owner={t.owner} runsHere={t.runsHere} />
+              </div>
               <p className="text-sm text-muted-foreground">
                 When <span className="text-foreground">{s.when}</span>, <span className="text-foreground">{s.then}</span>.
               </p>
@@ -228,6 +240,11 @@ function Triggers({ list }: { list: TriggerView[] }) {
                   Test with the latest event
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => openTrigger(t)}>Edit</DropdownMenuItem>
+                {!t.runsHere && (
+                  <DropdownMenuItem onSelect={() => run(automationApi.updateTrigger(t.id, { owner: "me" }), "It runs on this machine now")}>
+                    <MonitorIcon /> Run it here instead
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={() => run(automationApi.deleteTrigger(t.id), "Trigger deleted")}>Delete</DropdownMenuItem>
               </DropdownMenuContent>

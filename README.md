@@ -219,7 +219,7 @@ After **2 fix rounds** with QA still failing, the runner stops and asks you to r
 
 ### Task board
 
-Tasks live in `.agentroom/tasks/board.json` and show as a Kanban board (`todo` → `doing` → `review` → `done`).
+Tasks live in `.agentroom/runs/board.json` (local, not committed: your goals are your own working state) and show as a Kanban board (`todo` → `doing` → `review` → `done`). To share work with the team, use the GitHub board or open a PR. Projects from 0.0.2 move `tasks/board.json` there automatically on first start; commit the deletion once.
 
 <details>
 <summary><b>Task fields</b></summary>
@@ -404,8 +404,9 @@ Caps per goal and per day in **Settings → Budgets**, plus a per-goal override 
 Run the team without you. **Automation** in the sidebar lists schedules, triggers and every run.
 
 - **Schedule from anywhere:** type a time in the goal box ("Start the dependency rules tomorrow at 9", "every weekday at 8:30") and Send becomes **Schedule**. Hand-offs have **Now / Later**, and New goal has **Schedule…**.
-- **Schedules** (`.agentroom/schedules.json`, committed) run once or repeat (every day, weekdays, weekly, or a cron rule), and can start a goal, message a bot or hand off GitHub cards or Sentry issues. **Build without waiting for my approval** is off by default: the team plans and waits for you.
-- **Triggers** (`.agentroom/triggers.json`) read like a sentence: *When Sentry reports a new fatal issue, hand it to Bug Fixer and stop after the plan.* Sources: new Sentry issues, GitHub cards moved to a column, failed goals. Limits: runs per day, budget per run, quiet hours.
+- **Just me or Team:** new schedules and triggers are personal (`.agentroom/runs/`, never committed). Switch one to **Team** to commit it (`.agentroom/schedules.json` / `triggers.json`) with you as its owner: it runs only on the owner's machine, so a team of five never runs it five times. Teammates see *On Kinley's machine* and can **Run it here instead** to take it over.
+- **Schedules** run once or repeat (every day, weekdays, weekly, or a cron rule), and can start a goal, message a bot or hand off GitHub cards or Sentry issues. **Build without waiting for my approval** is off by default: the team plans and waits for you.
+- **Triggers** read like a sentence: *When Sentry reports a new fatal issue, hand it to Bug Fixer and stop after the plan.* Sources: new Sentry issues, GitHub cards moved to a column, failed goals. Limits: runs per day, budget per run, quiet hours.
 - **History** shows each run with its result, goal and cost; failures also land in the Inbox.
 - **Background mode** (macOS): `agentroom daemon install` (or **Settings → Runner**) adds a LaunchAgent so schedules fire with the tab closed while the Mac is awake. `agentroom start` then opens the running instance.
 - A missed one-off (AgentRoom was off for more than 12 hours) is skipped and listed, never run late by surprise.
@@ -476,6 +477,15 @@ agentroom <command> [options]
 <summary><b><code>agentroom init</code></b>: scaffold <code>.agentroom/</code></summary>
 
 Copies default bots, skills and config into `.agentroom/` and adds `runs/` to `.gitignore`. Never overwrites existing files, so it's safe to re-run after upgrading to pick up new templates.
+
+- `--private`: keep the whole `.agentroom/` out of git for just you, via `.git/info/exclude` (your `.gitignore` is not touched). `agentroom start --private` does the same when it sets up a new project.
+
+</details>
+
+<details open>
+<summary><b><code>agentroom share</code></b>: switch a private setup to shared</summary>
+
+Removes the private exclude line and adds `.agentroom/runs/` to `.gitignore`, so you can commit bots, skills and settings for the team. `agentroom doctor` shows which mode you're in.
 
 </details>
 
@@ -574,18 +584,34 @@ your-project/
     │   └── 06-security-auditor/bot.md
     ├── skills/
     │   └── <name>/SKILL.md           # shared skill library
-    ├── tasks/board.json              # goals + tasks
     ├── github/project.json           # GitHub board config (when connected)
     ├── sentry.json                   # Sentry org/projects for the Sentry page (token is a local secret)
     ├── mcp.json                      # team MCP servers (${secret:NAME} references only)
-    ├── schedules.json                # scheduled goals, messages and hand-offs
-    ├── triggers.json                 # "when … then …" automation
+    ├── schedules.json                # team schedules (each runs on its owner's machine)
+    ├── triggers.json                 # team "when … then …" automation
     ├── goal-templates/*.md           # New goal templates (fields + planner guidance)
-    └── runs/                         # gitignored: events, sessions, ledger, audit, findings, uploads, local secrets
+    └── runs/                         # gitignored, yours only:
+        ├── board.json                #   goals + tasks
+        ├── schedules.json, triggers.json  # personal automation
+        ├── settings.local.json       #   your settings overrides
+        ├── config.local.json         #   your port / model / permission mode
+        └── …                         #   events, sessions, ledger, audit, findings, uploads, secrets
 ```
 
+### What's shared and what's yours
+
+| Shared (committed) | Yours (`runs/`, never committed) |
+|---|---|
+| Bots, skills, goal templates, bot memory | Goals and tasks |
+| `settings.json`, `config.json` (team defaults) | Personal overrides: `settings.local.json`, `config.local.json` |
+| `mcp.json`, `sentry.json`, `github/project.json` | Your own MCP servers, secrets and tokens |
+| Team schedules and triggers (run on the owner's machine) | Personal schedules and triggers |
+| | Sessions, ledger, audit log, findings, uploads |
+
+In Settings, **Save changes for: Team · Just me** picks where a change goes; sections you've overridden show **Just for you · Reset**. Prefer to keep AgentRoom entirely to yourself? Use `agentroom init --private`.
+
 > [!TIP]
-> Commit everything except `runs/`. Teammates get the same bots, skills, settings and board config. Edit any file by hand and the UI updates live.
+> Commit everything except `runs/`. Teammates get the same bots, skills, settings and board config, while goals, tasks and personal automation stay on your machine. Edit any file by hand and the UI updates live.
 
 ---
 
@@ -1024,7 +1050,7 @@ Not without you. `git push`, `gh pr merge` and others are in `alwaysAsk` by defa
 <details>
 <summary><b>Can my team share the same bots?</b></summary>
 
-Yes. Commit `.agentroom/` (except `runs/`, which is gitignored). Everyone gets the same bots, skills, settings and GitHub board config.
+Yes. Commit `.agentroom/` (except `runs/`, which is gitignored). Everyone gets the same bots, skills, settings and GitHub board config. Goals, tasks, personal schedules and settings overrides stay local, so you never fight over merge conflicts in the board. See [What's shared and what's yours](#whats-shared-and-whats-yours).
 
 </details>
 

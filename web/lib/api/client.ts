@@ -15,7 +15,11 @@ export async function request<T = unknown>(method: string, path: string, body?: 
     headers: { "content-type": "application/json", [TOKEN_HEADER]: useAppStore.getState().token },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new ApiError(data.error ?? res.statusText, res.status)
+  // An older server answers API paths it doesn't know with the web page (HTML, 200). Treat any
+  // non-JSON reply as "not supported" so optional features fail quietly instead of reading `{}`.
+  const json = (res.headers.get("content-type") ?? "").includes("application/json")
+  const data = json ? await res.json().catch(() => undefined) : undefined
+  if (!res.ok) throw new ApiError((data as { error?: string } | undefined)?.error ?? res.statusText, res.status)
+  if (data === undefined) throw new ApiError("This AgentRoom server doesn't support that yet. Restart `agentroom start` to update it.", 404)
   return data as T
 }

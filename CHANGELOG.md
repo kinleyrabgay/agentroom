@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-20
+
+A clear sharing model: the team shares the setup, everyone keeps their own work.
+
+### Changed
+
+- Goals and tasks now live in `.agentroom/runs/board.json` (local). The old committed `.agentroom/tasks/board.json` is moved automatically the first time a project opens; commit the deletion once. A broken old file is never moved, and if both exist the new one wins with a warning.
+- New schedules and triggers are personal (`.agentroom/runs/`) by default. **Team** items are committed with an owner and only run on the owner's machine, so they never run once per teammate. 0.0.2 team items without an owner are adopted by the first person who opens them; teammates can **Run it here instead** to take one over.
+- Settings and config changes can be saved for **Team** or **Just me**. Personal overrides go to `runs/settings.local.json` / `runs/config.local.json` and show a **Just for you · Reset** badge. Port and permission-mode changes from the UI are personal by default.
+
+### Added
+
+- `agentroom init --private` (and `start --private`) keeps `.agentroom/` out of git for just you via `.git/info/exclude`; `agentroom share` switches back. `doctor` and Settings → Data show the mode.
+- Unknown `/api/*` routes now return a JSON 404 instead of the web page.
+
+### Fixed
+
+- Inbox crashed ("spentUsd.toFixed") when the UI talked to an older server. The client now rejects non-JSON replies, optional top-bar widgets fail quietly, and the brief checks its data.
+- This repo ignores its own `.agentroom/` dogfooding folder.
+
 ## [0.0.2] - 2026-10-20
 
 A redesign of the whole UI, Sentry and MCP integrations, and automation that lets the team work while you're away.
@@ -98,6 +118,7 @@ First public release on npm as `@kinleyrabgay/agentroom`.
 - Run ledger, append-only audit log, usage tracking and alerts.
 - Server bound to `127.0.0.1` with a per-run access token.
 
-[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/kinleyrabgay/agentroom/releases/tag/v0.0.1

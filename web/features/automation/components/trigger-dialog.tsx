@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2Icon, ZapIcon } from "lucide-react"
 import { toast } from "sonner"
-import type { Trigger, TriggerThen, TriggerWhen } from "@shared"
+import type { AutomationScope, Trigger, TriggerThen, TriggerWhen } from "@shared"
+import { ScopeField } from "./scope-field"
 import { automationApi, githubApi, sentryApi, type TriggerInput } from "@/lib/api/endpoints"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
@@ -60,6 +61,7 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
   const [quiet, setQuiet] = useState(trigger ? !!trigger.limits.quietHours : true)
   const [projects, setProjects] = useState<string[]>([])
   const [columns, setColumns] = useState<string[]>([])
+  const [scope, setScope] = useState<AutomationScope>(trigger?.scope ?? "personal")
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -104,6 +106,7 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
       name: name.trim() || defaultName(when),
       when,
       then,
+      scope,
       limits: { maxRunsPerDay: Number(maxRuns) || 3, ...(usd > 0 ? { budgetUsd: usd } : {}), ...(quiet ? { quietHours: { from: "22:00", to: "07:00" } } : {}) },
     }
     setBusy(true)
@@ -204,6 +207,10 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
           </div>
           <Switch id="trig-quiet" checked={quiet} onCheckedChange={setQuiet} />
         </div>
+      </div>
+
+      <div className="pt-1">
+        <ScopeField value={scope} onChange={setScope} owner={trigger?.owner} />
       </div>
 
       <DialogFooter className="sm:justify-between">

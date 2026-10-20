@@ -161,7 +161,7 @@ export const GoalSchema = z.object({
   updatedAt: z.string(),
 });
 
-/** tasks/board.json — v2 holds goals and tasks; v1 was a bare task array. */
+/** runs/board.json (was tasks/board.json) — v2 holds goals and tasks; v1 was a bare task array. */
 export const BoardSchema = z.object({
   version: z.literal(2).default(2),
   goals: z.array(GoalSchema).default([]),
@@ -294,6 +294,7 @@ export const ScheduleSchema = z.object({
   runner: RunnerSchema,
   createdAt: z.string(),
   createdBy: z.string().optional(),
+  owner: z.object({ name: z.string(), email: z.string() }).optional(),
 });
 export const SchedulesFileSchema = z.object({ schedules: z.array(ScheduleSchema).default([]) });
 
@@ -323,5 +324,6 @@ export const TriggerSchema = z.object({
   runner: RunnerSchema,
   createdAt: z.string(),
   createdBy: z.string().optional(),
+  owner: z.object({ name: z.string(), email: z.string() }).optional(),
 });
 export const TriggersFileSchema = z.object({ triggers: z.array(TriggerSchema).default([]) });

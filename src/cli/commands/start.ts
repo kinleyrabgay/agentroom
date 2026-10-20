@@ -13,9 +13,10 @@ export function registerStart(program: Command) {
     .option('-m, --model <id>', 'default model for bots')
     .option('--port <n>', 'port (default from config)')
     .option('--no-open', 'do not open the browser')
+    .option('--private', 'when setting up, keep .agentroom/ out of git for you only')
     .action(async (opts) => {
       const project = currentProject();
-      ensureInitialized(project);
+      ensureInitialized(project, { private: opts.private });
       const port = Number(opts.port ?? project.config.get().port);
       // Already running for this repo (e.g. background mode)? Open that instead of starting another.
       const live = await liveSession(project.paths.sessionFile);

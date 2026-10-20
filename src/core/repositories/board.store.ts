@@ -6,7 +6,7 @@ import { writeJson } from '../fs/json.js';
 export const BOARD_VERSION = 2;
 
 /**
- * Reads and writes `tasks/board.json`. Goals and tasks share one file so a plan and its
+ * Reads and writes `runs/board.json` (local). Goals and tasks share one file so a plan and its
  * tasks change atomically and diff together in git. v1 files (a bare task array) are migrated on read.
  */
 export class BoardStore {

@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { useAppStore } from "@/lib/store/app-store"
+import { ToneBadge } from "@/components/kit/badge"
 import { useSettingsSection } from "../hooks/use-settings-section"
 import { DATA_FILES, RETENTION_LIMITS, SettingsSection } from "../lib/constants"
 import { SaveIndicator } from "./save-indicator"
@@ -59,7 +61,8 @@ export function DataSection() {
       )}
 
       <Separator className="my-4" />
-      <h3 className="mb-2 text-sm font-medium">Where AgentRoom keeps things</h3>
+      <SharingMode />
+      <h3 className="mt-4 mb-2 text-sm font-medium">Where AgentRoom keeps things</h3>
       <ul className="divide-y rounded-xl border text-sm">
         {DATA_FILES.map((f) => (
           <li key={f.path} className="flex items-start gap-3 px-3 py-2.5">
@@ -79,8 +82,31 @@ export function DataSection() {
         ))}
       </ul>
       <p className="mt-2 text-xs text-muted-foreground">
-        Everything under <code className="font-mono">.agentroom/runs/</code> is gitignored.
+        Everything under <code className="font-mono">.agentroom/runs/</code> is gitignored. In private mode nothing under{" "}
+        <code className="font-mono">.agentroom/</code> is committed.
       </p>
     </SettingsCard>
+  )
+}
+
+/** Shared with the team through git, or private to this machine. */
+function SharingMode() {
+  const sharing = useAppStore((s) => s.info?.sharing ?? "team")
+  const priv = sharing === "private"
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      <div className="min-w-48 flex-1">
+        <p className="text-sm font-medium">{priv ? "Private to this machine" : "Shared with your team"}</p>
+        <p className="text-xs text-muted-foreground">
+          {priv
+            ? "`.agentroom/` is excluded in .git/info/exclude, so nothing is committed and teammates see nothing."
+            : "Commit `.agentroom/` so teammates get the same bots, skills and settings. Your goals, overrides and secrets stay in runs/."}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Switch with <code className="font-mono">{priv ? "agentroom share" : "agentroom init --private"}</code>
+        </p>
+      </div>
+      <ToneBadge tone={priv ? "neutral" : "brand"} size="sm">{priv ? "Private" : "Shared"}</ToneBadge>
+    </div>
   )
 }

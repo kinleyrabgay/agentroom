@@ -145,14 +145,22 @@ describe('brief', () => {
   });
 });
 
-function harness(over: Partial<AutomationDeps> = {}) {
+function harness(over: Partial<AutomationDeps> = {}, me = { name: 'Tester', email: 'tester@example.com' }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentroom-auto-'));
   let now = NOW;
   const goals: Goal[] = [];
   const started: string[] = [];
   const approved: string[] = [];
   const deps: AutomationDeps = {
-    repo: new AutomationRepository({ schedules: path.join(dir, 'schedules.json'), triggers: path.join(dir, 'triggers.json') }),
+    repo: new AutomationRepository(
+      {
+        schedules: path.join(dir, 'schedules.json'),
+        triggers: path.join(dir, 'triggers.json'),
+        personalSchedules: path.join(dir, 'runs', 'schedules.json'),
+        personalTriggers: path.join(dir, 'runs', 'triggers.json'),
+      },
+      () => me,
+    ),
     stateFile: path.join(dir, 'state.json'),
     historyFile: path.join(dir, 'history.jsonl'),
     pushState: () => {},
@@ -289,5 +297,49 @@ describe('background mode', () => {
     expect(readSession(file)).not.toBeNull();
     clearSession(file, 123);
     expect(readSession(file)).toBeNull();
+  });
+});
+
+describe('team and personal automation', () => {
+  const at = () => new Date(2026, 9, 20, 15, 0).toISOString();
+
+  it('saves personal items locally and team items in the repo with an owner', () => {
+    const h = harness();
+    h.svc.createSchedule({ name: 'Mine', when: { type: 'once', at: at() }, action: { type: 'goal', brief: 'a' } });
+    h.svc.createSchedule({ name: 'Shared', scope: 'team', when: { type: 'once', at: at() }, action: { type: 'goal', brief: 'b' } });
+    const personal = JSON.parse(fs.readFileSync(path.join(h.dir, 'runs', 'schedules.json'), 'utf8')).schedules;
+    const team = JSON.parse(fs.readFileSync(path.join(h.dir, 'schedules.json'), 'utf8')).schedules;
+    expect(personal.map((s: { name: string }) => s.name)).toEqual(['Mine']);
+    expect(team).toMatchObject([{ name: 'Shared', owner: { email: 'tester@example.com' } }]);
+    expect(team[0].scope).toBeUndefined();
+    expect(h.svc.snapshot().schedules.map((s) => [s.name, s.scope, s.runsHere])).toEqual([
+      ['Mine', 'personal', true],
+      ['Shared', 'team', true],
+    ]);
+  });
+
+  it("does not run a teammate's team schedule; taking it over makes it run here", async () => {
+    const owner = harness();
+    const s = owner.svc.createSchedule({ name: 'Nightly', scope: 'team', when: { type: 'once', at: at() }, action: { type: 'goal', brief: 'Run e2e' } });
+    // A teammate opens the same repo (same team file) with a different git user.
+    const mate = harness({}, { name: 'Mate', email: 'mate@example.com' });
+    fs.copyFileSync(path.join(owner.dir, 'schedules.json'), path.join(mate.dir, 'schedules.json'));
+    mate.setNow(new Date(2026, 9, 20, 15, 0, 30));
+    await mate.svc.tick();
+    expect(mate.started).toEqual([]);
+    expect(mate.svc.snapshot().schedules[0]).toMatchObject({ runsHere: false, nextRunAt: null });
+
+    mate.svc.updateSchedule(s.id, { owner: 'me' });
+    expect(mate.svc.snapshot().schedules[0]).toMatchObject({ runsHere: true, owner: { email: 'mate@example.com' } });
+  });
+
+  it('adopts ownerless team items from 0.0.2 for the current git user', () => {
+    const h = harness();
+    fs.writeFileSync(
+      path.join(h.dir, 'triggers.json'),
+      JSON.stringify({ triggers: [{ id: 'T-1', name: 'Old', when: { source: 'goal', event: 'failed' }, then: { type: 'notify', planOnly: true }, runner: 'local', createdAt: at() }] }),
+    );
+    expect(h.svc.snapshot().triggers[0]).toMatchObject({ scope: 'team', runsHere: true, owner: { email: 'tester@example.com' } });
+    expect(JSON.parse(fs.readFileSync(path.join(h.dir, 'triggers.json'), 'utf8')).triggers[0].owner.email).toBe('tester@example.com');
   });
 });

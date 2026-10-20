@@ -6,6 +6,7 @@ import type { Settings, SettingsPatch } from "@shared"
 import { settingsApi } from "@/lib/api/endpoints"
 import { useAppStore } from "@/lib/store/app-store"
 import { AUTOSAVE_MS, SAVED_VISIBLE_MS } from "../lib/constants"
+import { useSaveScope } from "../lib/scope"
 
 export const SaveStatus = { Idle: "idle", Saving: "saving", Saved: "saved" } as const
 export type SaveStatus = (typeof SaveStatus)[keyof typeof SaveStatus]
@@ -31,7 +32,7 @@ export function useSettingsSection<K extends Section>(section: K) {
     pending.current = {}
     if (!Object.keys(patch).length) return
     try {
-      const next = await settingsApi.update({ [section]: patch } as SettingsPatch)
+      const next = await settingsApi.update({ [section]: patch } as SettingsPatch, useSaveScope.getState().scope)
       useAppStore.setState({ settings: next })
       setStatus(SaveStatus.Saved)
       clearTimeout(savedTimer.current)

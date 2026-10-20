@@ -20,7 +20,7 @@ export type StateEvent =
   | { type: typeof StateType.Skills; skills: Skill[] }
   | { type: typeof StateType.Tasks; tasks: Task[] }
   | { type: typeof StateType.Goals; goals: Goal[] }
-  | { type: typeof StateType.Settings; settings: Settings }
+  | { type: typeof StateType.Settings; settings: Settings & { overrides?: string[] } }
   | { type: typeof StateType.Findings; findings: SecurityFinding[] }
   | { type: typeof StateType.Config; config: Config }
   | { type: typeof StateType.Mcp; mcp: McpSnapshot }

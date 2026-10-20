@@ -10,20 +10,36 @@ import { body, respond } from '../respond.js';
 
 /** Team settings (committed) and local integration secrets (write-only). */
 export function settingsRoutes(app: Hono, project: Project, secrets: SecretsStore, hub: Hub, audit: HumanAudit) {
-  app.get('/settings', (c) => respond(c, () => project.settings.get()));
+  const withOverrides = () => ({ ...project.settings.get(), overrides: project.settings.overrides() });
+  app.get('/settings', (c) => respond(c, withOverrides));
+  // ?scope=team (default, committed) or personal (runs/settings.local.json, only you).
   app.patch('/settings', async (c) => {
     const patch = await body<SettingsPatch>(c);
+    const scope = c.req.query('scope') === 'personal' ? 'personal' : 'team';
     return respond(c, () => {
       const before = project.settings.get();
-      const next = project.settings.update(patch);
+      const next = project.settings.update(patch, scope);
       const changed = changedKeys(before, next);
       if (changed.length) {
-        audit(AuditKind.Settings, `Settings changed: ${changed.join(', ')}`, { detail: { changed } });
-        hub.state({ type: StateType.Settings, settings: next });
+        audit(AuditKind.Settings, `${scope === 'personal' ? 'Personal settings' : 'Settings'} changed: ${changed.join(', ')}`, { detail: { changed, scope } });
       }
-      return next;
+      const out = withOverrides();
+      hub.state({ type: StateType.Settings, settings: out });
+      return out;
     });
   });
+  // Drop a personal override so the team value applies again.
+  app.delete('/settings/personal', (c) =>
+    respond(c, () => {
+      const key = c.req.query('key') ?? '';
+      if (!key) throw new Error('key is required');
+      project.settings.resetPersonal(key);
+      audit(AuditKind.Settings, `Personal setting reset: ${key}`, { detail: { key } });
+      const out = withOverrides();
+      hub.state({ type: StateType.Settings, settings: out });
+      return out;
+    }),
+  );
 
   app.get('/integrations', (c) => c.json(secrets.status()));
   app.put('/integrations', async (c) => {

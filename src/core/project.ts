@@ -15,6 +15,8 @@ import { FsTaskRepository, type TaskRepository } from './repositories/task.repos
 import { FsSettingsRepository, type SettingsRepository } from './repositories/settings.repository.js';
 import { MemoryRepository } from './repositories/memory.repository.js';
 import { GoalTemplateRepository } from './repositories/goal-template.repository.js';
+import { migrateBoard } from './migrations.js';
+import { makePrivate, removePrivate, sharingMode } from './sharing.js';
 
 /**
  * Facade over a project's `.agentroom/` folder. Repositories own each kind of file;
@@ -37,13 +39,21 @@ export class Project {
 
   constructor(root: string) {
     this.paths = new ProjectPaths(root);
+    if (fs.existsSync(this.paths.dir)) {
+      try {
+        const note = migrateBoard(this.paths);
+        if (note) console.log(`  [agentroom] ${note}`);
+      } catch (err) {
+        console.error(`  [agentroom] Could not move the task board: ${(err as Error).message}`);
+      }
+    }
     this.bots = new FsBotRepository(this.paths);
     this.library = new FsSkillRepository(this.paths.skills, SkillScope.Library);
     const board = new BoardStore(this.paths.tasksFile);
     this.tasks = new FsTaskRepository(board);
     this.goals = new FsGoalRepository(board);
-    this.config = new FsConfigRepository(this.paths.config);
-    this.settings = new FsSettingsRepository(this.paths.settingsFile);
+    this.config = new FsConfigRepository(this.paths.config, this.paths.localConfig);
+    this.settings = new FsSettingsRepository(this.paths.settingsFile, this.paths.localSettingsFile);
     this.memory = new MemoryRepository(this.paths);
     this.goalTemplates = new GoalTemplateRepository(this.paths.goalTemplates);
   }
@@ -54,21 +64,42 @@ export class Project {
     return fs.existsSync(this.paths.config);
   }
 
-  /** Scaffold `.agentroom/` from templates. Never overwrites existing files. Returns created paths. */
-  init(): string[] {
+  /**
+   * Scaffold `.agentroom/` from templates. Never overwrites existing files. Returns created paths.
+   * `private`: keep the whole folder out of git for you only (`.git/info/exclude`) instead of
+   * sharing it with the team (only `runs/` ignored in `.gitignore`).
+   */
+  init(opts: { private?: boolean } = {}): string[] {
     const created = copyTreeIfMissing(templatesDir(), this.paths.dir);
     if (!fs.existsSync(this.paths.tasksFile)) {
       new BoardStore(this.paths.tasksFile).write({ version: 2, goals: [], tasks: [] });
       created.push(this.paths.tasksFile);
     }
     fs.mkdirSync(this.paths.runs, { recursive: true });
+    if (opts.private && makePrivate(this.root)) return created.map((p) => path.relative(this.root, p));
     this.ensureGitignore();
     return created.map((p) => path.relative(this.root, p));
   }
 
   info(): ProjectInfo {
     const config = this.config.get();
-    return { root: this.root, name: path.basename(this.root), branch: gitBranch(this.root), provider: config.provider, model: config.model, config };
+    return { root: this.root, name: path.basename(this.root), branch: gitBranch(this.root), provider: config.provider, model: config.model, config, sharing: sharingMode(this.root) };
+  }
+
+  /** Team (shared through git, `runs/` ignored) or private (whole folder excluded for you only). */
+  sharing() {
+    return sharingMode(this.root);
+  }
+
+  /** Switch from private to shared: stop excluding the folder, ignore only `runs/`. */
+  share() {
+    removePrivate(this.root);
+    this.ensureGitignore();
+  }
+
+  /** Switch to private: exclude the folder locally. Files already committed stay in git history. */
+  makePrivate(): boolean {
+    return makePrivate(this.root);
   }
 
   // ---------- skills across library and bots ----------

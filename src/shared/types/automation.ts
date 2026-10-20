@@ -19,6 +19,17 @@ export type AutomationAction =
 /** Where automation runs. Only this machine for now. */
 export type AutomationRunner = 'local' | 'cloud';
 
+/**
+ * personal: `.agentroom/runs/*.json`, only on this machine.
+ * team: `.agentroom/*.json` (committed); runs only on its owner's machine (later: the cloud runner).
+ */
+export type AutomationScope = 'personal' | 'team';
+
+export interface AutomationOwner {
+  name: string;
+  email: string;
+}
+
 export interface Schedule {
   id: string;
   name: string;
@@ -28,6 +39,10 @@ export interface Schedule {
   runner: AutomationRunner;
   createdAt: string;
   createdBy?: string;
+  /** Where it's saved (computed from the file it lives in). */
+  scope?: AutomationScope;
+  /** Team items: whose machine runs it. */
+  owner?: AutomationOwner;
 }
 
 export type TriggerWhen =
@@ -61,6 +76,10 @@ export interface Trigger {
   runner: AutomationRunner;
   createdAt: string;
   createdBy?: string;
+  /** Where it's saved (computed from the file it lives in). */
+  scope?: AutomationScope;
+  /** Team items: whose machine runs it. */
+  owner?: AutomationOwner;
 }
 
 export type AutomationOutcome = 'started' | 'skipped' | 'failed';
@@ -84,9 +103,13 @@ export interface ScheduleView extends Schedule {
   lastOutcome?: AutomationOutcome;
   /** Who it acts as (bot id), for display. */
   botId?: string;
+  /** This machine runs it (personal, or a team item owned by the current git user). */
+  runsHere: boolean;
 }
 
 export interface TriggerView extends Trigger {
+  /** This machine runs it (personal, or a team item owned by the current git user). */
+  runsHere: boolean;
   runsToday: number;
   lastRunAt: string | null;
   lastOutcome?: AutomationOutcome;

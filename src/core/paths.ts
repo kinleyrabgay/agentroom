@@ -12,6 +12,8 @@ export class ProjectPaths {
   }
 
   get config() { return path.join(this.dir, 'config.json'); }
+  /** Your own config overrides (port, permission mode, model). Local. */
+  get localConfig() { return path.join(this.runs, 'config.local.json'); }
   get bots() { return path.join(this.dir, 'bots'); }
   /** The shared skill library, also the library plugin root's `skills/`. */
   get skills() { return path.join(this.dir, 'skills'); }
@@ -19,7 +21,10 @@ export class ProjectPaths {
   get goalTemplates() { return path.join(this.dir, 'goal-templates'); }
   /** Memory notes bots proposed, waiting for the human (local). */
   get memorySuggestionsFile() { return path.join(this.runs, 'memory-suggestions.json'); }
-  get tasksFile() { return path.join(this.dir, 'tasks', 'board.json'); }
+  /** Goals and tasks: local working state (in runs/, not committed). */
+  get tasksFile() { return path.join(this.runs, 'board.json'); }
+  /** Where 0.0.2 and earlier kept the board (committed); migrated to runs/ on open. */
+  get legacyTasksFile() { return path.join(this.dir, 'tasks', 'board.json'); }
   /** Gitignored: run logs, sessions, preview output. */
   get runs() { return path.join(this.dir, 'runs'); }
   get sessionsFile() { return path.join(this.runs, 'sessions.json'); }
@@ -35,6 +40,8 @@ export class ProjectPaths {
   get githubItemsCache() { return path.join(this.runs, 'github-items.json'); }
   /** Team-wide settings (committed). */
   get settingsFile() { return path.join(this.dir, 'settings.json'); }
+  /** Your personal settings overrides (only the keys you changed). Local. */
+  get localSettingsFile() { return path.join(this.runs, 'settings.local.json'); }
   /** One row per bot run (budgets, insights, replay). */
   get ledgerFile() { return path.join(this.runs, 'ledger.jsonl'); }
   /** Append-only audit log. */
@@ -51,9 +58,13 @@ export class ProjectPaths {
   get mcpLocalFile() { return path.join(this.runs, 'mcp.local.json'); }
   /** Scheduled work (committed). */
   get schedulesFile() { return path.join(this.dir, 'schedules.json'); }
-  /** Event-based automation (committed). */
+  /** Team triggers (committed; each runs on its owner's machine). */
   get triggersFile() { return path.join(this.dir, 'triggers.json'); }
   /** Scheduler/trigger bookkeeping: last runs, seen issues, presence (local). */
+  /** Personal schedules (local, default). */
+  get personalSchedulesFile() { return path.join(this.runs, 'schedules.json'); }
+  /** Personal triggers (local, default). */
+  get personalTriggersFile() { return path.join(this.runs, 'triggers.json'); }
   get automationStateFile() { return path.join(this.runs, 'automation-state.json'); }
   /** One row per automation run (local). */
   get automationHistoryFile() { return path.join(this.runs, 'automation.jsonl'); }

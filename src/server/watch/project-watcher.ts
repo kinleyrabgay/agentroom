@@ -11,7 +11,7 @@ export function pushProjectState(project: Project, hub: Hub) {
     hub.state({ type: StateType.Skills, skills: project.library.list() });
     pushBoard(project, hub);
     hub.state({ type: StateType.Config, config: project.config.get() });
-    hub.state({ type: StateType.Settings, settings: project.settings.get() });
+    hub.state({ type: StateType.Settings, settings: { ...project.settings.get(), overrides: project.settings.overrides() } });
   } catch (err) {
     console.warn('[agentroom] reload failed:', (err as Error).message);
   }

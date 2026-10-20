@@ -39,13 +39,15 @@ export const PHASES: { id: Exclude<WorkPhase, typeof WorkPhase.Chat>; label: str
 
 /** Files AgentRoom writes, and whether they're shared through git. */
 export const DATA_FILES: { path: string; committed: boolean; what: string }[] = [
-  { path: ".agentroom/settings.json", committed: true, what: "These settings: models per phase, budgets, security policy" },
-  { path: ".agentroom/bots/, skills/, tasks/", committed: true, what: "Your team, its skills, goals and tasks" },
-  { path: ".agentroom/github/project.json", committed: true, what: "The connected GitHub board and its columns" },
-  { path: ".agentroom/runs/audit.jsonl", committed: false, what: "Audit log: commands, file writes, pushes, approvals" },
-  { path: ".agentroom/runs/ledger.jsonl", committed: false, what: "One row per bot run: cost, tokens, duration, outcome" },
-  { path: ".agentroom/runs/secrets.json", committed: false, what: "Integration secrets (webhooks, SMTP); never sent back to the UI" },
-  { path: ".agentroom/runs/alerts.json", committed: false, what: "Your alert preferences" },
+  { path: ".agentroom/settings.json, config.json", committed: true, what: "Team settings: models per phase, budgets, security policy" },
+  { path: ".agentroom/bots/, skills/, goal-templates/", committed: true, what: "Your team, its skills, memory and goal templates" },
+  { path: ".agentroom/mcp.json, sentry.json, github/", committed: true, what: "Team integrations (tokens are references, never values)" },
+  { path: ".agentroom/schedules.json, triggers.json", committed: true, what: "Team automation; each item runs only on its owner's machine" },
+  { path: ".agentroom/runs/board.json", committed: false, what: "Your goals and tasks" },
+  { path: ".agentroom/runs/settings.local.json, config.local.json", committed: false, what: "Your personal overrides (port, permission mode, models…)" },
+  { path: ".agentroom/runs/schedules.json, triggers.json", committed: false, what: "Your personal automation" },
+  { path: ".agentroom/runs/audit.jsonl, ledger.jsonl", committed: false, what: "Audit log and one row per bot run" },
+  { path: ".agentroom/runs/secrets.json", committed: false, what: "Tokens and webhooks; never sent back to the UI" },
 ]
 
 export const RETENTION_LIMITS = { min: 1, max: 3650 } as const

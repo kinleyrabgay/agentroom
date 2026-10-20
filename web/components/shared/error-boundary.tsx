@@ -10,6 +10,8 @@ interface Props {
   label?: string
   /** Render the fallback as a slim inline row (sidebar) instead of a full error screen. */
   compact?: boolean
+  /** Render this instead of the built-in fallback (`null` hides the section). */
+  fallback?: ReactNode
   className?: string
   children: ReactNode
 }
@@ -40,7 +42,8 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     const { error, componentStack } = this.state
     if (!error) return this.props.children
-    const { label, compact, className } = this.props
+    const { label, compact, className, fallback } = this.props
+    if (fallback !== undefined) return fallback
 
     if (compact) {
       return (

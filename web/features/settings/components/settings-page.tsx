@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/lib/store/app-store"
 import { Skeleton } from "@/components/ui/skeleton"
+import { UserIcon, UsersIcon } from "lucide-react"
+import { PageActions } from "@/components/layout/page-actions"
+import { Segmented } from "@/components/kit/segmented"
 import { SECTIONS, SettingsSection } from "../lib/constants"
+import { useSaveScope, type SaveScope } from "../lib/scope"
 import { RunnerSection } from "./runner-section"
 import { RemoteSection } from "./remote-section"
 import { AlertsSection } from "./alerts-section"
@@ -52,6 +56,7 @@ export function SettingsPage() {
 
   return (
     <div ref={scroller} className="absolute inset-0 overflow-y-auto">
+      <SaveScopeSwitch />
       <div className="mx-auto flex max-w-5xl gap-10 px-6 py-6">
         <nav className="sticky top-6 hidden h-fit w-48 shrink-0 md:block" aria-label="Settings sections">
           <ul className="space-y-0.5">
@@ -93,5 +98,26 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Top bar: whether edits change the team's settings (committed) or only yours. */
+function SaveScopeSwitch() {
+  const scope = useSaveScope((s) => s.scope)
+  const set = useSaveScope((s) => s.set)
+  return (
+    <PageActions>
+      <span className="hidden text-xs text-muted-foreground lg:inline">Save changes for</span>
+      <Segmented<SaveScope>
+        size="sm"
+        aria-label="Save changes for"
+        value={scope}
+        onChange={set}
+        options={[
+          { value: "team", label: <><UsersIcon className="size-3.5" /> Team</>},
+          { value: "personal", label: <><UserIcon className="size-3.5" /> Just me</>},
+        ]}
+      />
+    </PageActions>
   )
 }

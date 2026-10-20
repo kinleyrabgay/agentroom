@@ -110,7 +110,11 @@ const qs = (params: Record<string, string | number | undefined>) => {
 /** Team-wide settings (`.agentroom/settings.json`). PATCH merges per section. */
 export const settingsApi = {
   get: () => request<Settings>("GET", "/settings"),
-  update: (patch: SettingsPatch) => request<Settings>("PATCH", "/settings", patch),
+  /** `personal` saves to your own overlay (runs/settings.local.json) instead of the team file. */
+  update: (patch: SettingsPatch, scope: "team" | "personal" = "team") =>
+    request<Settings>("PATCH", `/settings${scope === "personal" ? "?scope=personal" : ""}`, patch),
+  /** Drop a personal override (dotted key) so the team value applies again. */
+  resetPersonal: (key: string) => request<Settings>("DELETE", `/settings/personal?key=${seg(key)}`),
 }
 
 /** Append-only audit log, newest first. Paginate with `before` (ISO of the last entry seen). */
@@ -259,5 +263,5 @@ export const runnerApi = {
   uninstall: () => request<RunnerStatus>("POST", "/runner/uninstall"),
 }
 
-export type ScheduleInput = Pick<Schedule, "name" | "when" | "action"> & Partial<Pick<Schedule, "enabled" | "runner">>
-export type TriggerInput = Pick<Trigger, "name" | "when" | "then"> & Partial<Pick<Trigger, "enabled" | "runner" | "limits">>
+export type ScheduleInput = Pick<Schedule, "name" | "when" | "action"> & Partial<Pick<Schedule, "enabled" | "runner" | "scope">> & { owner?: "me" }
+export type TriggerInput = Pick<Trigger, "name" | "when" | "then"> & Partial<Pick<Trigger, "enabled" | "runner" | "limits" | "scope">> & { owner?: "me" }

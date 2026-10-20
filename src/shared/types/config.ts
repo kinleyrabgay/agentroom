@@ -10,4 +10,6 @@ export interface ProjectInfo {
   provider: string;
   model: string;
   config: Config;
+  /** team: `.agentroom/` is committed (runs/ ignored); private: excluded for you only. */
+  sharing?: 'team' | 'private';
 }

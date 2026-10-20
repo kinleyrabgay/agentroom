@@ -4,8 +4,8 @@ import { Project } from '../core/project.js';
 export const currentProject = () => new Project(process.cwd());
 
 /** Scaffold `.agentroom/` on first use so every command just works. */
-export function ensureInitialized(project: Project) {
+export function ensureInitialized(project: Project, opts: { private?: boolean } = {}) {
   if (project.exists()) return;
-  const created = project.init();
-  console.log(`✔ Created ${PROJECT_DIR}/ (${created.length} files)`);
+  const created = project.init(opts);
+  console.log(`✔ Created ${PROJECT_DIR}/ (${created.length} files)${opts.private ? ' · private: kept out of git for you only' : ''}`);
 }

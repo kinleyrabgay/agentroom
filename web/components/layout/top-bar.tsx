@@ -11,6 +11,7 @@ import { useNeedsYou } from "@/hooks/use-needs-you"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { ErrorBoundary } from "@/components/shared/error-boundary"
 import { NextRunPill } from "@/features/automation/components/next-run-pill"
 import { UsageMeter } from "@/features/usage/components/usage-meter"
 import { InboxButton } from "@/features/inbox/components/inbox-button"
@@ -57,9 +58,18 @@ export function TopBar({ floating = false }: { floating?: boolean }) {
             <InboxIcon className="size-3.5 opacity-70" />
           </button>
         )}
-        {view !== View.Automation && <NextRunPill />}
-        <UsageMeter />
-        <InboxButton />
+        {/* Optional widgets: a failure in one hides it, never the whole app. */}
+        {view !== View.Automation && (
+          <ErrorBoundary label="Next run" compact fallback={null}>
+            <NextRunPill />
+          </ErrorBoundary>
+        )}
+        <ErrorBoundary label="Usage" compact fallback={null}>
+          <UsageMeter />
+        </ErrorBoundary>
+        <ErrorBoundary label="Alerts" compact fallback={null}>
+          <InboxButton />
+        </ErrorBoundary>
         {anyBusy && (
           <Button variant="outline" size="sm" className="tone-danger tone-text" onClick={() => send({ type: ClientMessageType.Stop })}>
             <OctagonXIcon data-icon="inline-start" /> Stop all

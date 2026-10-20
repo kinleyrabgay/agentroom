@@ -117,6 +117,8 @@ export function createApp(deps: AppDeps) {
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
+  // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
+  api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));
   app.route(API_PREFIX, api);
 
   app.get(

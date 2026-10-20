@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { CalendarClockIcon, Loader2Icon } from "lucide-react"
 import { toast } from "sonner"
-import type { AutomationAction, GoalTemplate, ScheduleWhen } from "@shared"
+import type { AutomationAction, GoalTemplate, ScheduleWhen, AutomationOwner, AutomationScope } from "@shared"
 import { automationApi, goalTemplateApi, type ScheduleInput } from "@/lib/api/endpoints"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Dropdown } from "@/components/kit/dropdown"
 import { Segmented } from "@/components/kit/segmented"
+import { ScopeField } from "./scope-field"
 import { Callout } from "@/components/kit/callout"
 import { describeWhen, formatAt } from "../lib/format"
 import { WhenPicker } from "./when-picker"
@@ -21,9 +22,10 @@ import { WhenPicker } from "./when-picker"
 type Kind = AutomationAction["type"]
 const NO_TEMPLATE = "__none__"
 
-export interface ScheduleDraft extends Partial<ScheduleInput> {
+export interface ScheduleDraft extends Partial<Omit<ScheduleInput, "owner">> {
   /** Editing an existing schedule. */
   id?: string
+  owner?: AutomationOwner
 }
 
 /** Create or edit a schedule: when (plain words or picker), what (goal / message / hand-off), budget, runner. */
@@ -62,6 +64,7 @@ function ScheduleForm({ draft, onDone }: { draft: ScheduleDraft; onDone: () => v
   const [budget, setBudget] = useState(initial?.type === "goal" && initial.budgetUsd ? String(initial.budgetUsd) : "")
   const [autoBuild, setAutoBuild] = useState(initial?.type === "goal" ? !!initial.autoBuild : false)
   const [templates, setTemplates] = useState<GoalTemplate[]>([])
+  const [scope, setScope] = useState<AutomationScope>(draft.scope ?? "personal")
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -109,8 +112,8 @@ function ScheduleForm({ draft, onDone }: { draft: ScheduleDraft; onDone: () => v
     const finalName = name.trim() || (a.type === "goal" ? (a.title ?? a.brief).slice(0, 80) : a.type === "message" ? a.text.slice(0, 80) : "Hand-off")
     setBusy(true)
     try {
-      if (draft.id) await automationApi.updateSchedule(draft.id, { name: finalName, when, action: a })
-      else await automationApi.createSchedule({ name: finalName, when, action: a })
+      if (draft.id) await automationApi.updateSchedule(draft.id, { name: finalName, when, action: a, scope })
+      else await automationApi.createSchedule({ name: finalName, when, action: a, scope })
       toast.success(when.type === "once" ? `Scheduled for ${formatAt(when.at)}` : `Scheduled: ${when.label}`)
       onDone()
     } catch (e) {
@@ -190,6 +193,8 @@ function ScheduleForm({ draft, onDone }: { draft: ScheduleDraft; onDone: () => v
             </Callout>
           )}
         </div>
+
+        <ScopeField value={scope} onChange={setScope} owner={draft.owner} />
 
         <div className="flex items-center gap-3">
           <Label className="shrink-0">Runs on</Label>

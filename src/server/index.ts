@@ -38,7 +38,7 @@ import { RemoteService } from './remote/remote.service.js';
 import { startCloudflared } from './remote/tunnel.js';
 import { AgentEventType } from '../shared/enums.js';
 import { handoffSentry } from './integrations/sentry/sentry-handoff.js';
-import { AutomationRepository } from '../core/repositories/automation.repository.js';
+import { AutomationRepository, parseOwner } from '../core/repositories/automation.repository.js';
 import { AutomationService } from './automation/automation.service.js';
 import { backgroundStatus, clearSession, installBackground, uninstallBackground, writeSession } from './runner/background.js';
 import { composeBrief } from '../core/repositories/goal-template.repository.js';
@@ -169,7 +169,15 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   });
   const runnerOpts = { root: project.root, port: opts.port, provider: provider.id, logFile: project.paths.daemonLog };
   const automation = new AutomationService({
-    repo: new AutomationRepository({ schedules: project.paths.schedulesFile, triggers: project.paths.triggersFile }),
+    repo: new AutomationRepository(
+      {
+        schedules: project.paths.schedulesFile,
+        triggers: project.paths.triggersFile,
+        personalSchedules: project.paths.personalSchedulesFile,
+        personalTriggers: project.paths.personalTriggersFile,
+      },
+      () => parseOwner(humanName()),
+    ),
     stateFile: project.paths.automationStateFile,
     historyFile: project.paths.automationHistoryFile,
     pushState: (snapshot) => hub.state({ type: StateType.Automation, automation: snapshot }),
