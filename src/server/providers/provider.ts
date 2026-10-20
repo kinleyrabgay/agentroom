@@ -2,6 +2,8 @@ import type { z } from 'zod';
 import type { EffortLevel } from '../../shared/enums.js';
 import type { AccountUsage, AgentEvent, Bot, ModelOption, StreamDelta } from '../../shared/types/index.js';
 import type { ResolvedAttachment } from '../services/upload.store.js';
+import type { Settings } from '../../shared/types/index.js';
+import type { HostToolBridge } from './host-bridge.js';
 
 /** A tool AgentRoom provides to bots (tasks, delegation, in-app browser), independent of provider. */
 export interface HostToolDef {
@@ -68,4 +70,24 @@ export interface Provider {
   listModels(cwd: string): Promise<ModelOption[]>;
   /** Account-wide plan usage, if the provider can report it. */
   fetchAccountUsage?(cwd: string): Promise<AccountUsage | null>;
+}
+
+/** What non-Claude providers need from the server: their settings, keys and the host-tool bridge. */
+export interface ProviderDeps {
+  engine: () => Settings['engine'];
+  /** API key stored for a provider in runs/secrets.json. */
+  secret: (providerId: string) => string | undefined;
+  /** Serves host tools over MCP to providers that run their own agent loop. */
+  bridge?: HostToolBridge;
+}
+
+/** Thrown (or reported) when a run can't start or fails for a reason another provider wouldn't have. */
+export class ProviderUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly reason: 'not-installed' | 'auth' | 'rate-limit' | 'outage',
+  ) {
+    super(message);
+    this.name = 'ProviderUnavailableError';
+  }
 }

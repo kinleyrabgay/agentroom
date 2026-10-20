@@ -1,4 +1,4 @@
-import { ClapperboardIcon, GaugeIcon } from "lucide-react"
+import { ClapperboardIcon, CpuIcon, GaugeIcon } from "lucide-react"
 import { PackageIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
@@ -8,6 +8,7 @@ export const SAVED_VISIBLE_MS = 2000
 /** Settings sections, in page order. */
 export const SettingsSection = {
   General: "general",
+  Providers: "providers",
   Budgets: "budgets",
   Security: "security",
   Context: "context",
@@ -24,6 +25,7 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: typeof SlidersHorizontalIcon; description: string }[] = [
   { id: SettingsSection.General, label: "General", icon: SlidersHorizontalIcon, description: "Which model each workflow phase uses." },
+  { id: SettingsSection.Providers, label: "Providers", icon: CpuIcon, description: "Run phases on Codex, Gemini or a local model, with fallbacks when one is down." },
   { id: SettingsSection.Budgets, label: "Budgets", icon: WalletIcon, description: "Spend caps per goal and per day. Goals pause at a cap instead of overspending." },
   { id: SettingsSection.Security, label: "Security", icon: ShieldIcon, description: "Security review, what blocks commits and PRs, and which paths count as sensitive." },
   { id: SettingsSection.Context, label: "Context", icon: WaypointsIcon, description: "The repo map bots read instead of exploring, and the cards written about each module." },
@@ -57,6 +59,7 @@ export const DATA_FILES: { path: string; committed: boolean; what: string }[] = 
   { path: ".agentroom/runs/settings.local.json, config.local.json", committed: false, what: "Your personal overrides (port, permission mode, models…)" },
   { path: ".agentroom/runs/schedules.json, triggers.json", committed: false, what: "Your personal automation" },
   { path: ".agentroom/runs/audit.jsonl, ledger.jsonl", committed: false, what: "Audit log and one row per bot run" },
+  { path: ".agentroom/runs/experiments.json, outcomes.json, evals.json", committed: false, what: "Your experiments, goal outcomes and replay evals" },
   { path: ".agentroom/runs/secrets.json", committed: false, what: "Tokens and webhooks; never sent back to the UI" },
   { path: ".agentroom/runs/proof/", committed: false, what: "Proof recordings, screenshots and quality reports (pushed to agentroom/proof only when a PR opens)" },
 ]

@@ -9,7 +9,9 @@ import { Team } from './agents/team.js';
 import { createApp } from './http/app.js';
 import { createSessionToken } from './http/auth.js';
 import { PreviewService } from './preview/preview.service.js';
-import { createProvider } from './providers/registry.js';
+import { createProvider, ProviderPool } from './providers/registry.js';
+import { HostToolBridge } from './providers/host-bridge.js';
+import { EngineService } from './engine/engine.service.js';
 import { Hub } from './realtime/hub.js';
 import { createClientMessageRouter } from './realtime/ws.handler.js';
 import { AccountMonitor } from './services/account-monitor.js';
@@ -62,7 +64,12 @@ export interface RunningServer {
 /** Composition root: wires the project, realtime hub, agents, previews and HTTP app together. */
 export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const project = new Project(opts.root);
-  const provider = createProvider(opts.provider);
+  // Secrets are read lazily (the store is created below); providers only need them at run time.
+  let secretsRef: { providerKey: (id: string) => string | undefined } | null = null;
+  const hostBridge = new HostToolBridge(() => `http://${BIND_HOST}:${opts.port}`);
+  const providerDeps = { engine: () => project.settings.get().engine, secret: (id: string) => secretsRef?.providerKey(id), bridge: hostBridge };
+  const provider = createProvider(opts.provider, providerDeps);
+  const providers = new ProviderPool(provider, providerDeps);
   const config = project.config.get();
   if (opts.model || opts.provider !== config.provider) {
     project.config.update({ provider: provider.id as typeof config.provider, ...(opts.model ? { model: opts.model } : {}) });
@@ -74,6 +81,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const humanName = () => gitUser(project.root);
   const ledger = new LedgerService(project.paths.ledgerFile);
   const secrets = new SecretsStore(project.paths.secretsFile);
+  secretsRef = secrets;
   const permissions = new PermissionGate(hub, () => project.config.get(), project.root, {
     record: (e) => audit.record(e),
     humanName,
@@ -127,7 +135,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     settings: () => project.settings.get(),
     scratchDir: path.join(worktreeHome(project.root), '.proof'),
   });
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context });
+  const engine = new EngineService({ project, ledger, secrets, providers, scratchDir: path.join(worktreeHome(project.root), '.evals') });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, providers, experiments: engine.experiments });
   const goals = new GoalRunner({
     project,
     team,
@@ -269,6 +278,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   };
   const { app, injectWebSocket } = createApp({
     token,
+    engine,
+    hostBridge,
     project,
     team,
     hub,

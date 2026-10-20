@@ -2,7 +2,9 @@ import { AgentEventType, BotStatus } from '../../shared/enums.js';
 import type { Bot } from '../../shared/types/index.js';
 import type { Project } from '../../core/project.js';
 import type { PreviewService } from '../preview/preview.service.js';
-import type { Provider } from '../providers/provider.js';
+import type { Provider, RunRequest } from '../providers/provider.js';
+import type { ProviderPool } from '../providers/registry.js';
+import { fallbackNote, fallbackReason, planRoute, type RouteAttempt } from '../providers/router.js';
 import type { Hub, RunContext } from '../realtime/hub.js';
 import { RunTally, type LedgerService } from '../services/ledger.service.js';
 import type { NotificationService } from '../services/notification.service.js';
@@ -36,6 +38,15 @@ export interface TeamDeps {
   mcp?: McpService;
   /** Repo context: the map in every bot's instructions and the context_* tools. */
   context?: ContextService;
+  /** Other providers (Codex, Gemini, OpenAI-compatible) for phase routing and fallbacks. */
+  providers?: ProviderPool;
+  /** A/B experiments: may change the bot's skills/prompt for runs inside goals. */
+  experiments?: RunExperiments;
+}
+
+/** What the learning loop does to a run: the bot as this run sees it, and the variants it's part of. */
+export interface RunExperiments {
+  forRun(bot: Bot, ctx: { goalId?: string; phase?: DispatchOptions['phase'] }): { bot: Bot; variants: Record<string, string> } | null;
 }
 
 /**
@@ -106,7 +117,7 @@ export class Team {
   }
 
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
-    const { project, hub, provider, permissions, sessions, previews } = this.deps;
+    const { project, hub, permissions, sessions, previews } = this.deps;
     const repoMap = this.deps.context?.promptBlock() ?? '';
     const team = project.bots.list();
     // Chats outside goals obey the daily cap (goal runs are checked by the goal engine).
@@ -125,10 +136,16 @@ export class Team {
     const controller = new AbortController();
     this.controllers.set(bot.id, controller);
     hub.setRunContext(bot.id, { goalId: opts.goalId, taskId: opts.taskId, phase: opts.phase });
-    const { model, effort } = this.modelFor(bot, opts);
-    const tally = new RunTally(bot.id, model, opts);
+    const route = this.route(bot, opts);
+    const experiment = opts.goalId ? (this.deps.experiments?.forRun(bot, { goalId: opts.goalId, phase: opts.phase }) ?? null) : null;
+    const runBot = experiment?.bot ?? bot;
+    const tally = new RunTally(bot.id, route[0]!.model, opts);
+    let ran = route[0]!;
+    const fellBackFrom: string[] = [];
     const finish = (out: RunOutcome): RunOutcome => {
-      this.deps.ledger?.record(tally.finish({ ok: out.ok, aborted: out.aborted, error: out.ok ? undefined : out.text }));
+      this.deps.ledger?.record(
+        tally.finish({ ok: out.ok, aborted: out.aborted, error: out.ok ? undefined : out.text, provider: ran.provider, fellBackFrom, ...(experiment ? { variants: experiment.variants } : {}) }),
+      );
       return out;
     };
     hub.emit({
@@ -143,18 +160,19 @@ export class Team {
     try {
       // Humans can start a message with /skill commands; bots' messages are passed through as written.
       const prompt = from === HUMAN ? expandSkillCommands(bot, text, project.library.list()) : text;
-      const res = await provider.run({
-        bot,
+      const request = (attempt: RouteAttempt): RunRequest => ({
+        bot: runBot,
         prompt,
         ...(attachments.length ? { attachments } : {}),
         cwd: opts.cwd ?? project.root,
         ...(maxBudgetUsd !== undefined && Number.isFinite(maxBudgetUsd) ? { maxBudgetUsd } : {}),
-        model,
-        effort,
+        model: attempt.model,
+        effort: attempt.effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
-        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), repoMap),
+        context: buildContext(runBot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), repoMap),
         mcpServers: this.deps.mcp?.forBot(bot),
-        resumeSessionId: sessions.get(bot.id),
+        // Sessions belong to one provider; another provider starts fresh.
+        resumeSessionId: attempt.provider === route[0]!.provider ? sessions.get(bot.id) : undefined,
         hostTools: buildHostTools(bot, team, {
           tasks: project.tasks,
           goals: project.goals,
@@ -183,7 +201,13 @@ export class Team {
           ? (tool, output) => this.deps.security!.inspect(output, tool === 'WebSearch' ? 'web search results' : 'a fetched web page', { botId: bot.id, goalId: opts.goalId, runKey: controller.signal })
           : undefined,
       });
-      if (res.sessionId) sessions.set(bot.id, res.sessionId);
+      const res = await this.runRoute(route, request, tally, controller.signal, (from, to, reason) => {
+        fellBackFrom.push(from.provider);
+        ran = to;
+        hub.emit({ type: AgentEventType.Message, botId: bot.id, text: fallbackNote(from.provider, to.provider, reason) });
+      });
+      ran = res.attempt;
+      if (res.sessionId && ran.provider === route[0]!.provider) sessions.set(bot.id, res.sessionId);
       hub.emit({ type: AgentEventType.BotStatus, botId: bot.id, status: res.ok ? BotStatus.Idle : BotStatus.Error });
       return finish({ ok: res.ok, text: res.result, aborted: controller.signal.aborted });
     } catch (err) {
@@ -196,6 +220,44 @@ export class Team {
     } finally {
       if (this.controllers.get(bot.id) === controller) this.controllers.delete(bot.id);
       hub.setRunContext(bot.id, null);
+    }
+  }
+
+  /** Providers this run may use, in order (just the main provider without a pool, as before). */
+  private route(bot: Bot, opts: DispatchOptions): RouteAttempt[] {
+    if (!this.deps.providers) {
+      const { model, effort } = this.modelFor(bot, opts);
+      return [{ provider: this.deps.provider.id, model, ...(effort ? { effort } : {}) }];
+    }
+    return planRoute({ bot, phase: opts.phase, settings: this.deps.project.settings.get(), config: this.deps.project.config.get() });
+  }
+
+  /**
+   * Try each provider in turn. Moves on only when an attempt failed before it did anything
+   * (no tool call) for a reason another provider wouldn't share: rate limit, outage, not installed.
+   */
+  private async runRoute(
+    route: RouteAttempt[],
+    request: (a: RouteAttempt) => RunRequest,
+    tally: RunTally,
+    signal: AbortSignal,
+    onFallback: (from: RouteAttempt, to: RouteAttempt, reason: NonNullable<ReturnType<typeof fallbackReason>>) => void,
+  ): Promise<Awaited<ReturnType<Provider['run']>> & { attempt: RouteAttempt }> {
+    const settings = this.deps.project.settings.get().engine.fallback;
+    for (let i = 0; ; i++) {
+      const attempt = route[i]!;
+      const next = route[i + 1];
+      const provider = this.deps.providers ? this.deps.providers.get(attempt.provider) : this.deps.provider;
+      try {
+        const res = await provider.run(request(attempt));
+        const reason = !res.ok && next ? fallbackReason(res.result, { progressed: tally.toolCalls > 0, aborted: signal.aborted, settings }) : null;
+        if (!reason || !next) return { ...res, attempt };
+        onFallback(attempt, next, reason);
+      } catch (err) {
+        const reason = next ? fallbackReason(err, { progressed: tally.toolCalls > 0, aborted: signal.aborted, settings }) : null;
+        if (!reason || !next) throw err;
+        onFallback(attempt, next, reason);
+      }
     }
   }
 

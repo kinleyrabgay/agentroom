@@ -5,6 +5,7 @@ import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
 import type { ProofAvailability, ProofScenario, ProofView } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
+import type { CostEstimate, EvalRun, Experiment, ExperimentResult, ExperimentVariant, GoalOutcome, ProviderStatus, Suggestion } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -302,4 +303,24 @@ export const proofApi = {
   run: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/run`),
   override: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/override`),
   setScenarios: (goalId: string, scenarios: ProofScenario[]) => request<ProofScenario[]>("PUT", `/goals/${seg(goalId)}/proof/scenarios`, { scenarios }),
+}
+
+/** Providers, routing estimate and the learning loop (experiments, suggestions, replay evals). */
+export const engineApi = {
+  providers: () => request<ProviderStatus[]>("GET", "/engine/providers"),
+  /** Write-only: the key is never sent back. Empty string removes it. */
+  setKey: (provider: string, key: string) => request<{ ok: true }>("PUT", `/engine/providers/${seg(provider)}/key`, { key }),
+  estimate: () => request<CostEstimate>("GET", "/engine/estimate"),
+  outcomes: () => request<GoalOutcome[]>("GET", "/engine/outcomes"),
+  refreshOutcomes: () => request<GoalOutcome[]>("POST", "/engine/outcomes/refresh"),
+  experiments: () => request<ExperimentResult[]>("GET", "/engine/experiments"),
+  createExperiment: (input: { name: string; botId: string; phase?: string; change: Partial<ExperimentVariant> }) =>
+    request<Experiment>("POST", "/engine/experiments", input),
+  updateExperiment: (id: string, patch: { status?: "running" | "stopped"; name?: string }) => request<Experiment>("PATCH", `/engine/experiments/${seg(id)}`, patch),
+  deleteExperiment: (id: string) => request<{ ok: true }>("DELETE", `/engine/experiments/${seg(id)}`),
+  suggestions: () => request<Suggestion[]>("GET", "/engine/suggestions"),
+  applySuggestion: (id: string, mode: "apply" | "experiment") => request<{ applied: string }>("POST", `/engine/suggestions/${seg(id)}/apply`, { mode }),
+  dismissSuggestion: (id: string) => request<{ ok: true }>("POST", `/engine/suggestions/${seg(id)}/dismiss`),
+  evals: () => request<EvalRun[]>("GET", "/engine/evals"),
+  startEval: (input: { goalId: string; botId?: string; variant: Partial<ExperimentVariant> }) => request<EvalRun>("POST", "/engine/evals", input),
 }

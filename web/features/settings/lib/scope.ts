@@ -13,6 +13,7 @@ export const useSaveScope = create<{ scope: SaveScope; set: (s: SaveScope) => vo
 /** Settings key each section edits (sections without one are personal or not stored in settings.json). */
 export const SECTION_KEY: Partial<Record<SettingsSection, keyof Settings>> = {
   [SettingsSection.General]: "models",
+  [SettingsSection.Providers]: "engine",
   [SettingsSection.Budgets]: "budgets",
   [SettingsSection.Security]: "security",
   [SettingsSection.Context]: "context",
