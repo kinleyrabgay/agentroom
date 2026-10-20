@@ -11,6 +11,8 @@ import { Segmented } from "@/components/kit/segmented"
 import { BotPanel } from "@/features/bot-panel/components/bot-panel"
 import { BrowserWorkspace } from "@/features/browser/components/browser-workspace"
 import { CommandBar } from "@/features/command/components/command-bar"
+import { useCanDecide, useIsMember } from "@/features/room/lib/room-store"
+import { OWNER_ONLY_VIEWS } from "@/features/room/components/room-presence"
 import { AutomationPage } from "@/features/automation/components/automation-page"
 import { TaskBoard } from "@/features/tasks/components/task-board"
 import { GithubBoard } from "@/features/github/components/github-board"
@@ -80,6 +82,10 @@ export function Workspace() {
   const bot = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBot))
   const detail = useInspectorDetail()
   const overCanvas = view === View.Team
+  // Team room viewers follow along; they don't start goals or message bots.
+  const decides = useCanDecide()
+  // A teammate never mounts an owner-only page (it would only fetch what they can't read); RoomGuards redirects.
+  const blocked = useIsMember() && OWNER_ONLY_VIEWS.has(view)
   const Main = VIEWS[view]
 
   // Whatever opened last comes to the front (derived during render, no effect needed).
@@ -131,14 +137,14 @@ export function Workspace() {
     >
       <div className="flex h-full flex-col">
         <div className="relative min-h-0 flex-1">
-          {!overCanvas && (
+          {!overCanvas && !blocked && (
             // Keyed by view: switching views clears a crashed section.
             <ErrorBoundary key={view} label={VIEW_META[view].label}>
               <Main />
             </ErrorBoundary>
           )}
         </div>
-        {WITH_COMMAND_BAR.has(view) && (
+        {WITH_COMMAND_BAR.has(view) && decides && (
           <div className="pr-(--inspector-space) transition-[padding] duration-200">
             <CommandBar floating={overCanvas} />
           </div>

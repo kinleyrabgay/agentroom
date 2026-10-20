@@ -19,6 +19,8 @@ export interface IntegrationSecrets {
   jiraToken?: string;
   /** Security token (base64 HMAC key) of the Teams outgoing webhook. */
   teamsOutgoingSecret?: string;
+  /** HMAC key that signs team room member links. Rotating it invalidates every link. */
+  roomSecret?: string;
 }
 
 /** What GET /api/integrations returns: which secrets are set, never their values. */

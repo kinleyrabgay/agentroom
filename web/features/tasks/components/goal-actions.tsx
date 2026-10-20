@@ -26,6 +26,7 @@ import {
 import { ConfirmDelete } from "@/components/shared/confirm-delete"
 import { isFinished, isRunning } from "../lib/goal-phase"
 import { RequestChangesDialog } from "./request-changes-dialog"
+import { isMember, useRoomStore } from "@/features/room/lib/room-store"
 
 const run = (p: Promise<unknown>) =>
   p.catch((e: Error) => toast.error(e.message))
@@ -34,6 +35,9 @@ const run = (p: Promise<unknown>) =>
 export function GoalActions({ goal }: { goal: Goal }) {
   const selectGoal = useAppStore((s) => s.selectGoal)
   const [changes, setChanges] = useState(false)
+  // Team room: teammates pause or cancel only goals they started; deleting is the owner's.
+  const member = useRoomStore((s) => isMember(s.me))
+  const mine = useRoomStore((s) => !isMember(s.me) || s.goalOwners[goal.id]?.id === s.me?.id)
 
   return (
     <div className="flex shrink-0 items-center gap-1.5">
@@ -47,7 +51,7 @@ export function GoalActions({ goal }: { goal: Goal }) {
           <MessageSquareDiffIcon data-icon="inline-start" /> Request changes
         </Button>
       )}
-      {isRunning(goal.status) && (
+      {isRunning(goal.status) && mine && (
         <Button
           size="sm"
           variant="outline"
@@ -56,8 +60,8 @@ export function GoalActions({ goal }: { goal: Goal }) {
           <PauseIcon data-icon="inline-start" /> Pause
         </Button>
       )}
-      {!isFinished(goal.status) && <CancelGoal goal={goal} />}
-      {isFinished(goal.status) && goal.status !== GoalStatus.Done && (
+      {!isFinished(goal.status) && mine && <CancelGoal goal={goal} />}
+      {isFinished(goal.status) && goal.status !== GoalStatus.Done && !member && (
         <ConfirmDelete
           title={`Delete ${goal.id}?`}
           description="Removes the goal and all of its tasks."

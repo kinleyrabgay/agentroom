@@ -27,6 +27,8 @@ import { GoalBranch, PublishActions } from "./goal-publish"
 import { useBudget } from "../hooks/use-budget"
 import { OctagonXIcon, PlusIcon } from "lucide-react"
 import { GoalAttachments } from "@/features/attachments/components/goal-attachments"
+import { GoalOwnerChip } from "@/features/room/components/goal-discussion"
+import { canDecide, isMember, useRoomStore } from "@/features/room/lib/room-store"
 
 const STOPPED: Partial<
   Record<GoalStatus, { title: string; destructive: boolean }>
@@ -50,6 +52,8 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
   const stopped = STOPPED[goal.status]
   const meta = GOAL_STATUS_META[goal.status]
   const setGoalTab = useAppStore((s) => s.setGoalTab)
+  const member = useRoomStore((s) => isMember(s.me))
+  const decides = useRoomStore((s) => canDecide(s.me))
   const findingCounts = useFindingCounts(goal.id)
   const openFindings = findingCounts.openCritical + findingCounts.openWarning
   // A stop is about security when findings are open or the reason says so.
@@ -85,6 +89,7 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
               {meta.label}
             </ToneBadge>
             {goal.risk && <RiskBadge risk={goal.risk} />}
+            <GoalOwnerChip goalId={goal.id} />
             <GoalBranch goal={goal} />
             {goal.round > 0 && (
               <ToneBadge icon={RepeatIcon} aria-label="Bug-fix rounds after QA">
@@ -94,7 +99,8 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
           </div>
           <input
             value={title}
-            onFocus={() => setDraft(goal.title)}
+            readOnly={member}
+            onFocus={() => !member && setDraft(goal.title)}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
@@ -114,9 +120,9 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
           {(goal.attachments?.length ?? 0) > 0 && <GoalAttachments ids={goal.attachments} className="pt-1" />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ReviewModeSelect value={reviewMode} onChange={setReviewMode} className="h-8" />
-          <GoalActions goal={goal} />
-          <PublishActions goal={goal} />
+          {!member && <ReviewModeSelect value={reviewMode} onChange={setReviewMode} className="h-8" />}
+          {decides && <GoalActions goal={goal} />}
+          {!member && <PublishActions goal={goal} />}
         </div>
       </div>
 

@@ -16,6 +16,8 @@ import { NextRunPill } from "@/features/automation/components/next-run-pill"
 import { UsageMeter } from "@/features/usage/components/usage-meter"
 import { InboxButton } from "@/features/inbox/components/inbox-button"
 import { PAGE_ACTIONS_ID } from "./page-actions"
+import { RoomGuards, RoomPresence } from "@/features/room/components/room-presence"
+import { useCanDecide, useIsMember } from "@/features/room/lib/room-store"
 
 /** A floating, translucent group over the canvas. */
 const PILL = "pointer-events-auto rounded-full border bg-background/85 p-1.5 shadow-sm backdrop-blur-md"
@@ -30,6 +32,8 @@ export function TopBar({ floating = false }: { floating?: boolean }) {
   const setView = useAppStore((s) => s.setView)
   const anyBusy = useAppStore((s) => Object.values(s.statuses).some((st) => isBusy(st.status)))
   const needs = useNeedsYou()
+  const member = useIsMember()
+  const canStop = useCanDecide()
   const { label, description, icon: Icon } = VIEW_META[view]
 
   return (
@@ -59,18 +63,24 @@ export function TopBar({ floating = false }: { floating?: boolean }) {
           </button>
         )}
         {/* Optional widgets: a failure in one hides it, never the whole app. */}
-        {view !== View.Automation && (
+        <ErrorBoundary label="Team room" compact fallback={null}>
+          <RoomPresence />
+          <RoomGuards />
+        </ErrorBoundary>
+        {view !== View.Automation && !member && (
           <ErrorBoundary label="Next run" compact fallback={null}>
             <NextRunPill />
           </ErrorBoundary>
         )}
-        <ErrorBoundary label="Usage" compact fallback={null}>
-          <UsageMeter />
-        </ErrorBoundary>
+        {!member && (
+          <ErrorBoundary label="Usage" compact fallback={null}>
+            <UsageMeter />
+          </ErrorBoundary>
+        )}
         <ErrorBoundary label="Alerts" compact fallback={null}>
           <InboxButton />
         </ErrorBoundary>
-        {anyBusy && (
+        {anyBusy && canStop && (
           <Button variant="outline" size="sm" className="tone-danger tone-text" onClick={() => send({ type: ClientMessageType.Stop })}>
             <OctagonXIcon data-icon="inline-start" /> Stop all
           </Button>

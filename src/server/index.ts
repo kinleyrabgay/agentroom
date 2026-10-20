@@ -37,6 +37,8 @@ import { McpScope } from '../shared/enums.js';
 import { SentryService } from './integrations/sentry/sentry.service.js';
 import { RemoteService } from './remote/remote.service.js';
 import { startCloudflared } from './remote/tunnel.js';
+import { RoomService, roomSecret } from './room/room.service.js';
+import { memberLabel, parseUser } from './room/principal.js';
 import { AgentEventType } from '../shared/enums.js';
 import { handoffSentry } from './integrations/sentry/sentry-handoff.js';
 import { AutomationRepository, parseOwner } from '../core/repositories/automation.repository.js';
@@ -78,7 +80,10 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const hub = new Hub(project.paths.runs);
   const previews = new PreviewService(hub);
   const audit = new AuditService(project.paths.auditFile, project.settings.get().audit.retentionDays);
-  const humanName = () => gitUser(project.root);
+  /** This machine's user (the team room owner). */
+  const ownerName = () => gitUser(project.root);
+  /** Who is acting: a team room member during their requests, otherwise the owner. */
+  const humanName = () => memberLabel() ?? ownerName();
   const ledger = new LedgerService(project.paths.ledgerFile);
   const secrets = new SecretsStore(project.paths.secretsFile);
   const permissions = new PermissionGate(hub, () => project.config.get(), project.root, {
@@ -126,6 +131,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const context = new ContextService({
     root: project.root,
     hub,
+    user: humanName,
     settings: () => project.settings.get(),
     record: (row) => ledger.record(row),
     dayRemaining: () => {
@@ -290,7 +296,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
         personalSchedules: project.paths.personalSchedulesFile,
         personalTriggers: project.paths.personalTriggersFile,
       },
-      () => parseOwner(humanName()),
+      () => parseOwner(ownerName()),
     ),
     stateFile: project.paths.automationStateFile,
     historyFile: project.paths.automationHistoryFile,
@@ -341,7 +347,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     projectName: project.info().name,
     url: () => url,
     audit: (summary, detail) => audit.record({ kind: AuditKind.Automation, actor: { type: ActorType.Human, name: humanName() }, summary, ...(detail ? { detail } : {}) }),
-    human: humanName,
+    human: ownerName,
   });
   const runner = {
     status: () => backgroundStatus(runnerOpts),
@@ -356,6 +362,23 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return st;
     },
   };
+  const room = new RoomService({
+    file: path.join(project.paths.runs, 'room.json'),
+    port: opts.port,
+    secret: roomSecret(secrets),
+    owner: () => parseUser(ownerName()),
+    startTunnel: startCloudflared,
+    // An extra listener on the chosen LAN address, only while the owner shares on the network.
+    listenLan: (address) =>
+      new Promise((resolve, reject) => {
+        const s = serve({ fetch: app.fetch, port: opts.port, hostname: address }, () => {
+          injectWebSocket(s);
+          resolve({ close: () => s.close() });
+        });
+        s.once('error', reject);
+      }),
+    audit: (summary, detail) => audit.record({ kind: AuditKind.Settings, actor: { type: ActorType.Human, name: ownerName() }, summary, ...(detail ? { detail } : {}) }),
+  });
   const { app, injectWebSocket } = createApp({
     token,
     project,
@@ -374,6 +397,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     sentry,
     sentryHandoff,
     remote,
+    room,
     automation,
     runner,
     security,
@@ -419,6 +443,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       clearSession(project.paths.sessionFile);
       remote.close();
       teams.close();
+      room.close();
       previews.closeAll();
       await stopWatching();
       server.close();

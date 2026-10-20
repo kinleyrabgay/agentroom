@@ -1,6 +1,8 @@
 "use client"
 
-import { ClapperboardIcon, FileDiffIcon, HistoryIcon, ListChecksIcon, ShieldIcon, type LucideIcon } from "lucide-react"
+import { ClapperboardIcon, FileDiffIcon, HistoryIcon, ListChecksIcon, MessagesSquareIcon, ShieldIcon, type LucideIcon } from "lucide-react"
+import { useRoomStore } from "@/features/room/lib/room-store"
+import { useUnreadDiscussion } from "@/features/room/components/goal-discussion"
 import { GoalTab } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { Segmented } from "@/components/kit/segmented"
@@ -22,6 +24,7 @@ export const GOAL_TABS: TabDef[] = [
   { id: GoalTab.Security, label: "Security", icon: ShieldIcon },
   { id: GoalTab.Proof, label: "Proof", icon: ClapperboardIcon },
   { id: GoalTab.Timeline, label: "Timeline", icon: HistoryIcon },
+  { id: GoalTab.Discussion, label: "Discussion", icon: MessagesSquareIcon },
 ]
 
 export function GoalTabs({ goalId }: { goalId: string }) {
@@ -30,6 +33,9 @@ export function GoalTabs({ goalId }: { goalId: string }) {
   const counts = useFindingCounts(goalId)
   const open = counts.openCritical + counts.openWarning
   const goal = useAppStore((s) => s.goals.find((g) => g.id === goalId))
+  // Discussion: only once the team room is in use (or this goal already has comments).
+  const roomOn = useRoomStore((s) => !!s.me?.roomEnabled || (s.comments[goalId]?.length ?? 0) > 0)
+  const unreadComments = useUnreadDiscussion(goalId)
   const proofAlert = !!goal?.proof && (goal.proof.status === "failed" || (goal.proof.failing.length > 0 && goal.proofOverride?.round !== goal.round))
 
   return (
@@ -37,7 +43,7 @@ export function GoalTabs({ goalId }: { goalId: string }) {
       aria-label="Goal sections"
       value={tab}
       onChange={setTab}
-      options={GOAL_TABS.map(({ id, label, icon: Icon }) => ({
+      options={GOAL_TABS.filter((t) => t.id !== GoalTab.Discussion || roomOn).map(({ id, label, icon: Icon }) => ({
         value: id,
         label: (
           <>
@@ -51,6 +57,11 @@ export function GoalTabs({ goalId }: { goalId: string }) {
               </span>
             )}
             {id === GoalTab.Proof && proofAlert && <ToneDot tone="danger" className="ml-0.5" />}
+            {id === GoalTab.Discussion && unreadComments > 0 && (
+              <span className={cn(TONE_CLASS.brand, "tone-soft rounded-full border px-1.5 text-xs tabular-nums")} aria-label={`${unreadComments} new comments for you`}>
+                {unreadComments}
+              </span>
+            )}
           </>
         ),
       }))}

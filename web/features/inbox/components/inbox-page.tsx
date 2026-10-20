@@ -32,6 +32,7 @@ import { markRead } from "../lib/actions"
 import { needsAnswer } from "../lib/route"
 import { NotificationItem } from "./notification-item"
 import { QuestionAnswer } from "./question-answer"
+import { RoomMentions } from "@/features/room/components/room-mentions"
 
 const RECENT_LIMIT = 30
 
@@ -72,6 +73,9 @@ export function InboxPage() {
         {/* Optional card: if it fails, the rest of the Inbox still shows. */}
         <ErrorBoundary label="Brief" compact>
           <AwayBrief />
+        </ErrorBoundary>
+        <ErrorBoundary label="For you" compact>
+          <RoomMentions />
         </ErrorBoundary>
         {waiting === 0 ? (
           <EmptyState

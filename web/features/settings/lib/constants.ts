@@ -1,5 +1,5 @@
 import { ClapperboardIcon, GaugeIcon } from "lucide-react"
-import { PackageIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
+import { PackageIcon, UsersIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
 export const AUTOSAVE_MS = 500
@@ -16,6 +16,7 @@ export const SettingsSection = {
   Packs: "packs",
   Alerts: "alerts",
   Remote: "remote",
+  Room: "room",
   Runner: "runner",
   Integrations: "integrations",
   Data: "data",
@@ -32,6 +33,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: typeof Slider
   { id: SettingsSection.Packs, label: "Packs", icon: PackageIcon, description: "Ready-made teams for your stack, and the registries Browse skills searches." },
   { id: SettingsSection.Alerts, label: "Alerts", icon: BellRingIcon, description: "How AgentRoom reaches you when you're away. Personal to this machine." },
   { id: SettingsSection.Remote, label: "Remote approvals", icon: SmartphoneIcon, description: "Approve from your phone through a temporary, approvals-only link." },
+  { id: SettingsSection.Room, label: "Team room", icon: UsersIcon, description: "Teammates watch, approve and comment from their own browser. Everything runs on this machine." },
   { id: SettingsSection.Runner, label: "Runner", icon: ServerIcon, description: "Where schedules and triggers run. Background mode keeps them running with the tab closed." },
   { id: SettingsSection.Integrations, label: "Integrations", icon: PlugIcon, description: "Services AgentRoom connects to." },
   { id: SettingsSection.Data, label: "Data", icon: DatabaseIcon, description: "What AgentRoom keeps, where, and for how long." },

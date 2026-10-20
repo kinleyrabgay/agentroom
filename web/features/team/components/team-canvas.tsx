@@ -1,6 +1,7 @@
 "use client"
 
 import "@xyflow/react/dist/style.css"
+import { useIsMember } from "@/features/room/lib/room-store"
 import { useMemo, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react"
@@ -73,6 +74,8 @@ export function TeamCanvas({ fullBleed = false }: { fullBleed?: boolean }) {
   const events = useAppStore((s) => s.events)
   const { resolvedTheme } = useTheme()
   const [creating, setCreating] = useState(false)
+  // Bots are the owner's setup; team room members don't add them.
+  const member = useIsMember()
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useAppStore((s) => !!s.draggingSkill)
   const { state: sidebarState, isMobile } = useSidebar()
@@ -109,14 +112,16 @@ export function TeamCanvas({ fullBleed = false }: { fullBleed?: boolean }) {
 
       {/* Chrome slots: the box the sidebar and top bar leave free. */}
       <div className="pointer-events-none absolute right-0 bottom-0" style={{ left: free.left, top: free.top }}>
-        <Button
-          variant="outline"
-          size="sm"
-          className="pointer-events-auto absolute top-0 left-0 bg-background/85 shadow-sm backdrop-blur-md"
-          onClick={() => setCreating(true)}
-        >
-          <PlusIcon data-icon="inline-start" /> Add bot
-        </Button>
+        {!member && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="pointer-events-auto absolute top-0 left-0 bg-background/85 shadow-sm backdrop-blur-md"
+            onClick={() => setCreating(true)}
+          >
+            <PlusIcon data-icon="inline-start" /> Add bot
+          </Button>
+        )}
         {bots.length === 0 && (
           <div className="pointer-events-auto absolute inset-0 grid place-items-center">
             <EmptyState
