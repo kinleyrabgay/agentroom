@@ -16,6 +16,7 @@ import { emitNotification } from "./notification-bus"
 import { send } from "./socket"
 import { normalizeGoals, normalizeTasks } from "./normalize"
 import { applyContextStatus } from "@/features/context/lib/context-store"
+import { contextPushInView } from "@/features/rooms/lib/room-store"
 
 const set = useAppStore.setState
 
@@ -115,7 +116,8 @@ function applyState(ev: StateEvent) {
     case StateType.Automation:
       return set({ automation: ev.automation })
     case StateType.Context:
-      return applyContextStatus(ev.context)
+      // Multi-repo rooms push every repo's status; only the repo in view applies.
+      return contextPushInView(ev.repo) ? applyContextStatus(ev.context) : undefined
     case StateType.Mcp:
       return set({ mcp: ev.mcp })
     case StateType.Config:

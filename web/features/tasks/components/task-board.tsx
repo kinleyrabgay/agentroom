@@ -22,16 +22,26 @@ import { ProofPanel } from "@/features/proof/components/proof-panel"
 import { NewGoalDialog } from "./new-goal-dialog"
 import { QuickAddTask } from "./quick-add-task"
 import { TaskColumn } from "./task-column"
+import { inRepoView, useRoomStore } from "@/features/rooms/lib/room-store"
+import { GoalRepoTabs } from "@/features/rooms/components/goal-repo-tabs"
 
 /** Work: goals on the left; the selected goal (plan review, progress, tasks) on the right. */
 export function TaskBoard() {
   const loaded = useAppStore((s) => s.info !== null)
-  const goals = useAppStore((s) => s.goals)
-  const tasks = useAppStore((s) => s.tasks)
+  const allGoals = useAppStore((s) => s.goals)
+  const allTasks = useAppStore((s) => s.tasks)
   const selectedGoalId = useAppStore((s) => s.selectedGoalId)
   const selectGoal = useAppStore((s) => s.selectGoal)
   const goalTab = useAppStore((s) => s.goalTab)
   const [creating, setCreating] = useState(false)
+  // Multi-repo rooms: the repo switcher narrows the board to one repo's tasks (and the goals that have some).
+  const room = useRoomStore((s) => s.room)
+  const repoView = useRoomStore((s) => s.repo)
+  const tasks = useMemo(() => (repoView ? allTasks.filter((t) => inRepoView(t, room, repoView)) : allTasks), [allTasks, room, repoView])
+  const goals = useMemo(
+    () => (repoView ? allGoals.filter((g) => !allTasks.some((t) => t.goalId === g.id) || tasks.some((t) => t.goalId === g.id)) : allGoals),
+    [allGoals, allTasks, tasks, repoView]
+  )
 
   const sortedGoals = useMemo(() => [...goals].sort(newestFirst), [goals])
   const current = sortedGoals.find((g) => g.id === selectedGoalId) ?? (selectedGoalId === ALL_TASKS ? undefined : sortedGoals[0])
@@ -53,7 +63,7 @@ export function TaskBoard() {
 
   if (!loaded) return <LoadingState label="Loading goals…" className="absolute inset-0" />
 
-  if (!goals.length && !tasks.length) {
+  if (!allGoals.length && !allTasks.length) {
     return (
       <div className="absolute inset-0 grid place-items-center p-6">
         {actions}
@@ -82,7 +92,7 @@ export function TaskBoard() {
       {/* One scroll for the pane: header, then sticky tabs, then a board that fills the screen below them. */}
       <section className="min-w-0 flex-1 overflow-y-auto" aria-label={current ? `${current.id}: ${current.title}` : "Tasks without a goal"}>
         <div className="space-y-4 px-6 pt-5 pb-4">
-          {current?.status === GoalStatus.AwaitingApproval && <ApprovalBanner goal={current} taskCount={visible.length} />}
+          {current?.status === GoalStatus.AwaitingApproval && <ApprovalBanner goal={current} taskCount={allTasks.filter((t) => t.goalId === current.id).length} />}
           {current ? (
             <GoalHeader goal={current} tasks={visible} />
           ) : (
@@ -108,7 +118,7 @@ export function TaskBoard() {
         ) : current && goalTab === GoalTab.Changes ? (
           <div className="flex h-[max(28rem,calc(100svh-11rem))] flex-col px-6 py-4">
             <ErrorBoundary label="Changes" key={current.id}>
-              <ChangesPanel goal={current} />
+              <GoalRepoTabs goal={current}>{(repo) => <ChangesPanel key={repo ?? ""} goal={current} repo={repo} />}</GoalRepoTabs>
             </ErrorBoundary>
           </div>
         ) : current && goalTab === GoalTab.Proof ? (

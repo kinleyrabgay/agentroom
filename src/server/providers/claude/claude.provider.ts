@@ -32,6 +32,7 @@ export class ClaudeProvider implements Provider {
       prompt,
       options: {
         cwd,
+        ...(req.additionalDirectories?.length ? { additionalDirectories: req.additionalDirectories } : {}),
         model: req.model,
         ...(req.effort ? { effort: req.effort } : {}),
         ...(req.maxBudgetUsd !== undefined ? { maxBudgetUsd: Math.max(0.01, req.maxBudgetUsd) } : {}),

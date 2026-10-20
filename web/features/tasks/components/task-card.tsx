@@ -14,6 +14,7 @@ import { useAppStore } from "@/lib/store/app-store"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { KindBadge } from "./kind-badge"
 import { ToneBadge } from "@/components/kit/badge"
+import { RepoBadge } from "@/features/rooms/components/repo-badge"
 
 /** A task card. Click opens the detail sheet; drag moves/reorders. */
 export const TaskCard = memo(function TaskCard({
@@ -80,6 +81,7 @@ export const TaskCard = memo(function TaskCard({
             {task.id}
           </span>
           <KindBadge kind={task.kind} />
+          <RepoBadge task={task} />
           {task.blockedReason && (
             <ToneBadge tone="warning" icon={CircleAlertIcon} size="sm">
               Blocked

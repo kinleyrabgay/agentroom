@@ -26,6 +26,9 @@ import type { ProofService } from '../proof/proof.service.js';
 import { PROOF_MARK } from '../proof/proof.service.js';
 import { failing, summarize, withQuality } from '../proof/checks.js';
 import { parseScenarios } from '../proof/scenario.js';
+import type { GoalRepos } from '../rooms/goal-repos.js';
+import { linkedPrSection, withLinkedSection } from '../rooms/goal-repos-links.js';
+import { roomPlanSection, roomTaskSection } from '../rooms/prompts.js';
 
 export interface GoalRunnerDeps {
   project: Project;
@@ -47,6 +50,10 @@ export interface GoalRunnerDeps {
   onDone?: (goal: Goal, files: string[]) => void;
   /** Proof of work (Verify phase): record the feature in a browser and run quality checks. */
   proof?: ProofService;
+  /** Multi-repo rooms: the goal's work in the room's other repos (folders, checkpoints, PRs). */
+  repos?: GoalRepos;
+  /** Multi-repo rooms: a goal finished with these files changed in another repo. */
+  onRepoDone?: (repo: string, goal: Goal, files: string[]) => void;
 }
 
 /** Pause reasons set by the budget gate start with this, so the UI can offer "Add budget and resume". */
@@ -293,7 +300,9 @@ export class GoalRunner {
 
   private async planPhase(goal: Goal, roles: TeamRoles) {
     this.leadStatus(BotStatus.Working, `${goal.id} · Planning with ${roles.planner.name}`);
-    const out = await this.run(goal, roles, roles.planner, planPrompt(goal, roles, this.tasksOf(goal.id)), `Plan ${goal.id}: ${goal.title}`, { phase: WorkPhase.Planning });
+    const rooms = this.deps.repos?.isRoom ? this.deps.repos : undefined;
+    const prompt = planPrompt(goal, roles, this.tasksOf(goal.id)) + (rooms ? `\n\n${roomPlanSection(goal.id, rooms.registry.list())}` : '');
+    const out = await this.run(goal, roles, roles.planner, prompt, `Plan ${goal.id}: ${goal.title}`, { phase: WorkPhase.Planning });
     if (this.interrupted(goal.id, out.aborted)) return;
 
     const tasks = this.tasksOf(goal.id);
@@ -336,13 +345,15 @@ export class GoalRunner {
     repo.appendLog(task.id, roles.lead.id, previousBlock ? `Resumed after block: ${previousBlock}` : `Started by ${roles.developer.name}.`);
     this.changed();
 
-    this.leadStatus(BotStatus.Working, `${goal.id} · Building ${task.id} with ${roles.developer.name}`);
-    const before = await this.headOf(goal);
-    const out = await this.run(goal, roles, roles.developer, buildPrompt(goal, repo.get(task.id)!, previousBlock), `Build ${task.id}: ${task.title}`, {
+    const where = await this.taskRepo(goal.id, task);
+    this.leadStatus(BotStatus.Working, `${goal.id} · Building ${task.id}${where ? ` in ${where}` : ''} with ${roles.developer.name}`);
+    const before = await this.headOf(this.require(goal.id), where);
+    const out = await this.run(goal, roles, roles.developer, this.withRepo(buildPrompt(this.require(goal.id), repo.get(task.id)!, previousBlock), goal.id, task, where), `Build ${task.id}: ${task.title}`, {
       phase: WorkPhase.Build,
       taskId: task.id,
+      ...(where ? { repo: where } : {}),
     });
-    await this.checkpoint(this.require(goal.id), task.id, before);
+    await this.checkpoint(this.require(goal.id), task.id, before, where);
     if (out.aborted) return 'aborted';
 
     await this.updateRisk(goal.id);
@@ -369,12 +380,14 @@ export class GoalRunner {
 
     this.leadStatus(BotStatus.Working, `${goal.id} · Testing ${task.id} with ${roles.qa.name}`);
     const devTasks = tasks.filter((t) => WORK_KINDS.includes(t.kind));
-    const before = await this.headOf(goal);
-    const out = await this.run(goal, roles, roles.qa, testPrompt(goal, task, devTasks, roles), `Test ${task.id}: ${task.title}`, {
+    const where = await this.taskRepo(goal.id, task);
+    const before = await this.headOf(this.require(goal.id), where);
+    const out = await this.run(goal, roles, roles.qa, this.withRepo(testPrompt(this.require(goal.id), task, devTasks, roles), goal.id, task, where), `Test ${task.id}: ${task.title}`, {
       phase: WorkPhase.Testing,
       taskId: task.id,
+      ...(where ? { repo: where } : {}),
     });
-    await this.checkpoint(this.require(goal.id), task.id, before);
+    await this.checkpoint(this.require(goal.id), task.id, before, where);
     return out.aborted ? 'aborted' : 'progress';
   }
 
@@ -417,6 +430,14 @@ export class GoalRunner {
         .then((c) => this.deps.onDone!(done, c.files.map((f) => f.path)))
         .catch(() => this.deps.onDone!(done, []));
     }
+    if (this.deps.onRepoDone && this.deps.repos) {
+      const done = this.require(goal.id);
+      for (const r of this.deps.repos.spans(done, this.tasksOf(goal.id))) {
+        void this.changes(goal.id, r)
+          .then((c) => this.deps.onRepoDone!(r, done, c.files.map((f) => f.path)))
+          .catch(() => this.deps.onRepoDone!(r, done, []));
+      }
+    }
   }
 
   // ---------- security ----------
@@ -448,18 +469,44 @@ export class GoalRunner {
     }
   }
 
-  /** Folder the goal's bots work in. */
-  cwdOf(goal: Goal): string {
+  /** Folder the goal's bots work in (for a room's other repo: that repo's goal folder). */
+  cwdOf(goal: Goal, repo?: string): string {
+    if (repo && this.deps.repos) return this.deps.repos.cwd(goal, repo);
     return goal.worktree && fs.existsSync(goal.worktree.path) ? goal.worktree.path : this.deps.project.root;
   }
 
   /** Current commit in the goal's own folder (null without one: no checkpoints in the human's working copy). */
-  private async headOf(goal: Goal): Promise<string | null> {
+  private async headOf(goal: Goal, repo?: string): Promise<string | null> {
+    if (repo && this.deps.repos) return this.deps.repos.head(goal, repo);
     return goal.worktree && this.cwdOf(goal) === goal.worktree.path ? gg.head(goal.worktree.path) : null;
   }
 
+  // ---------- rooms (several repos) ----------
+
+  /** The non-primary repo a task changes (its folder is created on first use), or undefined. */
+  private async taskRepo(goalId: string, task: Task): Promise<string | undefined> {
+    const repos = this.deps.repos;
+    const repo = repos?.repoOf(task);
+    if (!repos || !repo) return undefined;
+    await repos.ensure(this.require(goalId), repo);
+    return repo;
+  }
+
+  /** In a room, tell the bot which repo the task is in and where the goal's other repos are. */
+  private withRepo(prompt: string, goalId: string, task: Task, repo: string | undefined): string {
+    const repos = this.deps.repos;
+    if (!repos?.isRoom) return prompt;
+    const goal = this.require(goalId);
+    const ref = repos.registry.ref(repo);
+    const others = [repos.registry.primaryId, ...repos.spans(goal, this.tasksOf(goalId))]
+      .filter((id, i, all) => id !== ref.id && all.indexOf(id) === i)
+      .map((id) => ({ id, dir: this.cwdOf(goal, id === repos.registry.primaryId ? undefined : id) }));
+    return `${prompt}\n\n${roomTaskSection(task, ref, this.cwdOf(goal, repo), others)}`;
+  }
+
   /** After a task's run: commit what changed in the goal's folder and record the task's commits. */
-  private async checkpoint(goal: Goal, taskId: string, before: string | null) {
+  private async checkpoint(goal: Goal, taskId: string, before: string | null, repo?: string) {
+    if (repo && this.deps.repos) return this.checkpointIn(goal, taskId, before, repo);
     if (!before || !goal.worktree) return;
     const cwd = goal.worktree.path;
     const task = this.deps.project.tasks.get(taskId);
@@ -476,16 +523,33 @@ export class GoalRunner {
     }
   }
 
+  /** Checkpoint in one of a room's other repos. */
+  private async checkpointIn(goal: Goal, taskId: string, before: string | null, repo: string) {
+    const task = this.deps.project.tasks.get(taskId);
+    if (!task || !this.deps.repos) return;
+    try {
+      const commits = await this.deps.repos.checkpoint(goal, repo, task, before);
+      if (!commits.length) return;
+      this.deps.project.tasks.update(task.id, { commits: [...task.commits, ...commits.filter((c) => !task.commits.includes(c))] });
+      this.deps.project.tasks.appendLog(task.id, ENGINE, `Checkpoint ${commits[commits.length - 1].slice(0, 8)} in ${repo} on ${goal.repos?.[repo]?.worktree?.branch ?? 'its branch'}.`);
+      this.changed();
+    } catch (err) {
+      this.deps.project.tasks.appendLog(task.id, ENGINE, `Couldn't commit a checkpoint in ${repo}: ${(err as Error).message}`);
+    }
+  }
+
   /** Files changed by the goal (its branch vs where it started, plus uncommitted work), grouped by task. */
-  async changes(id: string): Promise<GoalChanges> {
+  async changes(id: string, repo?: string): Promise<GoalChanges> {
     const goal = this.require(id);
+    const other = this.deps.repos?.registry.normalize(repo);
+    if (other) return this.deps.repos!.changes(goal, other, this.tasksOf(id));
     const cwd = this.cwdOf(goal);
     const branch = goal.worktree?.branch ?? (await gg.currentBranch(cwd));
     if (!goal.baseRef) return { goalId: id, base: null, branch, cwd, files: [], groups: [], additions: 0, deletions: 0 };
     const files = await gg.changedFiles(cwd, goal.baseRef);
     const groups: ChangeGroup[] = [];
     const claimed = new Set<string>();
-    for (const t of this.tasksOf(id).filter((t) => t.commits.length).sort((a, b) => a.order - b.order)) {
+    for (const t of this.tasksOf(id).filter((t) => t.commits.length && !this.deps.repos?.repoOf(t)).sort((a, b) => a.order - b.order)) {
       const touched = new Set<string>();
       for (const c of t.commits) for (const f of await gg.filesOf(cwd, c)) touched.add(f);
       t.commits.forEach((c) => claimed.add(c));
@@ -517,12 +581,13 @@ export class GoalRunner {
   async revertTask(goalId: string, taskId: string, by: string): Promise<Task> {
     const goal = this.require(goalId);
     if (this.isRunning(goalId)) throw new Error(`${goalId} is running. Pause it before reverting.`);
-    if (!goal.worktree) throw new Error(`${goalId} has no branch of its own, so its changes can't be reverted per task.`);
     const task = this.deps.project.tasks.get(taskId);
     if (!task || task.goalId !== goalId) throw new Error(`task "${taskId}" isn't part of ${goalId}`);
+    const inRepo = this.deps.repos?.repoOf(task);
+    if (!(inRepo ? goal.repos?.[inRepo]?.worktree : goal.worktree)) throw new Error(`${goalId} has no branch of its own${inRepo ? ` in ${inRepo}` : ''}, so its changes can't be reverted per task.`);
     if (task.reverted) throw new Error(`${taskId} is already reverted.`);
     if (!task.commits.length) throw new Error(`${taskId} has no commits to revert.`);
-    const reverts = await gg.revertCommits(this.cwdOf(goal), task.commits);
+    const reverts = inRepo ? await this.deps.repos!.revert(goal, inRepo, task.commits) : await gg.revertCommits(this.cwdOf(goal), task.commits);
     const next = this.deps.project.tasks.update(taskId, { reverted: true });
     this.deps.project.tasks.appendLog(taskId, by, `Reverted by ${by} (${reverts.length} revert ${reverts.length === 1 ? 'commit' : 'commits'}).`);
     this.deps.audit?.({ kind: AuditKind.Goal, actor: { type: ActorType.Human, name: by }, goalId, summary: `Reverted ${taskId} in ${goalId}`, decision: 'allowed', detail: { commits: task.commits, reverts } });
@@ -593,25 +658,42 @@ export class GoalRunner {
   // ---------- publish ----------
 
   /** Prefilled PR for the goal. */
-  async prDraft(goalId: string): Promise<PrDraft> {
+  async prDraft(goalId: string, repoId?: string): Promise<PrDraft> {
     const goal = this.require(goalId);
-    const tasks = this.tasksOf(goalId);
+    const all = this.tasksOf(goalId);
+    const rooms = this.deps.repos?.isRoom ? this.deps.repos : undefined;
+    const other = rooms?.registry.normalize(repoId);
+    const linked = !!rooms && rooms.parts(goal, all).length > 1;
+    // In a room each repo's PR lists only that repo's tasks.
+    const tasks = rooms ? all.filter((t) => rooms.repoOf(t) === other) : all;
     const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open }).length ?? 0;
-    const repo = await this.originRepo();
-    const proof = this.deps.proof?.markdown(goalId, repo);
+    const repo = await this.originRepo(other);
+    const proof = other ? undefined : this.deps.proof?.markdown(goalId, repo);
+    let body = buildPrBody(goal, tasks, openFindings, repo, proof ? [proof] : []);
+    if (linked) body = withLinkedSection(body, linkedPrSection(goal.id, rooms!.prParts(goal, all), other ?? rooms!.registry.primaryId));
     return {
-      title: goal.title,
-      body: buildPrBody(goal, tasks, openFindings, repo, proof ? [proof] : []),
-      branch: goal.worktree?.branch ?? null,
+      title: linked ? `${goal.title} (${rooms!.registry.ref(other).name})` : goal.title,
+      body,
+      branch: (other ? goal.repos?.[other]?.worktree?.branch : goal.worktree?.branch) ?? null,
       openFindings,
       tests: testsLine(tasks),
+      ...(other ? { repo: other } : {}),
     };
   }
 
   /** Push the goal's branch and open a pull request with gh. */
-  async openPr(goalId: string, input: { title?: string; body?: string; draft?: boolean }): Promise<Goal> {
+  async openPr(goalId: string, input: { title?: string; body?: string; draft?: boolean; repo?: string }): Promise<Goal> {
     const goal = this.require(goalId);
     if (this.isRunning(goalId)) throw new Error(`${goalId} is still running. Wait for it to finish or pause it.`);
+    const other = this.deps.repos?.registry.normalize(input.repo);
+    if (other) {
+      if (goal.repos?.[other]?.pr) throw new Error(`${goalId} already has a PR in ${other}: ${goal.repos[other].pr!.url}`);
+      const draft = await this.prDraft(goalId, other);
+      await this.deps.repos!.openPr(goal, other, { title: input.title?.trim() || draft.title, body: input.body?.trim() || draft.body, draft: !!input.draft });
+      this.changed();
+      await this.linkPrs(goalId, other);
+      return this.require(goalId);
+    }
     if (!goal.worktree) throw new Error(`${goalId} worked in your own folder, so there's no branch to push. Commit and open the PR yourself.`);
     const cwd = this.cwdOf(goal);
     await gg.commitAll(cwd, `${goal.id}: remaining changes`).catch(() => null);
@@ -621,13 +703,34 @@ export class GoalRunner {
     await gg.push(cwd, goal.worktree.branch);
     if (body.includes(PROOF_MARK)) body = await this.withPublishedProof(goalId, body);
     const pr = await gg.createPr(cwd, { title, body, head: goal.worktree.branch, draft: !!input.draft });
-    return this.set(goalId, { pr });
+    const next = this.set(goalId, { pr });
+    if (this.deps.repos?.isRoom) await this.linkPrs(goalId, this.deps.repos.registry.primaryId);
+    return next;
+  }
+
+  /** A goal's PR opened in a room: point the goal's other open PRs at the whole set. Same click, audited. */
+  private async linkPrs(goalId: string, opened: string) {
+    const repos = this.deps.repos!;
+    const errors = await repos.refreshLinks(this.require(goalId), this.tasksOf(goalId), opened).catch((e: Error) => [e.message]);
+    this.deps.audit?.({
+      kind: AuditKind.PullRequest,
+      actor: { type: ActorType.Human, name: this.human() },
+      goalId,
+      summary: `Linked the PRs of ${goalId} across repos`,
+      ...(errors.length ? {} : { decision: 'allowed' as const }),
+      detail: { opened, errors },
+    });
   }
 
   /** Merge the goal's branch into the branch checked out in the project (no PR). */
-  async mergeLocal(goalId: string): Promise<Goal> {
+  async mergeLocal(goalId: string, repo?: string): Promise<Goal> {
     const goal = this.require(goalId);
     if (this.isRunning(goalId)) throw new Error(`${goalId} is still running.`);
+    const other = this.deps.repos?.registry.normalize(repo);
+    if (other) {
+      await this.deps.repos!.mergeLocal(goal, other);
+      return this.require(goalId);
+    }
     if (!goal.worktree) throw new Error(`${goalId} already worked in your own folder; there's nothing to merge.`);
     if (fs.existsSync(goal.worktree.path)) await gg.commitAll(goal.worktree.path, `${goal.id}: remaining changes`).catch(() => null);
     await gg.mergeInto(this.deps.project.root, goal.worktree.branch, `Merge ${goal.id}: ${goal.title}`);
@@ -638,14 +741,18 @@ export class GoalRunner {
   async cleanup(goalId: string): Promise<Goal> {
     const goal = this.require(goalId);
     if (this.isRunning(goalId)) throw new Error(`${goalId} is still running.`);
-    if (!goal.worktree) throw new Error(`${goalId} has no folder of its own.`);
+    const others = Object.values(goal.repos ?? {}).some((r) => r.worktree);
+    if (!goal.worktree && !others) throw new Error(`${goalId} has no folder of its own.`);
+    if (others && this.deps.repos) await this.deps.repos.cleanup(goal);
+    if (!goal.worktree) return this.require(goalId);
     await gg.removeWorktree(this.deps.project.root, goal.worktree.path);
     return this.set(goalId, { worktreeWarning: `Folder removed; branch ${goal.worktree.branch} is kept.` });
   }
 
   /** owner/repo of the origin remote (to write cross-repo "Closes" lines), if it's on GitHub. */
-  private async originRepo(): Promise<string | undefined> {
-    const out = await gg.run('git', ['remote', 'get-url', 'origin'], this.deps.project.root);
+  private async originRepo(repo?: string): Promise<string | undefined> {
+    const root = repo && this.deps.repos ? this.deps.repos.registry.root(repo) : this.deps.project.root;
+    const out = await gg.run('git', ['remote', 'get-url', 'origin'], root);
     const m = /github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?\s*$/.exec(out.stdout.trim());
     return m?.[1];
   }
@@ -956,7 +1063,7 @@ export class GoalRunner {
     bot: Bot,
     prompt: string,
     label: string,
-    ctx: { phase: WorkPhase; taskId?: string },
+    ctx: { phase: WorkPhase; taskId?: string; repo?: string },
   ): Promise<RunOutcome> {
     const ctl = this.control(goal.id);
     const budget = this.budgetFor(this.require(goal.id));
@@ -973,10 +1080,14 @@ export class GoalRunner {
       // Files attached to the brief: the Planner gets them as content (images, PDFs…); every bot gets their paths.
       const files = this.attachmentsOf(goal);
       const fullPrompt = files.length ? `${prompt}\n\n## Files the human attached to this goal\n${attachmentLines(files)}` : prompt;
+      const { repo, ...runCtx } = ctx;
+      const current = this.require(goal.id);
+      const extra = this.deps.repos?.extraDirs(current, repo, ctx.phase === WorkPhase.Planning ? 'plan' : 'work') ?? [];
       const out = await this.deps.team.dispatch(bot.id, fullPrompt, fromLead ? roles.lead.id : ENGINE, {
         goalId: goal.id,
-        ...ctx,
-        cwd: this.cwdOf(this.require(goal.id)),
+        ...runCtx,
+        cwd: this.cwdOf(current, repo),
+        ...(extra.length ? { additionalDirectories: extra } : {}),
         ...(Number.isFinite(budget.remaining) ? { maxBudgetUsd: budget.remaining } : {}),
         ...(ctx.phase === WorkPhase.Planning && files.length ? { attachments: files.map((a) => a.id) } : {}),
       });

@@ -22,3 +22,4 @@ export type * from './automation.js';
 export type * from './context.js';
 export type * from './proof.js';
 export type * from './packs.js';
+export type * from './rooms.js';

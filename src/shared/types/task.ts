@@ -25,4 +25,9 @@ export interface NewTaskInput {
   dependsOn?: string[];
   notes?: string;
   createdBy?: string;
+  /** Multi-repo rooms: room repo id; unset = primary repo. */
+  repo?: string;
 }
+
+/** Per-repo state of a goal that spans repos (multi-repo rooms). */
+export type GoalRepoState = NonNullable<Goal['repos']>[string];

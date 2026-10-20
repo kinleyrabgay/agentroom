@@ -62,6 +62,8 @@ export const TaskSchema = z.object({
   commits: z.array(z.string()).default([]),
   /** The task's commits were reverted by the human. */
   reverted: z.boolean().optional(),
+  /** Multi-repo rooms: the repo (room repo id) this task changes; unset = the room's primary repo. */
+  repo: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -170,6 +172,21 @@ export const GoalSchema = z.object({
     .optional(),
   /** The human approved failing quality checks for this round. */
   proofOverride: z.object({ round: z.number(), at: z.string(), by: z.string() }).optional(),
+  /**
+   * Multi-repo rooms: per-repo state for the other repos a goal touches (keyed by room repo id).
+   * The primary repo keeps using `baseRef`, `worktree` and `pr` above.
+   */
+  repos: z
+    .record(
+      z.string(),
+      z.object({
+        baseRef: z.string().optional(),
+        worktree: z.object({ path: z.string(), branch: z.string() }).optional(),
+        worktreeWarning: z.string().optional(),
+        pr: z.object({ url: z.string(), number: z.number().optional() }).optional(),
+      }),
+    )
+    .optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

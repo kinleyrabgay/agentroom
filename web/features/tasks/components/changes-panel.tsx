@@ -36,7 +36,7 @@ const STATUS: Record<ChangedFile["status"], { letter: string; tone: Tone; label:
 type Mode = "unified" | "split"
 
 /** The goal's diff like a pull request: files by task, inline comments, revert a task, send comments back. */
-export function ChangesPanel({ goal }: { goal: Goal }) {
+export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo rooms: which of the goal's repos (unset = primary). */ repo?: string }) {
   const [data, setData] = useState<GoalChanges | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -52,7 +52,7 @@ export function ChangesPanel({ goal }: { goal: Goal }) {
   useEffect(() => {
     let cancelled = false
     goalWorkApi
-      .changes(goal.id)
+      .changes(goal.id, repo)
       .then((d) => {
         if (cancelled) return
         setData(d)
@@ -62,7 +62,7 @@ export function ChangesPanel({ goal }: { goal: Goal }) {
     return () => {
       cancelled = true
     }
-  }, [goal.id, commitsKey, reload, goal.status])
+  }, [goal.id, repo, commitsKey, reload, goal.status])
 
   const file = data?.files.find((f) => f.path === selected) ?? data?.files[0]
   const pending = goal.reviewComments.filter((c) => !c.sent && !c.resolved)

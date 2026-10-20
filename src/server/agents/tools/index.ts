@@ -35,6 +35,9 @@ export interface HostToolDeps {
   memory?: MemoryRepository;
   /** Repo context (read-only map); absent when context is off. */
   context?: ContextReader;
+  /** Multi-repo rooms: repo ids tasks may name (`repo` on task_create/task_update). */
+  repos?: string[];
+  primaryRepo?: string;
 }
 
 /**
@@ -48,6 +51,7 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
     changed: deps.boardChanged,
     goalId: deps.goalId,
     roleOf: (id: string) => team.find((b) => b.id === id)?.role,
+    ...(deps.repos ? { repos: deps.repos, primaryRepo: deps.primaryRepo } : {}),
   };
   const tools = [...taskTools(board, bot.id), ...humanTools(bot, deps, signal)];
   if (deps.memory) tools.push(...memoryTools(bot, deps.memory, deps.notifications));

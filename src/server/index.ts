@@ -46,12 +46,17 @@ import { composeBrief } from '../core/repositories/goal-template.repository.js';
 import { ActorType, AuditKind, StateType } from '../shared/enums.js';
 import { ContextService } from './context/context.service.js';
 import { ProofService } from './proof/proof.service.js';
+import { loadRoom, ProjectRegistry } from '../core/rooms/index.js';
+import { RoomService } from './rooms/room.service.js';
+import { GoalRepos } from './rooms/goal-repos.js';
 
 export interface StartOptions {
   root: string;
   port: number;
   provider: string;
   model?: string;
+  /** Multi-repo room to open (its primary repo must be `root`). */
+  room?: string;
 }
 
 export interface RunningServer {
@@ -62,6 +67,8 @@ export interface RunningServer {
 /** Composition root: wires the project, realtime hub, agents, previews and HTTP app together. */
 export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const project = new Project(opts.root);
+  // Single-project mode is a one-repo registry; a room adds its other repos (each keeps its own .agentroom/).
+  const registry = opts.room ? ProjectRegistry.fromRoom(loadRoom(opts.room), project) : ProjectRegistry.single(project);
   const provider = createProvider(opts.provider);
   const config = project.config.get();
   if (opts.model || opts.provider !== config.provider) {
@@ -121,13 +128,38 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return cap === null ? undefined : cap - ledger.spentToday();
     },
   });
+  const room = new RoomService({
+    registry,
+    primaryContext: context,
+    // The room's settings and budget (the primary repo's) apply to every repo's map.
+    makeContext: (repo) =>
+      new ContextService({
+        root: repo.root,
+        hub: { state: (m) => hub.state(m.type === StateType.Context ? { ...m, repo: repo.id } : m) },
+        settings: () => project.settings.get(),
+        record: (row) => ledger.record(row),
+        dayRemaining: () => {
+          const cap = project.settings.get().budgets.perDayUsd;
+          return cap === null ? undefined : cap - ledger.spentToday();
+        },
+      }),
+  });
+  const goalRepos = new GoalRepos({
+    registry,
+    update: (id, repos) => {
+      const goal = project.goals.update(id, { repos });
+      boardChanged();
+      return goal;
+    },
+    worktreesEnabled: () => project.settings.get().worktrees.enabled,
+  });
   const proof = new ProofService({
     root: project.root,
     runsDir: project.paths.runs,
     settings: () => project.settings.get(),
     scratchDir: path.join(worktreeHome(project.root), '.proof'),
   });
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, room });
   const goals = new GoalRunner({
     project,
     team,
@@ -141,6 +173,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     humanName,
     onDone: (goal, files) => void context.onGoalDone(goal, files),
     proof,
+    repos: goalRepos,
+    onRepoDone: (repo, goal, files) => room.onGoalDone(repo, goal, files),
   });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
@@ -290,6 +324,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     security,
     uploads,
     context,
+    room,
     proof,
     humanName,
     boardChanged,
@@ -299,7 +334,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       findings.push();
       mcp.push();
       automation.push();
-      context.push();
+      room.push();
     },
   });
   const stopWatching = watchProject(project, hub, () => void mcp.refresh(), () => context.changed());
@@ -314,6 +349,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   mcp.start();
   automation.start();
   context.start();
+  room.start();
   writeSession(project.paths.sessionFile, { port: opts.port, token, url, pid: process.pid, startedAt: new Date().toISOString() });
 
   return {
@@ -324,6 +360,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       mcp.stop();
       automation.stop();
       context.stop();
+      room.stop();
       clearSession(project.paths.sessionFile);
       remote.close();
       previews.closeAll();

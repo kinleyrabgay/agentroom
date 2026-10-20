@@ -21,6 +21,7 @@ import { DependsOnPicker } from "./depends-on-picker"
 import { DescriptionEditor } from "./description-editor"
 import { FilesEditor } from "./files-editor"
 import { TaskLog } from "./task-log"
+import { primaryRepoId, useRoomStore } from "@/features/rooms/lib/room-store"
 
 /** The selected task, in the Inspector. Every change autosaves. */
 export function TaskInspector() {
@@ -44,6 +45,7 @@ const same = (a: unknown, b: unknown) =>
 function TaskEditor({ task }: { task: Task }) {
   const bots = useAppStore((s) => s.bots)
   const siblings = useAppStore((s) => s.tasks)
+  const room = useRoomStore((s) => s.room)
   const openTask = useAppStore((s) => s.openTask)
   const { state, queue, flush } = useAutosave<TaskUpdate>((patch) =>
     taskApi.update(task.id, patch)
@@ -152,6 +154,16 @@ function TaskEditor({ task }: { task: Task }) {
               className="tabular-nums"
             />
           </Field>
+          {room && (
+            <Field label="Repo" hint="The repo this task changes">
+              <Dropdown<string>
+                datas={room.repos.map((r) => ({ value: r.id, label: r.name, sublabel: r.primary ? "primary" : undefined }))}
+                selectedValue={view.repo ?? primaryRepoId(room)}
+                showSearch={room.repos.length > 6}
+                onSelect={(v) => change("repo", v === primaryRepoId(room) ? null : (v as string))}
+              />
+            </Field>
+          )}
         </div>
 
         <Field label="Description">

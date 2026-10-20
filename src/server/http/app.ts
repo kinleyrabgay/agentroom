@@ -46,6 +46,8 @@ import { RegistryService } from '../registry/registry.service.js';
 import type { ContextService } from '../context/context.service.js';
 import { proofRoutes } from './routes/proof.routes.js';
 import type { ProofService } from '../proof/proof.service.js';
+import { roomRoutes } from './routes/room.routes.js';
+import type { RoomService } from '../rooms/room.service.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -76,6 +78,8 @@ export interface AppDeps {
   uploads: UploadStore;
   /** Repo context (module map, cards). */
   context?: ContextService;
+  /** Multi-repo rooms (also present in single-project mode, as a one-repo room). */
+  room?: RoomService;
   /** Proof of work (Verify phase, Proof tab). */
   proof?: ProofService;
   /** "Name <email>" of the human using the UI. */
@@ -112,7 +116,7 @@ export function createApp(deps: AppDeps) {
   infoRoutes(api, deps.project, deps.models);
   botRoutes(api, deps.project, deps.team);
   skillRoutes(api, deps.project);
-  taskRoutes(api, deps.project, deps.boardChanged);
+  taskRoutes(api, deps.project, deps.boardChanged, deps.room?.isRoom ? (repo) => deps.room!.registry.normalize(repo) ?? null : undefined);
   goalRoutes(api, deps.goals, deps.humanAudit, deps.project.goalTemplates);
   memoryRoutes(api, deps.project, deps.humanAudit);
   goalTemplateRoutes(api, deps.project, deps.humanAudit);
@@ -127,7 +131,8 @@ export function createApp(deps: AppDeps) {
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
-  if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
+  if (deps.context) contextRoutes(api, deps.room ? (repo) => deps.room!.context(repo) : deps.context, deps.humanAudit);
+  if (deps.room) roomRoutes(api, deps.room, deps.humanAudit);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
