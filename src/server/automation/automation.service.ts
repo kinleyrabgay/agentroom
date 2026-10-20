@@ -23,6 +23,7 @@ import { readJson, writeJson } from '../../core/fs/json.js';
 import { runsHere, type AutomationRepository } from '../../core/repositories/automation.repository.js';
 import { buildBrief, briefHasNews, digestText } from './brief.js';
 import { decide, localDay, movedCards, newSentryIssues, triggerBlocked, type ScheduleState } from './plan.js';
+import { DEFAULT_SPIKE, recordCounts, spikeOf, type CountHistory } from './spike.js';
 import { cronError } from './time-parse.js';
 import { teamsTextMessage } from '../intake/teams/cards.js';
 
@@ -43,6 +44,10 @@ interface State {
   schedules: Record<string, ScheduleState>;
   triggers: Record<string, TriggerState>;
   sentrySeen?: string[];
+  /** Event counts per Sentry issue over the last day (spike triggers). */
+  sentryCounts?: CountHistory;
+  /** "<trigger>:<issue>" → day a spike trigger last fired for it (once a day per issue). */
+  spikesFired?: Record<string, string>;
   githubSnapshot?: Record<string, string>;
   /** Linear/Jira issue states at the last poll, per tracker. */
   trackerSnapshots?: Record<string, Record<string, string>>;
@@ -62,6 +67,8 @@ export interface SentryIssueLite {
   level: string;
   permalink?: string;
   project: { slug: string };
+  /** Total events (spike triggers). */
+  count?: number;
 }
 
 export interface GithubCardLite {
@@ -95,7 +102,9 @@ export interface AutomationDeps {
   spentToday: () => number;
   settings: () => Settings;
   /** Newest Sentry issues, or null when Sentry isn't connected. */
-  sentryIssues?: () => Promise<SentryIssueLite[] | null>;
+  sentryIssues?: (opts?: { sort?: 'new' | 'date' }) => Promise<SentryIssueLite[] | null>;
+  /** Incident autopilot: start a reproduce-first goal for a Sentry issue. */
+  startAutopilot?: (issueId: string, opts: { triggerId: string; autoPr: boolean; budgetUsd?: number }) => Promise<Goal>;
   /** Board cards with their column names, or null when no board is connected. */
   githubCards?: () => Promise<GithubCardLite[] | null>;
   /** Open issues of a connected tracker with their state names, or null when it isn't connected. */
@@ -369,6 +378,7 @@ export class AutomationService {
     if (t.runner === 'cloud') throw new Error("The cloud runner isn't available yet. Use This Mac.");
     if (t.then.type === 'message' && !t.then.botId) throw new Error('Pick the bot to message.');
     if (t.then.type === 'handoff' && t.when.source === 'goal') throw new Error('A failed goal can be sent to a bot as a message, not handed off.');
+    if (t.then.type === 'autopilot' && t.when.source !== 'sentry') throw new Error('Autopilot starts from Sentry issues.');
     return t;
   }
 
@@ -505,6 +515,22 @@ export class AutomationService {
     }
   }
 
+  /** Autopilot trigger: a reproduce-first goal for the Sentry issue. */
+  private async autopilot(t: Trigger, ev: { title: string; ids?: string[]; source?: HandoffSource }, ctx: { kind: AutomationRun['kind']; refId: string; name: string }, opts: { budgetUsd?: number; autoBuild?: boolean }): Promise<AutomationRun> {
+    const issueId = ev.source === 'sentry' ? ev.ids?.[0] : undefined;
+    if (!issueId || !this.deps.startAutopilot) return this.record({ ...ctx, outcome: 'skipped', reason: 'Autopilot works on Sentry issues only' });
+    try {
+      const goal = await this.deps.startAutopilot(issueId, { triggerId: t.id, autoPr: !!t.then.autoPr, ...(opts.budgetUsd ? { budgetUsd: opts.budgetUsd } : {}) });
+      if (opts.autoBuild) this.state.autoBuild = [...new Set([...this.state.autoBuild, goal.id])];
+      return this.record({ ...ctx, outcome: 'started', goalId: goal.id });
+    } catch (err) {
+      const reason = (err as Error).message;
+      const run = this.record({ ...ctx, outcome: 'failed', reason });
+      this.deps.notify({ kind: NotificationKind.GoalFailed, title: `Autopilot didn't start: ${ctx.name}`, body: reason });
+      return run;
+    }
+  }
+
   /** Plans from "build without waiting" automation get approved as soon as they're ready. */
   private autoBuildPending() {
     if (!this.state.autoBuild.length) return;
@@ -548,13 +574,14 @@ export class AutomationService {
     this.polling = true;
     try {
       const triggers = this.deps.repo.triggers().filter((t) => t.enabled && this.here(t));
-      if (triggers.some((t) => t.when.source === 'sentry') && this.deps.sentryIssues) {
+      if (triggers.some((t) => t.when.source === 'sentry' && t.when.event === 'spike') && this.deps.sentryIssues) await this.pollSpikes(triggers);
+      if (triggers.some((t) => t.when.source === 'sentry' && t.when.event !== 'spike') && this.deps.sentryIssues) {
         const issues = await this.deps.sentryIssues().catch(() => null);
         if (issues) {
           const { fresh, seen } = newSentryIssues(issues, this.state.sentrySeen);
           this.state.sentrySeen = seen;
           for (const issue of fresh) {
-            for (const t of triggers.filter((t) => matchesSentry(t, issue))) {
+            for (const t of triggers.filter((t) => t.when.source === 'sentry' && t.when.event !== 'spike' && matchesSentry(t, issue))) {
               await this.fireTrigger(t, { title: `${issue.shortId}: ${issue.title}`, url: issue.permalink ?? '', ids: [issue.id], source: 'sentry' });
             }
           }
@@ -593,6 +620,35 @@ export class AutomationService {
     }
   }
 
+  /** Spike triggers: record event counts and fire once a day per issue when a window jumps. */
+  private async pollSpikes(triggers: Trigger[]) {
+    const issues = await this.deps.sentryIssues!({ sort: 'date' }).catch(() => null);
+    if (!issues) return;
+    const now = this.now().getTime();
+    this.state.sentryCounts = recordCounts(this.state.sentryCounts, issues.map((i) => ({ id: i.id, count: Number(i.count ?? NaN) })), now);
+    const day = localDay(this.now());
+    const fired = this.state.spikesFired ?? {};
+    for (const t of triggers) {
+      if (t.when.source !== 'sentry' || t.when.event !== 'spike') continue;
+      const rule = t.when.spike ?? DEFAULT_SPIKE;
+      for (const issue of issues.filter((i) => matchesSentry(t, i))) {
+        const key = `${t.id}:${issue.id}`;
+        if (fired[key] === day) continue;
+        const s = spikeOf(this.state.sentryCounts[issue.id], now, rule);
+        if (!s?.spike) continue;
+        fired[key] = day;
+        await this.fireTrigger(t, {
+          title: `${issue.shortId}: ${issue.title} (spike: ${s.recent} events in ${rule.windowMin} min, ${s.prior} before)`,
+          url: issue.permalink ?? '',
+          ids: [issue.id],
+          source: 'sentry',
+        });
+      }
+    }
+    // Forget days that passed.
+    this.state.spikesFired = Object.fromEntries(Object.entries(fired).filter(([, d]) => d === day));
+  }
+
   private async fireTrigger(t: Trigger, ev: { title: string; url: string; ids?: string[]; source?: HandoffSource; reason?: string }) {
     const blocked = triggerBlocked(t, this.runsToday(t.id), this.now()) ?? this.dailyCapReached();
     const st = this.state.triggers[t.id] ?? { runsByDay: {} };
@@ -613,6 +669,8 @@ export class AutomationService {
       run = this.record({ ...ctx, outcome: 'started', reason: 'Notified' });
     } else if (t.then.type === 'handoff' && ev.source && ev.ids) {
       run = await this.execute({ type: 'handoff', source: ev.source, ids: ev.ids, ...(t.then.botId ? { botId: t.then.botId } : {}), ...(t.then.text ? { note: text } : {}) }, ctx, opts);
+    } else if (t.then.type === 'autopilot') {
+      run = await this.autopilot(t, ev, ctx, opts);
     } else if (t.then.type === 'message' && t.then.botId) {
       run = await this.execute({ type: 'message', botId: t.then.botId, text }, ctx, opts);
     } else {
@@ -700,6 +758,7 @@ const sameColumn = (a: string, b: string) => a.trim().toLowerCase() === b.trim()
 
 function defaultText(t: Trigger): string {
   if (t.when.source === 'goal') return 'Goal {title} failed. Find out why and fix it if you can. {url}';
+  if (t.when.source === 'sentry' && t.when.event === 'spike') return 'Sentry issue {title} is spiking. Find the cause and fix it. {url}';
   return 'Look into {title}. {url}';
 }
 
@@ -715,6 +774,8 @@ function describeThen(t: Trigger): string {
       return `Start a goal${t.then.planOnly ? ' and stop after the plan' : ' and build it'}`;
     case 'message':
       return `Message ${who}`;
+    case 'autopilot':
+      return `Autopilot: reproduce, failing test, fix, verify${t.then.planOnly ? ', stopping after the plan' : ''}${t.then.autoPr ? ', may open the PR when confident' : ', PR waits for you'}`;
     default:
       return `Notify you${t.then.channel && t.then.channel !== 'inbox' ? ` on ${t.then.channel}` : ''}`;
   }

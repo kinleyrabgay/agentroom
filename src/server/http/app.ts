@@ -55,6 +55,8 @@ import type { TrackerService } from '../integrations/issues/tracker.service.js';
 import type { TeamsService } from '../intake/teams/teams.service.js';
 import type { PrReviewService } from '../review/pr-review.service.js';
 import type { TrackerId } from '../../shared/types/index.js';
+import { autopilotRoutes } from './routes/autopilot.routes.js';
+import type { AutopilotService } from '../autopilot/autopilot.service.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -95,6 +97,8 @@ export interface AppDeps {
   reviews?: PrReviewService;
   /** Shared team room (members over the LAN or a tunnel). */
   room?: RoomService;
+  /** Incident autopilot (Sentry → reproduce → failing test → fix → verify). */
+  autopilot?: AutopilotService;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -148,6 +152,7 @@ export function createApp(deps: AppDeps) {
   uploadRoutes(api, deps.uploads);
   if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
+  if (deps.autopilot) autopilotRoutes(api, deps.autopilot, deps.goals);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);
   if (deps.trackers) trackerRoutes(api, deps.trackers, deps.humanAudit);
   if (deps.teams) teamsRoutes(api, deps.teams, deps.humanName);

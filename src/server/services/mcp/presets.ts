@@ -31,4 +31,33 @@ export const MCP_PRESETS: McpPreset[] = [
     auth: 'Runs locally with npx; the token stays in .agentroom/runs/secrets.json.',
     docs: 'https://github.com/getsentry/sentry-mcp',
   },
+  {
+    id: 'figma',
+    name: 'Figma',
+    description: 'Frames, layout, styles and variables from Figma designs (Implement design goals).',
+    config: { type: 'http', url: 'https://mcp.figma.com/mcp' },
+    auth: 'Sign in with your Figma account in the browser (OAuth). For design-match scores, also add a FIGMA_ACCESS_TOKEN (Figma access token preset) or attach the design image.',
+    docs: 'https://help.figma.com/hc/en-us/articles/32132100833559',
+  },
+  {
+    id: 'figma-token',
+    name: 'Figma (access token)',
+    description: 'Figma frames and layout through a personal access token. The same token lets Verify export the frame to score the design match.',
+    config: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'figma-developer-mcp', '--stdio'],
+      env: { FIGMA_API_KEY: '${secret:FIGMA_ACCESS_TOKEN}' },
+    },
+    secrets: [
+      {
+        name: 'FIGMA_ACCESS_TOKEN',
+        label: 'Personal access token',
+        help: 'Read-only scopes are enough: file content (read).',
+        url: 'https://www.figma.com/developers/api#access-tokens',
+      },
+    ],
+    auth: 'Runs locally with npx; the token stays in .agentroom/runs/secrets.json and is only used to read files.',
+    docs: 'https://github.com/GLips/Figma-Context-MCP',
+  },
 ];

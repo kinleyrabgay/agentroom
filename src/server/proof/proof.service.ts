@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Goal, ProofCheck, ProofReport, ProofScenario, ProofScenarioResult, ProofView, Settings } from '../../shared/types/index.js';
+import type { DesignMatch, Goal, ProofCheck, ProofReport, ProofScenario, ProofScenarioResult, ProofView, Settings } from '../../shared/types/index.js';
+import type { DesignReference } from '../autopilot/design.js';
+import { compareDesign, designCheck, diffImage, encodePng } from './design-match.js';
 import * as gg from '../git/goal-git.js';
-import { axeSource, launchBrowser, proofAvailability } from './browser.js';
+import { axeSource, launchBrowser, proofAvailability, type PwBrowser } from './browser.js';
 import { a11yCheck, bundleBytes, bundleCheck, coverageCheck, perfCheck, readCoverage, visualCheck, type A11yIssue, type PageMetrics } from './checks.js';
 import { detectApp, startApp, type RunningApp } from './devserver.js';
 import { decodePng, diffPercent, encodeGif } from './image.js';
@@ -17,6 +19,8 @@ export interface ProofServiceDeps {
   settings: () => Settings;
   /** Folder for throwaway "before" checkouts. */
   scratchDir: string;
+  /** Design image of an Implement design goal (uploaded or exported from Figma), cached in `dir`. */
+  designReference?: (goal: Goal, dir: string) => Promise<DesignReference>;
 }
 
 /** What a run needs from the goal. */
@@ -104,7 +108,7 @@ export class ProofService {
       const app = detectApp(cwd, settings.proof.devCommand);
       if (!app && !settings.proof.url.trim()) return this.finish({ ...report, status: 'skipped', reason: 'No web app to open: no dev/start script in package.json and no proof URL in Settings → Proof.' });
 
-      resetDir(out, ['scenarios.json']);
+      resetDir(out, (f) => f === 'scenarios.json' || f.startsWith('design-source.'));
       const list = scenarios.length ? scenarios : defaultScenarios();
       this.setScenarios(goal.id, list);
 
@@ -135,6 +139,11 @@ export class ProofService {
         report.scenarios.push(result);
       }
 
+      if (goal.design && settings.quality.design) {
+        onProgress?.('Comparing with the design');
+        report.design = await this.designMatch(browser, goal, report.url!, out, settings.proof.mask);
+      }
+
       // Before: the same pages on the goal's starting commit (only when we start the app ourselves).
       let a11yBase: A11yIssue[] | null = null;
       const visual: { label: string; pct: number }[] = [];
@@ -163,6 +172,7 @@ export class ProofService {
       if (q.a11y) checks.push(a11yCheck(a11yHead, a11yBase, q));
       if (q.perf) checks.push(perfCheck(metrics, q));
       if (q.visual) checks.push(visualCheck(visual, q));
+      if (report.design) checks.push(designCheck(report.design, q.minDesignMatch));
       if (q.coverage || q.bundle) checks.push(...(await this.commandChecks(cwd, base?.dir ?? null, settings, abort.signal, onProgress)));
       report.checks = checks;
       report.status = report.scenarios.every((s) => s.ok) ? 'passed' : 'failed';
@@ -193,6 +203,13 @@ export class ProofService {
         if (a && b) lines.push(`| Before | After |\n|---|---|\n| ${b} | ${a} |`);
       }
     }
+    if (r.design && !r.design.error) {
+      const d = r.design;
+      lines.push(`**Design match: ${d.score}/100** (${d.path} at ${d.width}×${d.height})`);
+      const ref = img(d.reference, 'Design');
+      const shot = img(d.shot, 'Implementation');
+      if (ref && shot) lines.push(`| Design | Implementation |\n|---|---|\n| ${ref} | ${shot} |`);
+    }
     if (r.checks.length) {
       lines.push('| Check | Result |\n|---|---|\n' + r.checks.map((c) => `| ${icon(c.status)} ${c.label} | ${c.summary.replace(/\|/g, '\\|')} |`).join('\n'));
     }
@@ -211,6 +228,7 @@ export class ProofService {
       if (s.frames.length) names.add(s.frames[s.frames.length - 1].file);
       if (s.before[0]) names.add(s.before[0].file);
     }
+    if (r.design && !r.design.error) for (const n of [r.design.reference, r.design.shot, r.design.diff]) if (n) names.add(n);
     const files = [...names].filter((n) => fs.existsSync(path.join(dir, n))).map((name) => ({ name, path: path.join(dir, name) }));
     if (!files.length) return r;
     const folder = `${safeId(goalId)}-r${r.round}`;
@@ -221,6 +239,59 @@ export class ProofService {
   }
 
   // ---------- internals ----------
+
+  /**
+   * Render the design reference and the page at the frame's size and score the match. Never throws:
+   * problems come back as `error` (the check is then skipped).
+   */
+  private async designMatch(browser: PwBrowser, goal: Goal, baseUrl: string, out: string, mask: string[]): Promise<DesignMatch> {
+    const design = goal.design!;
+    const empty: DesignMatch = { reference: 'design-ref.png', shot: 'design-shot.png', score: 0, pixelMatch: 0, structure: 0, proportions: 0, width: 0, height: 0, source: design.source, path: design.path };
+    if (!this.deps.designReference) return { ...empty, error: 'Design comparison is not available.' };
+    try {
+      const ref = await this.deps.designReference(goal, out);
+      const bytes = fs.readFileSync(ref.file);
+      const ctx = await browser.newContext({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 1, colorScheme: 'light' });
+      let width: number;
+      let height: number;
+      try {
+        const page = await ctx.newPage();
+        const src = `data:${mimeOf(ref.file)};base64,${bytes.toString('base64')}`;
+        await page.setContent(`<html><body style="margin:0;background:#fff"><img id="r" src="${src}"></body></html>`, { waitUntil: 'load' });
+        const nat = await page.evaluate<{ w: number; h: number }>(`(async () => { const i = document.getElementById('r'); try { await i.decode(); } catch (e) {} return { w: i.naturalWidth, h: i.naturalHeight }; })()`);
+        if (!nat.w || !nat.h) throw new Error("Couldn't read the design image.");
+        width = ref.width ?? (nat.w > 2000 ? Math.round(nat.w / 2) : nat.w); // a wide image without a size is likely a 2× export
+        height = Math.min(4000, ref.height ?? Math.round((nat.h * width) / nat.w));
+        await page.setViewportSize({ width, height });
+        await page.setContent(`<html><body style="margin:0;background:#fff"><img src="${src}" style="display:block;width:${width}px;height:${Math.round((nat.h * width) / nat.w)}px"></body></html>`, { waitUntil: 'load' });
+        fs.writeFileSync(path.join(out, empty.reference), await page.screenshot({ type: 'png' }));
+      } finally {
+        await ctx.close().catch(() => {});
+      }
+
+      const pctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, colorScheme: 'light' });
+      let pageHeight: number | null = null;
+      try {
+        const page = await pctx.newPage();
+        await page.goto(new URL(design.path, baseUrl).href, { waitUntil: 'load', timeout: 30_000 });
+        await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        pageHeight = await page.evaluate<number>('document.documentElement.scrollHeight').catch(() => null);
+        const locators = mask.map((m) => page.locator(m));
+        fs.writeFileSync(path.join(out, empty.shot), await page.screenshot({ type: 'png', animations: 'disabled', ...(locators.length ? { mask: locators } : {}) }));
+      } finally {
+        await pctx.close().catch(() => {});
+      }
+
+      const a = decodePng(fs.readFileSync(path.join(out, empty.reference)));
+      const b = decodePng(fs.readFileSync(path.join(out, empty.shot)));
+      const s = compareDesign(a, b, pageHeight, ref.height ?? null);
+      fs.writeFileSync(path.join(out, 'design-diff.png'), encodePng(diffImage(a, b)));
+      return { ...empty, ...s, diff: 'design-diff.png', width, height };
+    } catch (err) {
+      return { ...empty, error: (err as Error).message.slice(0, 300) };
+    }
+  }
 
   private finish(report: ProofReport): ProofReport {
     report.finishedAt = new Date().toISOString();
@@ -314,9 +385,14 @@ async function shell(command: string, cwd: string, signal: AbortSignal): Promise
   });
 }
 
-function resetDir(dir: string, keep: string[]) {
+function resetDir(dir: string, keep: (file: string) => boolean) {
   fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) if (!keep.includes(f)) fs.rmSync(path.join(dir, f), { recursive: true, force: true });
+  for (const f of fs.readdirSync(dir)) if (!keep(f)) fs.rmSync(path.join(dir, f), { recursive: true, force: true });
+}
+
+function mimeOf(file: string): string {
+  const ext = path.extname(file).toLowerCase();
+  return ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : ext === '.svg' ? 'image/svg+xml' : 'image/png';
 }
 
 function readJson<T>(file: string): T | null {

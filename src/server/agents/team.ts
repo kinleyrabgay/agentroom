@@ -10,6 +10,7 @@ import { buildContext } from './context-builder.js';
 import type { PermissionGate } from './permission-gate.js';
 import type { SessionStore } from './session-store.js';
 import { buildHostTools } from './tools/index.js';
+import type { AutopilotReporter } from './tools/autopilot.tools.js';
 import { expandSkillCommands } from './skill-commands.js';
 import type { SecurityService } from '../security/security.service.js';
 import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
@@ -36,6 +37,8 @@ export interface TeamDeps {
   mcp?: McpService;
   /** Repo context: the map in every bot's instructions and the context_* tools. */
   context?: ContextService;
+  /** Incident autopilot (`autopilot_report` on autopilot goals). */
+  autopilot?: AutopilotReporter;
 }
 
 /**
@@ -166,6 +169,7 @@ export class Team {
           security: this.deps.security,
           memory: project.memory,
           ...(repoMap && this.deps.context ? { context: this.deps.context.reader } : {}),
+          ...(this.deps.autopilot ? { autopilot: this.deps.autopilot } : {}),
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.

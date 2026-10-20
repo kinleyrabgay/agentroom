@@ -18,7 +18,7 @@ import { BudgetsSection } from "./budgets-section"
 import { IntegrationsSection } from "./integrations-section"
 import { SecuritySection } from "./security-section"
 import { ContextSection } from "./context-section"
-import { ProofSection, QualitySection } from "./proof-section"
+import { AutopilotSettingsSection, ProofSection, QualitySection } from "./proof-section"
 import { PacksSection } from "@/features/packs/components/packs-section"
 import { TeamRoomSection } from "@/features/room/components/team-room-section"
 
@@ -90,6 +90,7 @@ export function SettingsPage() {
               <ContextSection />
               <ProofSection />
               <QualitySection />
+              <AutopilotSettingsSection />
               <PacksSection />
               <AlertsSection />
               <RemoteSection />

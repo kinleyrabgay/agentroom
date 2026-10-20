@@ -45,15 +45,30 @@ export interface Schedule {
   owner?: AutomationOwner;
 }
 
+export interface SpikeRule {
+  factor: number;
+  windowMin: number;
+  minEvents: number;
+}
+
 export type TriggerWhen =
-  | { source: 'sentry'; event: 'new_issue'; level?: 'fatal' | 'error' | 'warning'; project?: string }
+  | {
+      source: 'sentry';
+      event: 'new_issue' | 'spike';
+      level?: 'fatal' | 'error' | 'warning';
+      project?: string;
+      /** spike: events in the last `windowMin` minutes ≥ `factor` × the window before, and at least `minEvents`. */
+      spike?: SpikeRule;
+    }
   | { source: 'github'; event: 'card_moved'; toColumn: string }
   | { source: 'goal'; event: 'failed' }
   | { source: 'linear' | 'jira'; event: 'issue_moved'; toState: string };
 
 export interface TriggerThen {
-  type: 'handoff' | 'goal' | 'message' | 'notify';
+  type: 'handoff' | 'goal' | 'message' | 'notify' | 'autopilot';
   botId?: string;
+  /** Autopilot: may open the PR on its own when confident enough (also needs settings.autopilot.allowAutoPr). */
+  autoPr?: boolean;
   /** Stop after the plan and wait for the human (default true). */
   planOnly: boolean;
   channel?: 'inbox' | 'slack' | 'teams';

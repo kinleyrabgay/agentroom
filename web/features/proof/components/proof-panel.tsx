@@ -27,6 +27,8 @@ import { EmptyState, ErrorState } from "@/components/kit/state-view"
 import { TONE_CLASS, type Tone } from "@/components/kit/tone"
 import { isRunning } from "@/features/tasks/lib/goal-phase"
 import { proofFileUrl } from "../lib/proof-url"
+import { AutopilotPanel } from "@/features/autopilot/components/autopilot-panel"
+import { DesignMatchCard } from "./design-match-card"
 import { FrameDialog } from "./frame-dialog"
 import { ScenarioDialog } from "./scenario-dialog"
 
@@ -107,6 +109,7 @@ export function ProofPanel({ goal }: { goal: Goal }) {
 
   return (
     <div className="space-y-4">
+      {goal.autopilot && <AutopilotPanel goal={goal} />}
       {!view.availability.ok && (
         <Callout tone="info" title="Proof recording is off on this machine">
           {view.availability.reason}
@@ -123,7 +126,9 @@ export function ProofPanel({ goal }: { goal: Goal }) {
             description={
               recording
                 ? "The app is starting in the goal's folder. The recording and checks show up here."
-                : "After QA passes, the Verify step opens the app in a headless browser, records the feature working and runs accessibility, performance and visual checks. The PR shows the result."
+                : goal.design
+                  ? "After QA passes, the Verify step renders the page at the design's size, scores how closely it matches the design and records the feature working. The PR shows the result."
+                  : "After QA passes, the Verify step opens the app in a headless browser, records the feature working and runs accessibility, performance and visual checks. The PR shows the result."
             }
             className="rounded-xl border border-dashed"
           />
@@ -171,6 +176,8 @@ export function ProofPanel({ goal }: { goal: Goal }) {
           {report.scenarios.map((s, i) => (
             <ScenarioCard key={`${s.name}-${i}`} goalId={goal.id} scenario={s} version={report.finishedAt} />
           ))}
+
+          {report.design && <DesignMatchCard goalId={goal.id} match={report.design} check={report.checks.find((c) => c.id === "design")} version={report.finishedAt} />}
 
           {report.checks.length > 0 && <ChecksList checks={report.checks} />}
         </>

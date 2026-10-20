@@ -1,4 +1,4 @@
-import { ClapperboardIcon, GaugeIcon } from "lucide-react"
+import { ClapperboardIcon, GaugeIcon, SirenIcon } from "lucide-react"
 import { PackageIcon, UsersIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
@@ -13,6 +13,7 @@ export const SettingsSection = {
   Context: "context",
   Proof: "proof",
   Quality: "quality",
+  Autopilot: "autopilot",
   Packs: "packs",
   Alerts: "alerts",
   Remote: "remote",
@@ -30,6 +31,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: typeof Slider
   { id: SettingsSection.Context, label: "Context", icon: WaypointsIcon, description: "The repo map bots read instead of exploring, and the cards written about each module." },
   { id: SettingsSection.Proof, label: "Proof", icon: ClapperboardIcon, description: "The Verify step: open the app in a headless browser, record the feature working, attach it to the PR." },
   { id: SettingsSection.Quality, label: "Quality", icon: GaugeIcon, description: "Checks run while verifying. A failing check pauses the goal until you accept it." },
+  { id: SettingsSection.Autopilot, label: "Autopilot", icon: SirenIcon, description: "Sentry incidents fixed reproduce-first. When, if ever, autopilot may open a PR on its own." },
   { id: SettingsSection.Packs, label: "Packs", icon: PackageIcon, description: "Ready-made teams for your stack, and the registries Browse skills searches." },
   { id: SettingsSection.Alerts, label: "Alerts", icon: BellRingIcon, description: "How AgentRoom reaches you when you're away. Personal to this machine." },
   { id: SettingsSection.Remote, label: "Remote approvals", icon: SmartphoneIcon, description: "Approve from your phone through a temporary, approvals-only link." },

@@ -14,6 +14,7 @@ import { delegateTool, type Delegate } from './delegate.tool.js';
 import { humanTools } from './human.tools.js';
 import { memoryTools } from './memory.tools.js';
 import { contextTools } from './context.tools.js';
+import { autopilotTools, type AutopilotReporter } from './autopilot.tools.js';
 import type { ContextReader } from '../../../core/context/index.js';
 import type { MemoryRepository } from '../../../core/repositories/memory.repository.js';
 import { planningTools, taskTools } from './task.tools.js';
@@ -35,6 +36,8 @@ export interface HostToolDeps {
   memory?: MemoryRepository;
   /** Repo context (read-only map); absent when context is off. */
   context?: ContextReader;
+  /** Incident autopilot: `autopilot_report` on autopilot goals. */
+  autopilot?: AutopilotReporter;
 }
 
 /**
@@ -53,6 +56,7 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
   if (deps.memory) tools.push(...memoryTools(bot, deps.memory, deps.notifications));
   if (deps.context) tools.push(...contextTools(deps.context));
   if (isPlannerRole(bot)) tools.push(...planningTools(board, bot.id));
+  if (deps.autopilot && deps.goalId && deps.goals.get(deps.goalId)?.autopilot) tools.push(...autopilotTools(deps.autopilot, deps.goalId));
   if (bot.tools.includes(ToolName.Browser)) {
     const guard = deps.security
       ? (text: string, source: string) => deps.security!.guardUntrusted(text, source, { botId: bot.id, goalId: deps.goalId, runKey: signal })

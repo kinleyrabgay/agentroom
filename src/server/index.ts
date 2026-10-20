@@ -55,6 +55,8 @@ import { GoalWatch, startedBuilding } from './intake/goal-watch.js';
 import { IntakeService } from './intake/intake.service.js';
 import { TeamsService } from './intake/teams/teams.service.js';
 import { PrReviewService } from './review/pr-review.service.js';
+import { AUTOPILOT_TEMPLATE, AutopilotService, type AutopilotGoals } from './autopilot/autopilot.service.js';
+import { designReference, FIGMA_TOKEN_SECRET } from './autopilot/design.js';
 
 export interface StartOptions {
   root: string;
@@ -144,8 +146,33 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     runsDir: project.paths.runs,
     settings: () => project.settings.get(),
     scratchDir: path.join(worktreeHome(project.root), '.proof'),
+    designReference: (goal, dir) => designReference(goal.design!, dir, { uploadPath: (id) => uploads.get(id)?.path, figmaToken: () => secrets.mcpSecret(FIGMA_TOKEN_SECRET) }),
   });
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context });
+  // Incident autopilot: the runner and Sentry are created below; it only uses them once a goal runs.
+  const autopilotGoals = (): AutopilotGoals => ({
+    list: () => goals.list(),
+    get: (id) => project.goals.get(id),
+    start: (brief, title, sources, t) => goals.start(brief, title, sources, undefined, [], t ? { template: { id: t.id, name: t.name }, guidance: t.guidance } : {}),
+    update: (id, patch) => project.goals.update(id, patch),
+    changedFiles: async (id) => (await goals.changes(id)).files.map((f) => f.path),
+    cwdOf: (goal) => goals.cwdOf(goal),
+    openPr: (id) => goals.openPr(id, {}),
+    isRunning: (id) => goals.isRunning(id),
+  });
+  const autopilot = new AutopilotService({
+    root: project.root,
+    goals: autopilotGoals,
+    detail: (id) => sentry.detail(id),
+    template: () => project.goalTemplates.get(AUTOPILOT_TEMPLATE),
+    bots: () => project.bots.list(),
+    settings: () => project.settings.get(),
+    notify: (n) => void notifications.create(n),
+    audit: (e) => audit.record(e),
+    guard: (text, source) => security.guardUntrusted(text, source, {}),
+    impact: (files) => context.reader.impactSet(files).modules.length,
+    scratchDir: path.join(worktreeHome(project.root), '.autopilot'),
+  });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, autopilot });
   const goals = new GoalRunner({
     project,
     team,
@@ -159,6 +186,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     humanName,
     onDone: (goal, files) => void context.onGoalDone(goal, files),
     proof,
+    autopilot,
   });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
@@ -331,12 +359,13 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     ledgerSince: (since) => ledger.list({ since }),
     spentToday: () => ledger.spentToday(),
     settings: () => project.settings.get(),
-    sentryIssues: async () => {
+    sentryIssues: async (o) => {
       const st = sentry.status();
       if (!st.config || !st.hasToken) return null;
-      const page = await sentry.issues({ sort: 'new', period: '24h', status: 'unresolved' });
+      const page = await sentry.issues({ sort: o?.sort ?? 'new', period: '24h', status: 'unresolved' });
       return page.issues;
     },
+    startAutopilot: (issueId, o) => autopilot.startFromSentry(issueId, { ...o, by: 'automation' }),
     githubCards: async () => {
       if (!github.config()) return null;
       const board = await github.board({ refresh: true });
@@ -407,6 +436,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     trackers,
     teams,
     reviews,
+    autopilot,
     humanName,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),

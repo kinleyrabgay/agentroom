@@ -21,6 +21,7 @@ import { compact } from "../lib/format"
 import { setSentry, useSentryStore } from "../lib/sentry-store"
 import { shortRef } from "./issue-card"
 import { StackTrace } from "./stack-trace"
+import { AutopilotSection } from "@/features/autopilot/components/autopilot-section"
 
 const BREADCRUMBS_SHOWN = 30
 const HANDOFF_ID = "sentry-handoff"
@@ -100,6 +101,8 @@ export function SentryIssueInspector({ id }: { id: string }) {
         ) : (
           <EventSections detail={detail} />
         )}
+
+        <AutopilotSection issueId={issue.id} shortId={issue.shortId} />
 
         <HandoffSection
           id={HANDOFF_ID}

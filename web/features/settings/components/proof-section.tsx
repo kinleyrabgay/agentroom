@@ -102,6 +102,36 @@ export function QualitySection() {
         <TextRow id="q-build" label="Build command" hint="Runs in the goal's folder and on the starting commit." placeholder="npm run build" value={value.buildCommand} disabled={!value.bundle} onCommit={(buildCommand) => update({ buildCommand })} nested />
         <TextRow id="q-out" label="Output folder" hint="Leave empty to detect (.next/static, dist, build, out)." placeholder="dist" value={value.bundleDir} disabled={!value.bundle} onCommit={(bundleDir) => update({ bundleDir })} nested />
         <NumberRow id="q-growth" label="Allowed growth (%)" hint="Fail when the output grows more than this." value={value.maxBundleGrowthPct} min={0} max={1000} disabled={!value.bundle} onCommit={(maxBundleGrowthPct) => update({ maxBundleGrowthPct })} nested />
+        <Separator />
+        <Row id="q-design" label="Design match" hint="Implement design goals: render the page at the frame's size and score it against the Figma frame or design image.">
+          <Switch id="q-design" checked={value.design} onCheckedChange={(design) => update({ design })} />
+        </Row>
+        <NumberRow id="q-design-min" label="Fail below (score)" hint="0–100: structure, pixels and proportions combined." value={value.minDesignMatch} min={0} max={100} disabled={!value.design} onCommit={(minDesignMatch) => update({ minDesignMatch })} nested />
+      </div>
+    </SettingsCard>
+  )
+}
+
+/** Incident autopilot: whether a fix may open its PR without you, and how sure it must be. */
+export function AutopilotSettingsSection() {
+  const { value, update, status } = useSettingsSection("autopilot")
+  if (!value) return <SettingsCard id={SettingsSection.Autopilot}>{null}</SettingsCard>
+  return (
+    <SettingsCard id={SettingsSection.Autopilot} aside={<SaveIndicator status={status} />}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Add a Sentry trigger with <span className="font-medium text-foreground">run autopilot</span> (Automation), or press Run autopilot on an issue. The team reproduces the error and writes a
+          failing test; AgentRoom checks it fails before and passes after the fix, then scores its confidence.
+        </p>
+        <Row id="ap-auto" label="Allow PRs without me" hint="Off: every autopilot fix waits for you to review and open the PR. On: triggers set to “open the PR when confident” may open it on their own.">
+          <Switch id="ap-auto" checked={value.allowAutoPr} onCheckedChange={(allowAutoPr) => update({ allowAutoPr })} />
+        </Row>
+        <NumberRow id="ap-min" label="Minimum confidence" hint="A fix needs at least this score (0–100) and a test verified fail → pass." value={value.minConfidence} min={0} max={100} disabled={!value.allowAutoPr} onCommit={(minConfidence) => update({ minConfidence })} nested />
+        {value.allowAutoPr && (
+          <Callout tone="warning" title="PRs can open while you're away">
+            Only from triggers you set to open the PR when confident, and only after the failing test is verified on both commits. Every auto-opened PR is in the Audit log.
+          </Callout>
+        )}
       </div>
     </SettingsCard>
   )

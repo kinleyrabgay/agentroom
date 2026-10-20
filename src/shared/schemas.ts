@@ -66,6 +66,53 @@ export const TaskSchema = z.object({
   updatedAt: z.string(),
 });
 
+/** Incident autopilot: a goal started from a Sentry issue that must reproduce, fail first, then pass. */
+export const GoalAutopilotSchema = z.object({
+  source: z.literal('sentry'),
+  issueId: z.string(),
+  shortId: z.string(),
+  title: z.string(),
+  permalink: z.string().optional(),
+  triggerId: z.string().optional(),
+  /** The trigger allows opening the PR without a human (still needs settings.autopilot.allowAutoPr and enough confidence). */
+  autoPr: z.boolean().default(false),
+  status: z.enum(['reproducing', 'reproduced', 'not_reproduced', 'needs_human', 'verified', 'unverified', 'pr_opened', 'ready']).default('reproducing'),
+  /** Reported by the bot (autopilot_report). */
+  reproduced: z.boolean().optional(),
+  how: z.string().optional(),
+  test: z.object({ file: z.string(), command: z.string() }).optional(),
+  /** Measured by AgentRoom: the test fails on the starting commit and passes on the goal's branch. */
+  verification: z
+    .object({
+      failsOnBase: z.boolean().nullable(),
+      passesOnHead: z.boolean().nullable(),
+      at: z.string(),
+      detail: z.string().optional(),
+    })
+    .optional(),
+  confidence: z
+    .object({
+      score: z.number(),
+      at: z.string(),
+      factors: z.array(z.object({ label: z.string(), points: z.number(), max: z.number(), ok: z.boolean().nullable(), detail: z.string().optional() })),
+    })
+    .optional(),
+});
+
+/** "Implement design" goals: the design the Verify step compares the page against. */
+export const GoalDesignSchema = z.object({
+  source: z.enum(['figma', 'upload']),
+  figmaUrl: z.string().optional(),
+  fileKey: z.string().optional(),
+  nodeId: z.string().optional(),
+  /** Upload id of the design image (uploads, or the Figma export once fetched). */
+  uploadId: z.string().optional(),
+  /** Page to compare ("/pricing"). */
+  path: z.string().default('/'),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+});
+
 export const GoalSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -178,6 +225,10 @@ export const GoalSchema = z.object({
     .optional(),
   /** The human approved failing quality checks for this round. */
   proofOverride: z.object({ round: z.number(), at: z.string(), by: z.string() }).optional(),
+  /** Incident autopilot (Sentry → reproduce → failing test → fix → verify). */
+  autopilot: GoalAutopilotSchema.optional(),
+  /** Design to match (Implement design goals). */
+  design: GoalDesignSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -310,6 +361,19 @@ export const SettingsSchema = z.object({
       /** Build output folder to measure (default: detected, e.g. dist, .next/static, build). */
       bundleDir: z.string().default(''),
       maxBundleGrowthPct: z.number().min(0).default(10),
+      /** Compare the page with the design reference (Implement design goals). */
+      design: z.boolean().default(true),
+      /** Design match score (0–100) below which the check fails. */
+      minDesignMatch: z.number().min(0).max(100).default(70),
+    })
+    .prefault({}),
+  /** Incident autopilot (Sentry triggers with "Autopilot"). */
+  autopilot: z
+    .object({
+      /** Allow autopilot to open a PR without a human. Off by default: it always stops for you. */
+      allowAutoPr: z.boolean().default(false),
+      /** Confidence (0–100) a fix needs before a PR may open on its own. */
+      minConfidence: z.number().min(0).max(100).default(80),
     })
     .prefault({}),
   /** Where Browse skills searches. A private registry is just another `index` URL. */
@@ -402,16 +466,25 @@ export const TriggerSchema = z.object({
   name: z.string().min(1).max(120),
   enabled: z.boolean().default(true),
   when: z.discriminatedUnion('source', [
-    z.object({ source: z.literal('sentry'), event: z.literal('new_issue'), level: z.enum(['fatal', 'error', 'warning']).optional(), project: z.string().optional() }),
+    z.object({
+      source: z.literal('sentry'),
+      event: z.enum(['new_issue', 'spike']),
+      level: z.enum(['fatal', 'error', 'warning']).optional(),
+      project: z.string().optional(),
+      /** spike: events in the last `windowMin` minutes ≥ `factor` × the window before, and at least `minEvents`. */
+      spike: z.object({ factor: z.number().min(1.5).max(100).default(3), windowMin: z.number().int().min(10).max(1440).default(60), minEvents: z.number().int().min(1).default(10) }).optional(),
+    }),
     z.object({ source: z.literal('github'), event: z.literal('card_moved'), toColumn: z.string().min(1) }),
     z.object({ source: z.literal('goal'), event: z.literal('failed') }),
     z.object({ source: z.literal('linear'), event: z.literal('issue_moved'), toState: z.string().min(1) }),
     z.object({ source: z.literal('jira'), event: z.literal('issue_moved'), toState: z.string().min(1) }),
   ]),
   then: z.object({
-    type: z.enum(['handoff', 'goal', 'message', 'notify']),
+    type: z.enum(['handoff', 'goal', 'message', 'notify', 'autopilot']),
     botId: z.string().optional(),
     planOnly: z.boolean().default(true),
+    /** Autopilot: may open the PR on its own when confident enough (also needs settings.autopilot.allowAutoPr). */
+    autoPr: z.boolean().optional(),
     channel: z.enum(['inbox', 'slack', 'teams']).optional(),
     text: z.string().optional(),
   }),

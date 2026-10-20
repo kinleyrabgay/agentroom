@@ -3,6 +3,7 @@ import { request } from "./client"
 import type { BotMemory, GoalTemplateList, MemoryNote, RemoteStatus } from "@shared"
 import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
 import type { ProofAvailability, ProofScenario, ProofView } from "@shared"
+import type { AutopilotIssueRun } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
 
@@ -302,4 +303,11 @@ export const proofApi = {
   run: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/run`),
   override: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/override`),
   setScenarios: (goalId: string, scenarios: ProofScenario[]) => request<ProofScenario[]>("PUT", `/goals/${seg(goalId)}/proof/scenarios`, { scenarios }),
+}
+
+/** Incident autopilot (Sentry → reproduce → failing test → fix → verify). */
+export const autopilotApi = {
+  start: (issueId: string) => request<Goal>("POST", `/autopilot/sentry/${seg(issueId)}`),
+  runs: (issueId: string) => request<AutopilotIssueRun[]>("GET", `/autopilot/sentry/${seg(issueId)}`),
+  verify: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/autopilot/verify`),
 }
