@@ -95,6 +95,8 @@ export const AuditKind = {
   Mcp: 'mcp',
   /** Schedules and triggers: created, changed, fired. */
   Automation: 'automation',
+  /** Work from outside: Teams messages, Linear/Jira writes, PR reviews. */
+  Intake: 'intake',
 } as const;
 export type AuditKind = ValueOf<typeof AuditKind>;
 
@@ -112,6 +114,8 @@ export const ActorType = {
   Bot: 'bot',
   /** AgentRoom itself (workflow engine, scheduler, guards). */
   System: 'system',
+  /** Someone in an outside tool (a Teams user on the allow-list). */
+  External: 'external',
 } as const;
 export type ActorType = ValueOf<typeof ActorType>;
 

@@ -7,7 +7,7 @@ import {
   OctagonXIcon,
   PlugIcon,
   SquareKanbanIcon,
-  SunIcon, CalendarClockIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon, MapIcon, FileTextIcon, MessageSquareTextIcon } from "lucide-react"
+  SunIcon, CalendarClockIcon, GitPullRequestIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon, MapIcon, FileTextIcon, MessageSquareTextIcon } from "lucide-react"
 import { ClientMessageType, GoalStatus, type ContextHit } from "@shared"
 import { BotTab, View } from "@/lib/constants"
 import { VIEW_META } from "@/lib/views"
@@ -18,6 +18,7 @@ import { contextApi } from "@/lib/api/endpoints"
 import { askAbout, loadGraph, openModule, setContext, setContextTab, useContextStore } from "@/features/context/lib/context-store"
 import { openHit } from "@/features/context/components/context-search"
 import { startSync } from "@/features/context/lib/actions"
+import { setReviews } from "@/features/reviews/lib/review-store"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { ToneDot } from "@/components/kit/badge"
 import {
@@ -40,6 +41,9 @@ const PAGES: View[] = [
   View.Context,
   View.Automation,
   View.Github,
+  View.Reviews,
+  View.Linear,
+  View.Jira,
   View.Sentry,
   View.Browser,
   View.Security,
@@ -288,7 +292,18 @@ export function CommandPalette() {
               <CalendarClockIcon className="size-4 text-muted-foreground" /> New schedule
             </CommandItem>
             <CommandItem
-              value="new trigger when sentry github automation"
+              value="review a pull request pr link github reviewer"
+              onSelect={() =>
+                run(() => {
+                  setReviews({ openId: null })
+                  app().setView(View.Reviews)
+                })
+              }
+            >
+              <GitPullRequestIcon className="size-4 text-muted-foreground" /> Review a pull request…
+            </CommandItem>
+            <CommandItem
+              value="new trigger when sentry github linear jira automation"
               onSelect={() =>
                 run(() => {
                   app().setView(View.Automation)

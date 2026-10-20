@@ -43,9 +43,16 @@ import { AutomationRepository, parseOwner } from '../core/repositories/automatio
 import { AutomationService } from './automation/automation.service.js';
 import { backgroundStatus, clearSession, installBackground, uninstallBackground, writeSession } from './runner/background.js';
 import { composeBrief } from '../core/repositories/goal-template.repository.js';
-import { ActorType, AuditKind, StateType } from '../shared/enums.js';
+import { ActorType, AuditKind, NotificationKind, StateType } from '../shared/enums.js';
 import { ContextService } from './context/context.service.js';
 import { ProofService } from './proof/proof.service.js';
+import { TrackerService } from './integrations/issues/tracker.service.js';
+import { IssueSources } from './integrations/issues/issue-source.js';
+import { githubSource, sentrySource } from './integrations/issues/adapters.js';
+import { GoalWatch, startedBuilding } from './intake/goal-watch.js';
+import { IntakeService } from './intake/intake.service.js';
+import { TeamsService } from './intake/teams/teams.service.js';
+import { PrReviewService } from './review/pr-review.service.js';
 
 export interface StartOptions {
   root: string;
@@ -108,7 +115,12 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     bots: () => project.bots.list(),
   });
   permissions.useMcp(mcp);
-  const boardChanged = () => pushBoard(project, hub);
+  // Goal-level events (status moved, PR opened) for integrations that report outside AgentRoom.
+  const goalWatch = new GoalWatch();
+  const boardChanged = () => {
+    pushBoard(project, hub);
+    goalWatch.check(project.goals.list());
+  };
   const uploads = new UploadStore(project.paths.uploads, project.root);
   uploads.prune();
   const context = new ContextService({
@@ -199,6 +211,76 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     audit: (e) => audit.record(e),
     reasonOf: (id) => requestReasons.get(id),
   });
+  // Intake: Linear/Jira, every issue source behind one interface, Teams, PR reviews.
+  const intakeAudit = (summary: string, detail?: Record<string, unknown>) => {
+    const by = typeof detail?.by === 'string' ? detail.by : null;
+    audit.record({
+      kind: AuditKind.Intake,
+      actor: by?.startsWith('sync rule') ? { type: ActorType.Policy, name: by } : { type: ActorType.Human, name: humanName() },
+      summary,
+      ...(detail ? { detail } : {}),
+    });
+  };
+  const integrationsDir = path.join(project.paths.dir, 'integrations');
+  const tracker = (id: 'linear' | 'jira') =>
+    new TrackerService({
+      tracker: id,
+      dir: integrationsDir,
+      root: project.root,
+      secrets,
+      bots: () => project.bots.list(),
+      startGoal: (brief, title, sources) => goals.start(brief, title, sources),
+      sendToBot: (botId, text) => void team.send(botId, text).catch(() => {}),
+      guard: (text, source) => security.guardUntrusted(text, source, {}),
+      audit: intakeAudit,
+    });
+  const trackers = { linear: tracker('linear'), jira: tracker('jira') };
+  const sources = new IssueSources()
+    .add(githubSource(github, handoff))
+    .add(sentrySource(sentry, sentryHandoff))
+    .add(trackers.linear.asSource())
+    .add(trackers.jira.asSource());
+  const intake = new IntakeService({
+    goals: { list: () => goals.list(), start: (brief, title) => goals.start(brief, title), approve: (id) => goals.approve(id), replan: (id, fb) => goals.replan(id, fb) },
+    gate: permissions,
+    sources,
+    inspect: (text, source) => security.inspect(text, source, {}),
+    botName: (id) => project.bots.get(id)?.name ?? id,
+    audit: (e) => audit.record(e),
+  });
+  const teams = new TeamsService({
+    configFile: path.join(integrationsDir, 'teams.json'),
+    stateFile: path.join(project.paths.runs, 'teams.json'),
+    secrets,
+    intake,
+    goals: { list: () => goals.list(), approve: (id) => goals.approve(id) },
+    tunnelUrl: () => {
+      const st = remote.status();
+      return st.state === 'on' ? st.url : undefined;
+    },
+    audit: (e) => audit.record(e),
+  });
+  goalWatch.on((c) => teams.onGoalChange(c));
+  goalWatch.on((c) => {
+    const event = startedBuilding(c) ? 'started' : c.kind === 'pr' ? 'pr' : null;
+    if (!event) return;
+    for (const t of Object.values(trackers)) {
+      void t.onGoalEvent(c.goal, event).then((errors) => {
+        if (errors.length) void notifications.create({ kind: NotificationKind.Info, title: `${t.label} status sync failed`, body: errors.join('\n'), goalId: c.goal.id });
+      });
+    }
+  });
+  goalWatch.check(project.goals.list());
+  const reviews = new PrReviewService({
+    root: project.root,
+    file: path.join(project.paths.runs, 'reviews.json'),
+    diffDir: path.join(project.paths.runs, 'reviews'),
+    worktreeDir: worktreeHome(project.root),
+    bots: () => project.bots.list(),
+    dispatch: (botId, text, o) => team.dispatch(botId, text, 'human', { cwd: o.cwd }),
+    strict: (botId, reason) => permissions.setStrict(botId, reason),
+    audit: (e) => audit.record(e),
+  });
   const runnerOpts = { root: project.root, port: opts.port, provider: provider.id, logFile: project.paths.daemonLog };
   const automation = new AutomationService({
     repo: new AutomationRepository(
@@ -226,10 +308,17 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     setGoalBudget: (id, usd) => void goals.update(id, { budgetUsd: usd }),
     goals: () => goals.list(),
     sendToBot: (botId, text) => void team.send(botId, text).catch(() => {}),
-    handoff: (source, input) =>
-      source === 'github'
-        ? handoff.handoff({ itemIds: input.ids, ...(input.botId ? { botId: input.botId } : {}), ...(input.note ? { note: input.note } : {}) })
-        : sentryHandoff({ issueIds: input.ids, ...(input.botId ? { botId: input.botId } : {}), ...(input.note ? { note: input.note } : {}) }),
+    handoff: (source, input) => {
+      const s = sources.get(source);
+      if (!s) throw new Error(`Unknown source "${source}".`);
+      return s.handoff(input);
+    },
+    trackerIssues: async (id) => {
+      const t = trackers[id];
+      if (!t.ready()) return null;
+      const page = await t.issues({}, { refresh: true });
+      return page.issues.map((i) => ({ id: i.id, title: `${i.key}: ${i.title}`, url: i.url, status: i.state.name }));
+    },
     notify: (n) => void notifications.create(n),
     notifications: () => notifications.list(),
     pendingApprovals: () => permissions.pendingRequests().length,
@@ -291,6 +380,9 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     uploads,
     context,
     proof,
+    trackers,
+    teams,
+    reviews,
     humanName,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),
@@ -326,6 +418,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       context.stop();
       clearSession(project.paths.sessionFile);
       remote.close();
+      teams.close();
       previews.closeAll();
       await stopWatching();
       server.close();

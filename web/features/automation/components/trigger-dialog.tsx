@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import type { AutomationScope, Trigger, TriggerThen, TriggerWhen } from "@shared"
 import { ScopeField } from "./scope-field"
 import { automationApi, githubApi, sentryApi, type TriggerInput } from "@/lib/api/endpoints"
+import { trackerApi } from "@/lib/api/intake-endpoints"
 import { useAppStore } from "@/lib/store/app-store"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -52,6 +53,9 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
   const [level, setLevel] = useState<string>(trigger?.when.source === "sentry" ? (trigger.when.level ?? ANY) : "fatal")
   const [project, setProject] = useState<string>(trigger?.when.source === "sentry" ? (trigger.when.project ?? ANY) : ANY)
   const [column, setColumn] = useState<string>(trigger?.when.source === "github" ? trigger.when.toColumn : "")
+  const [toState, setToState] = useState<string>(trigger?.when.source === "linear" || trigger?.when.source === "jira" ? trigger.when.toState : "")
+  const [trackerStates, setTrackerStates] = useState<Record<"linear" | "jira", string[]>>({ linear: [], jira: [] })
+  const [trackersReady, setTrackersReady] = useState<{ linear: boolean; jira: boolean }>({ linear: false, jira: false })
   const [thenType, setThenType] = useState<TriggerThen["type"]>(trigger?.then.type ?? "handoff")
   const [botId, setBotId] = useState<string>(trigger?.then.botId ?? lead?.id ?? "")
   const [planOnly, setPlanOnly] = useState<"plan" | "build">(trigger?.then.planOnly === false ? "build" : "plan")
@@ -78,6 +82,20 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
         setColumn((c) => c || cols.find((x) => /ready|todo|to do/i.test(x)) || cols[0] || "")
       })
       .catch(() => {})
+    trackerApi
+      .all()
+      .then((all) => {
+        const ready = { linear: !!all.linear.config && all.linear.hasToken, jira: !!all.jira.config && all.jira.hasToken }
+        setTrackersReady(ready)
+        for (const id of ["linear", "jira"] as const) {
+          if (!ready[id]) continue
+          trackerApi
+            .issues(id, {})
+            .then((p) => setTrackerStates((s) => ({ ...s, [id]: p.states.map((x) => x.name) })))
+            .catch(() => {})
+        }
+      })
+      .catch(() => {})
   }, [])
 
   // A failed goal can't be handed off; pick the closest action.
@@ -87,14 +105,21 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
   const effectiveThen = thenOptions.some((o) => o.value === thenType) ? thenType : thenOptions[0]!.value
   const botOptions = bots.map((b) => ({ label: b.name, value: b.id }))
 
+  const tracker = source === "linear" || source === "jira" ? source : null
+  // The state pill shows the first state until one is picked; save what's shown.
+  const stateValue = tracker ? toState.trim() || trackerStates[tracker][0] || "" : ""
+
   const save = async () => {
     const when: TriggerWhen =
       source === "sentry"
         ? { source, event: "new_issue", ...(level !== ANY ? { level: level as "fatal" } : {}), ...(project !== ANY ? { project } : {}) }
         : source === "github"
           ? { source, event: "card_moved", toColumn: column }
-          : { source, event: "failed" }
+          : source === "linear" || source === "jira"
+            ? { source, event: "issue_moved", toState: stateValue }
+            : { source, event: "failed" }
     if (source === "github" && !column) return toast.error("Pick the column.")
+    if (tracker && !stateValue) return toast.error("Pick the state.")
     const then: TriggerThen = {
       type: effectiveThen,
       planOnly: planOnly === "plan",
@@ -145,7 +170,18 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
       <div className="space-y-4 rounded-2xl border bg-surface p-4">
         <div className="flex flex-wrap items-center gap-2 text-[15px]">
           <span>When</span>
-          <Pill label="sources" value={source} onChange={setSource} options={[{ label: "Sentry", value: "sentry" }, { label: "GitHub", value: "github" }, { label: "a goal", value: "goal" }]} />
+          <Pill
+            label="sources"
+            value={source}
+            onChange={setSource}
+            options={[
+              { label: "Sentry", value: "sentry" },
+              { label: "GitHub", value: "github" },
+              ...(trackersReady.linear || source === "linear" ? [{ label: "Linear", value: "linear" as const }] : []),
+              ...(trackersReady.jira || source === "jira" ? [{ label: "Jira", value: "jira" as const }] : []),
+              { label: "a goal", value: "goal" },
+            ]}
+          />
           {source === "sentry" && (
             <>
               <span>reports a new issue with</span>
@@ -161,6 +197,16 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
                 <Pill label="columns" value={column} onChange={setColumn} options={columns.map((c) => ({ label: c, value: c }))} />
               ) : (
                 <Input value={column} onChange={(e) => setColumn(e.target.value)} placeholder="Ready" className="h-8 w-36" aria-label="Column" />
+              )}
+            </>
+          )}
+          {(source === "linear" || source === "jira") && (
+            <>
+              <span>issue moves to</span>
+              {trackerStates[source].length ? (
+                <Pill label="states" value={stateValue} onChange={setToState} options={trackerStates[source].map((c) => ({ label: c, value: c }))} />
+              ) : (
+                <Input value={toState} onChange={(e) => setToState(e.target.value)} placeholder="Ready for dev" className="h-8 w-40" aria-label="State" />
               )}
             </>
           )}
@@ -229,5 +275,6 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
 function defaultName(w: TriggerWhen): string {
   if (w.source === "sentry") return `New ${w.level ?? ""} Sentry issues${w.project ? ` in ${w.project}` : ""}`.replace(/\s+/g, " ")
   if (w.source === "github") return `Cards moved to ${w.toColumn}`
+  if (w.source === "linear" || w.source === "jira") return `${w.source === "linear" ? "Linear" : "Jira"} issues moved to ${w.toState}`
   return "Failed goals"
 }

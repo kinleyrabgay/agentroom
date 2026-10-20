@@ -17,6 +17,12 @@ export const View = {
   /** The GitHub Project board (was "Board"). */
   Github: "github",
   Sentry: "sentry",
+  /** Linear issues (shown once connected). */
+  Linear: "linear",
+  /** Jira issues (shown once connected). */
+  Jira: "jira",
+  /** Pull requests the Reviewer drafted a review for. */
+  Reviews: "reviews",
   Browser: "browser",
   Security: "security",
   Audit: "audit",

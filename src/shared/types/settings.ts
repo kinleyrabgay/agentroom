@@ -12,6 +12,13 @@ export interface IntegrationSecrets {
   smtp?: { host: string; port: number; secure: boolean; user?: string; pass?: string; from: string; to: string };
   /** Values for `${secret:NAME}` references in mcp.json (tokens, API keys). */
   mcp?: Record<string, string>;
+  /** Linear personal API key. */
+  linearApiKey?: string;
+  /** Jira Cloud account email + API token. */
+  jiraEmail?: string;
+  jiraToken?: string;
+  /** Security token (base64 HMAC key) of the Teams outgoing webhook. */
+  teamsOutgoingSecret?: string;
 }
 
 /** What GET /api/integrations returns: which secrets are set, never their values. */

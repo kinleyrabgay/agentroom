@@ -6,6 +6,7 @@ import {
   FilePenLineIcon,
   GitPullRequestIcon,
   HandIcon,
+  InboxIcon,
   SendIcon,
   ShieldIcon,
   SmartphoneIcon,
@@ -13,6 +14,7 @@ import {
   TargetIcon,
   UploadIcon,
   UserIcon,
+  UsersIcon,
   WalletIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -34,6 +36,7 @@ export const KIND_META: Record<AuditKind, { label: string; icon: LucideIcon }> =
   [AuditKind.Mcp]: { label: "MCP", icon: PlugIcon },
   [AuditKind.Automation]: { label: "Automation", icon: CalendarClockIcon },
   [AuditKind.Goal]: { label: "Goal", icon: TargetIcon },
+  [AuditKind.Intake]: { label: "Intake", icon: InboxIcon },
 }
 
 /** Kinds whose summary is a command or a path (shown in monospace). */
@@ -46,6 +49,7 @@ export const ACTOR_META: Record<ActorType, { label: string; icon: LucideIcon; to
   [ActorType.Remote]: { label: "Remote", icon: SmartphoneIcon, tone: "warning" },
   [ActorType.Bot]: { label: "Bot", icon: BotIcon, tone: "success" },
   [ActorType.System]: { label: "AgentRoom", icon: WorkflowIcon, tone: "neutral" },
+  [ActorType.External]: { label: "Teams", icon: UsersIcon, tone: "brand" },
 }
 
 export const AUDIT_PAGE_SIZE = 50
