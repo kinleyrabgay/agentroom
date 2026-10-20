@@ -7,3 +7,5 @@ web/out/
 web/node_modules/
 # AgentRoom running on its own repo (local dogfooding, never shipped)
 .agentroom/
+# Claude Code local worktrees
+.claude/worktrees/
