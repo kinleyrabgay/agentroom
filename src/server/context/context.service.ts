@@ -42,6 +42,7 @@ import {
   type SyncSummary,
 } from '../../core/context/index.js';
 import type { Hub } from '../realtime/hub.js';
+import { KnowledgeService, type Answerer } from './knowledge.service.js';
 
 /** Measured on Haiku 4.5: ~6-8k tokens in, ~600 out, about two cents a card. */
 const USD_PER_CARD = 0.02;
@@ -64,6 +65,10 @@ export interface ContextServiceDeps {
   generator?: (model: string, onCost: (usd: number) => void) => CardGenerator;
   /** Tests shorten the debounce. */
   autoSyncDelayMs?: number;
+  /** Swap the Ask bot (tests). */
+  answerer?: Answerer;
+  /** Who's using it (git user); tests override. */
+  user?: () => string;
 }
 
 export interface SyncRequest {
@@ -86,8 +91,22 @@ export class ContextService {
   private statusCache: ContextStatus | null = null;
   private statusAt = 0;
 
+  /** Ask the codebase, generated docs and the onboarding tour. */
+  readonly knowledge: KnowledgeService;
+
   constructor(private readonly deps: ContextServiceDeps) {
     this.reader = new ContextReader(deps.root);
+    this.knowledge = new KnowledgeService({
+      root: deps.root,
+      reader: this.reader,
+      settings: deps.settings,
+      ...(deps.record ? { record: deps.record } : {}),
+      ...(deps.dayRemaining ? { dayRemaining: deps.dayRemaining } : {}),
+      ...(deps.answerer ? { answerer: deps.answerer } : {}),
+      ...(deps.user ? { user: deps.user } : {}),
+      setNotes: (id, text) => void this.setNotes(id, text),
+      ledgerId: CONTEXT_LEDGER_ID,
+    });
   }
 
   enabled(): boolean {

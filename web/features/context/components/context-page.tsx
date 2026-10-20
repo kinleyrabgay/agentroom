@@ -18,7 +18,11 @@ import { ToneDot } from "@/components/kit/badge"
 import { PageActions } from "@/components/layout/page-actions"
 import { areaLayout } from "../lib/layout"
 import { CARD_STATUS } from "../lib/meta"
-import { loadGraph, openModule, setContext, useContextStore } from "../lib/context-store"
+import { loadGraph, openModule, setContext, setContextTab, useContextStore, type ContextTab } from "../lib/context-store"
+import { Segmented, type SegmentedOption } from "@/components/kit/segmented"
+import { AskPage } from "./ask-page"
+import { DocsPage } from "./docs-page"
+import { TourPage } from "./tour-page"
 import { startSync } from "../lib/actions"
 import { AreaNode, ModuleNode, type AreaNodeData, type ModuleNodeData } from "./module-node"
 import { ContextSearch } from "./context-search"
@@ -33,6 +37,7 @@ export function ContextPage() {
   const status = useContextStore((s) => s.status)
   const graph = useContextStore((s) => s.graph)
   const graphError = useContextStore((s) => s.graphError)
+  const tab = useContextStore((s) => s.tab)
 
   useEffect(() => {
     if (!useContextStore.getState().status)
@@ -56,6 +61,12 @@ export function ContextPage() {
         <Disabled />
       ) : !status.built ? (
         <NotBuilt status={status} />
+      ) : tab === "ask" ? (
+        <AskPage />
+      ) : tab === "tour" ? (
+        <TourPage />
+      ) : tab === "docs" ? (
+        <DocsPage />
       ) : graphError && !graph ? (
         <ErrorState error={graphError} onRetry={() => void loadGraph()} />
       ) : !graph ? (
@@ -109,12 +120,37 @@ function NotBuilt({ status }: { status: ContextStatus }) {
   )
 }
 
+const TAB_OPTIONS: SegmentedOption<ContextTab>[] = [
+  { value: "map", label: "Map" },
+  { value: "ask", label: "Ask" },
+  { value: "tour", label: "Tour" },
+  { value: "docs", label: "Docs" },
+]
+
 function Toolbar({ status }: { status: ContextStatus }) {
   const impactOn = useContextStore((s) => s.impactOn)
+  const tab = useContextStore((s) => s.tab)
   const sha = status.indexedSha?.slice(0, 7)
   return (
     <>
-      <span className="hidden text-xs whitespace-nowrap text-muted-foreground tabular-nums xl:inline" title={status.indexedAt ?? undefined}>
+      <Segmented size="sm" value={tab} onChange={setContextTab} options={TAB_OPTIONS} aria-label="Context view" />
+      {tab === "map" && <MapTools status={status} sha={sha} impactOn={impactOn} />}
+      {/* On a phone the tabs need the room; search and sync stay on the map. */}
+      {tab !== "map" && (
+        <div className="hidden md:contents">
+          <ContextSearch />
+          <SyncButton status={status} />
+        </div>
+      )}
+      {tab === "map" && <SyncButton status={status} />}
+    </>
+  )
+}
+
+function MapTools({ status, sha, impactOn }: { status: ContextStatus; sha?: string; impactOn: boolean }) {
+  return (
+    <>
+      <span className="hidden text-xs whitespace-nowrap text-muted-foreground tabular-nums 2xl:inline" title={status.indexedAt ?? undefined}>
         {sha ? <span className="font-mono">{sha}</span> : "no git"}
         {status.indexedAt ? ` · ${timeAgo(Date.parse(status.indexedAt))}` : ""}
       </span>
@@ -136,7 +172,6 @@ function Toolbar({ status }: { status: ContextStatus }) {
       <Button size="sm" variant="outline" onClick={() => setContext({ indexOpen: true })} title="The map every bot gets in its instructions">
         <EyeIcon data-icon="inline-start" /> What bots see
       </Button>
-      <SyncButton status={status} />
     </>
   )
 }

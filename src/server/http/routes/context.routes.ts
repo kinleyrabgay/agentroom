@@ -55,6 +55,48 @@ export function contextRoutes(app: Hono, context: ContextService, audit: HumanAu
       return out;
     });
   });
+  // ── Knowledge: ask, docs, tour ──
+  const k = context.knowledge;
+  app.get('/context/asks', (c) => respond(c, () => k.history()));
+  app.post('/context/ask', async (c) => {
+    const { question } = await body<{ question?: string }>(c);
+    return respond(c, () => {
+      if (typeof question !== 'string' || !question.trim()) throw new Error('Send { question }.');
+      return k.ask(question, { signal: c.req.raw.signal });
+    });
+  });
+  app.delete('/context/asks/:id', (c) => respond(c, () => k.deleteAsk(c.req.param('id'))));
+  app.post('/context/asks/:id/pin', async (c) => {
+    const { moduleId } = await body<{ moduleId?: string }>(c);
+    return respond(c, () => {
+      if (typeof moduleId !== 'string' || !moduleId) throw new Error('Send { moduleId }.');
+      const out = k.pin(c.req.param('id'), moduleId);
+      audit(AuditKind.Settings, `Ask answer pinned to ${moduleId} notes`);
+      return out;
+    });
+  });
+  app.get('/context/docs', (c) => respond(c, () => k.docsPreview()));
+  app.post('/context/docs/:id/write', async (c) => {
+    const { sections } = await body<{ sections?: string[] }>(c);
+    return respond(c, () => {
+      const id = c.req.param('id');
+      if (id !== 'architecture' && id !== 'decisions') throw new Error(`Unknown doc "${id}".`);
+      if (sections !== undefined && (!Array.isArray(sections) || sections.some((s) => typeof s !== 'string'))) throw new Error('"sections" must be a list of section ids.');
+      const out = k.writeDoc(id, sections?.length ? sections : undefined);
+      audit(AuditKind.Settings, `Generated ${out.path}${sections?.length ? ` (${sections.join(', ')})` : ''}`);
+      return out;
+    });
+  });
+  app.get('/context/tour', (c) => respond(c, () => k.tour()));
+  app.patch('/context/tour', async (c) => {
+    const patch = await body<{ done?: Record<string, boolean>; current?: string | null; reset?: boolean }>(c);
+    return respond(c, () => {
+      if (patch.done !== undefined && (typeof patch.done !== 'object' || patch.done === null || Object.values(patch.done).some((v) => typeof v !== 'boolean'))) throw new Error('"done" maps module ids to true/false.');
+      if (patch.current !== undefined && patch.current !== null && typeof patch.current !== 'string') throw new Error('"current" must be a module id.');
+      return k.tourProgress(patch);
+    });
+  });
+
   app.patch('/context/module/:id/decisions', async (c) => {
     const { decisions } = await body<{ decisions?: string[] }>(c);
     return respond(c, () => {

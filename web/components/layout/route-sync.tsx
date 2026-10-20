@@ -5,7 +5,7 @@ import { BotTab, View } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { useGithubStore } from "@/features/github/lib/github-store"
 import { setSentry, useSentryStore } from "@/features/sentry/lib/sentry-store"
-import { openModule, useContextStore } from "@/features/context/lib/context-store"
+import { CONTEXT_TABS, openModule, setContextTab, useContextStore, type ContextTab } from "@/features/context/lib/context-store"
 
 /**
  * Hash routes for a static export (the session token stays in the query string):
@@ -13,7 +13,7 @@ import { openModule, useContextStore } from "@/features/context/lib/context-stor
  *   #/team                      #/inbox
  *   #/work/G-3/T-2              #/github/<itemId>
  *   #/sentry/<issueId>          #/browser
- *   #/context/<moduleId>
+ *   #/context/<moduleId>        #/context/ask|tour|docs[/<moduleId>]
  *   #/security?goal=G-1         #/audit
  *   #/settings/integrations
  *
@@ -56,7 +56,9 @@ export function currentHash(): string {
     const id = useSentryStore.getState().openIssueId
     if (id) parts.push(id)
   } else if (a.view === View.Context) {
-    const id = useContextStore.getState().openModuleId
+    const { openModuleId: id, tab } = useContextStore.getState()
+    // #/context/<module> on the map; #/context/<tab>[/<module>] elsewhere (and for modules named like a tab).
+    if (tab !== "map" || (id && CONTEXT_TABS.includes(id as ContextTab))) parts.push(tab)
     if (id) parts.push(id)
   } else if (a.view === View.Settings && a.settingsSection) {
     parts.push(a.settingsSection)
@@ -84,7 +86,13 @@ function apply(route: Route) {
   }))
   if (route.view === View.Github) useGithubStore.setState({ openItemId: a ?? null })
   if (route.view === View.Sentry) setSentry({ openIssueId: a ?? null })
-  if (route.view === View.Context && (a ?? null) !== useContextStore.getState().openModuleId) openModule(a ?? null)
+  if (route.view === View.Context) {
+    const isTab = !!a && CONTEXT_TABS.includes(a as ContextTab)
+    const tab: ContextTab = isTab ? (a as ContextTab) : "map"
+    const id = (isTab ? b : a) ?? null
+    if (tab !== useContextStore.getState().tab) setContextTab(tab)
+    if (id !== useContextStore.getState().openModuleId) openModule(id)
+  }
 }
 
 /** Mount once: reads the hash on load and on back/forward, writes it when navigation state changes. */

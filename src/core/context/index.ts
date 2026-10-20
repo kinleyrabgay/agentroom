@@ -31,3 +31,19 @@ export {
 export { ContextReader, tokenize, type ContextHit, type DepsDirection } from './query.js';
 export { appendDecision, isSyncing, rejectClaim, setDecisions, setHumanNotes, syncContext, CLAIM_SECTIONS, type ClaimSection, type SyncOptions, type SyncProgress, type SyncSummary } from './sync.js';
 export { EXPORT_END, EXPORT_START, exportContextBlock, upsertContextBlock } from './export.js';
+export { askSystemPrompt, citedModules, extractCitations, grepIndexed, isUnsure, readIndexed, stripLinkTargets, tidyAnswer, GREP_MAX_HITS, READ_MAX_LINES, type AnswerCite, type GrepHit } from './answer.js';
+export {
+  changedSections,
+  diffLines,
+  docSections,
+  mergeDoc,
+  readBlocks,
+  DOC_FILES,
+  DIAGRAM_EDGE_LIMIT,
+  DIAGRAM_MODULE_LIMIT,
+  type DiffLine,
+  type DocFileId,
+  type DocInput,
+  type DocSection,
+} from './docs.js';
+export { buildTour, type TourStage, type TourStep } from './tour.js';

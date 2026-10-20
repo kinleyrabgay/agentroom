@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useMemo } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
@@ -65,11 +65,12 @@ const components: Components = {
   ),
 }
 
-/** Safe markdown (GFM; raw HTML is not rendered). */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+/** Safe markdown (GFM; raw HTML is not rendered). `overrides` swaps individual elements (keep it stable). */
+export const Markdown = memo(function Markdown({ text, overrides }: { text: string; overrides?: Components }) {
+  const merged = useMemo(() => (overrides ? { ...components, ...overrides } : components), [overrides])
   return (
     <div className="text-sm break-words">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} skipHtml>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={merged} skipHtml>
         {text}
       </ReactMarkdown>
     </div>

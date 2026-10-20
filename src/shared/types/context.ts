@@ -131,3 +131,87 @@ export interface ContextIndexView {
   text: string;
   tokens: number;
 }
+
+// ── Knowledge: Ask, Docs, Tour ──────────────────────────────────────────────
+
+/** A `path:line` the Ask answer cited, checked against the fact graph. */
+export interface ContextAnswerCite {
+  raw: string;
+  file: string;
+  line?: number;
+  endLine?: number;
+  moduleId: string | null;
+  /** False when the file isn't indexed or the line is past its end. */
+  ok: boolean;
+}
+
+/** One question asked of the codebase and its cited answer. */
+export interface ContextAsk {
+  id: string;
+  question: string;
+  /** Markdown with `path:line` citations in backticks. */
+  answer: string;
+  cites: ContextAnswerCite[];
+  /** Modules the answer cites, most cited first. */
+  modules: string[];
+  /** The model said it isn't sure, or cited nothing that checks out. */
+  unsure: boolean;
+  ok: boolean;
+  error?: string;
+  model: string;
+  costUsd: number;
+  durationMs: number;
+  askedAt: string;
+  /** Who asked (git user). */
+  by: string;
+  pinnedTo?: string;
+}
+
+export type ContextDocFileId = 'architecture' | 'decisions';
+
+export interface ContextDocSection {
+  id: string;
+  title: string;
+  /** Differs from what's on disk. */
+  changed: boolean;
+}
+
+export interface ContextDiffLine {
+  kind: 'same' | 'add' | 'del' | 'gap';
+  text: string;
+  /** Line numbers in the old / new text (1-based). */
+  a?: number;
+  b?: number;
+}
+
+export interface ContextDocPreview {
+  id: ContextDocFileId;
+  /** Repo-relative target, e.g. docs/architecture.md. */
+  path: string;
+  exists: boolean;
+  sections: ContextDocSection[];
+  /** Changed lines with 3 lines of context; empty when nothing changed. */
+  diff: ContextDiffLine[];
+  added: number;
+  removed: number;
+}
+
+export interface ContextTourStep {
+  moduleId: string;
+  dir: string;
+  stage: 'start' | 'core' | 'features' | 'edges';
+  /** Why it's at this point of the tour ("Used by 12 modules"). */
+  why: string;
+  purpose: string;
+  keyFiles: { path: string; line?: number; note: string }[];
+  /** A question to try in Ask. */
+  tryAsk: string;
+  hasCard: boolean;
+}
+
+export interface ContextTour {
+  steps: ContextTourStep[];
+  /** This person's progress (module ids). */
+  done: string[];
+  current: string | null;
+}

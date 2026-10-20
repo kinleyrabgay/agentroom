@@ -9,6 +9,7 @@ import {
   FileCodeIcon,
   FlaskConicalIcon,
   HistoryIcon,
+  MessageSquareTextIcon,
   PencilIcon,
   RefreshCwIcon,
   ScrollTextIcon,
@@ -29,12 +30,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { Callout } from "@/components/kit/callout"
 import { ToneBadge } from "@/components/kit/badge"
 import { CARD_STATUS, moduleName, SECTION_TITLES } from "../lib/meta"
-import { openModule, putModule, setContext, useContextStore } from "../lib/context-store"
+import { askAbout, openModule, putModule, setContext, useContextStore } from "../lib/context-store"
 import { startSync } from "../lib/actions"
 
 const peek = (path: string, line?: number) => setContext({ peek: { path, ...(line ? { line } : {}) } })
@@ -135,6 +136,11 @@ function AskBot({ moduleId }: { moduleId: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuItem onSelect={() => askAbout(`In ${moduleId}: `)}>
+          <MessageSquareTextIcon /> Ask the codebase
+          <span className="ml-auto text-xs text-muted-foreground">read-only</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Opens the chat with this module as context</DropdownMenuLabel>
         {bots.map((b) => (
           <DropdownMenuItem key={b.id} onSelect={() => useAppStore.getState().draftToBot(b.id, `Using context module ${moduleId}: `)}>
