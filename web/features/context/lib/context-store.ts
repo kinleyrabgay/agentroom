@@ -22,7 +22,14 @@ export interface ContextState {
   impact: ContextImpact | null
   /** What bots see (INDEX.md) dialog. */
   indexOpen: boolean
+  /** Context page tab (`#/context/<tab>`). */
+  tab: ContextTab
+  /** Text waiting in the Ask box (set from ⌘K, the Tour and module panels). */
+  askDraft: { text: string; at: number } | null
 }
+
+export type ContextTab = "map" | "ask" | "tour" | "docs"
+export const CONTEXT_TABS: ContextTab[] = ["map", "ask", "tour", "docs"]
 
 export const useContextStore = create<ContextState>(() => ({
   status: null,
@@ -37,7 +44,19 @@ export const useContextStore = create<ContextState>(() => ({
   impactFiles: [],
   impact: null,
   indexOpen: false,
+  tab: "map",
+  askDraft: null,
 }))
+
+/** Switch the Context page tab; leaving the map closes its panels. */
+export function setContextTab(tab: ContextTab) {
+  setContext(tab === "map" ? { tab } : { tab, impactOn: false })
+}
+
+/** Open Ask with a question ready to send (or edit). */
+export function askAbout(text: string) {
+  setContext({ tab: "ask", impactOn: false, askDraft: { text, at: Date.now() } })
+}
 
 export const setContext = (patch: Partial<ContextState>) => useContextStore.setState(patch)
 

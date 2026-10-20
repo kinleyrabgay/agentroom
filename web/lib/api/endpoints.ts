@@ -3,6 +3,7 @@ import { request } from "./client"
 import type { BotMemory, GoalTemplateList, MemoryNote, RemoteStatus } from "@shared"
 import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
+import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -283,4 +284,12 @@ export const contextApi = {
   reject: (id: string, section: ContextClaimSection, index: number, reason: string) =>
     request<ContextModuleDetail>("POST", `/context/module/${seg(id)}/claims/${section}/${index}/reject`, { reason }),
   setDecisions: (id: string, decisions: string[]) => request<ContextModuleDetail>("PATCH", `/context/module/${seg(id)}/decisions`, { decisions }),
+  asks: () => request<ContextAsk[]>("GET", "/context/asks"),
+  ask: (question: string) => request<ContextAsk>("POST", "/context/ask", { question }),
+  deleteAsk: (id: string) => request<ContextAsk[]>("DELETE", `/context/asks/${seg(id)}`),
+  pinAsk: (id: string, moduleId: string) => request<ContextAsk>("POST", `/context/asks/${seg(id)}/pin`, { moduleId }),
+  docs: () => request<ContextDocPreview[]>("GET", "/context/docs"),
+  writeDoc: (id: ContextDocFileId, sections?: string[]) => request<ContextDocPreview>("POST", `/context/docs/${id}/write`, sections ? { sections } : {}),
+  tour: () => request<ContextTour>("GET", "/context/tour"),
+  tourProgress: (patch: { done?: Record<string, boolean>; current?: string | null; reset?: boolean }) => request<ContextTour>("PATCH", "/context/tour", patch),
 }

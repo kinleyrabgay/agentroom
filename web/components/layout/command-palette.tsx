@@ -7,7 +7,7 @@ import {
   OctagonXIcon,
   PlugIcon,
   SquareKanbanIcon,
-  SunIcon, CalendarClockIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon } from "lucide-react"
+  SunIcon, CalendarClockIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon, MapIcon, FileTextIcon, MessageSquareTextIcon } from "lucide-react"
 import { ClientMessageType, GoalStatus, type ContextHit } from "@shared"
 import { BotTab, View } from "@/lib/constants"
 import { VIEW_META } from "@/lib/views"
@@ -15,7 +15,7 @@ import { send } from "@/lib/realtime/socket"
 import { useAppStore } from "@/lib/store/app-store"
 import { openSchedule, openTrigger } from "@/features/automation/lib/ui-store"
 import { contextApi } from "@/lib/api/endpoints"
-import { loadGraph, openModule, setContext, useContextStore } from "@/features/context/lib/context-store"
+import { askAbout, loadGraph, openModule, setContext, setContextTab, useContextStore } from "@/features/context/lib/context-store"
 import { openHit } from "@/features/context/components/context-search"
 import { startSync } from "@/features/context/lib/actions"
 import { BotAvatar } from "@/components/shared/bot-avatar"
@@ -313,6 +313,46 @@ export function CommandPalette() {
                 }
               >
                 <EyeIcon className="size-4 text-muted-foreground" /> What bots see
+              </CommandItem>
+            )}
+            {codeReady && (
+              <CommandItem
+                value={`ask the codebase question ${q}`}
+                onSelect={() =>
+                  run(() => {
+                    app().setView(View.Context)
+                    askAbout(q.trim().length > 3 ? q.trim() : "")
+                  })
+                }
+              >
+                <MessageSquareTextIcon className="size-4 text-muted-foreground" />
+                <span className="truncate">{q.trim().length > 3 ? `Ask the codebase: “${q.trim()}”` : "Ask the codebase…"}</span>
+              </CommandItem>
+            )}
+            {codeReady && (
+              <CommandItem
+                value="onboarding tour learn codebase modules"
+                onSelect={() =>
+                  run(() => {
+                    app().setView(View.Context)
+                    setContextTab("tour")
+                  })
+                }
+              >
+                <MapIcon className="size-4 text-muted-foreground" /> Onboarding tour
+              </CommandItem>
+            )}
+            {codeReady && (
+              <CommandItem
+                value="generate architecture docs decisions diagram"
+                onSelect={() =>
+                  run(() => {
+                    app().setView(View.Context)
+                    setContextTab("docs")
+                  })
+                }
+              >
+                <FileTextIcon className="size-4 text-muted-foreground" /> Architecture docs
               </CommandItem>
             )}
             <CommandItem

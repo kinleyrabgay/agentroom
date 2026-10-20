@@ -26,21 +26,21 @@ const BLANK = "__blank__"
  * Start a goal: pick a template (Bug fix, New endpoint, …) or start blank, fill in its fields,
  * optionally set a budget and the security review. The Planner turns it into tasks for review.
  */
-export function NewGoalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function NewGoalDialog({ open, onOpenChange, initialBrief }: { open: boolean; onOpenChange: (open: boolean) => void; initialBrief?: string }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">{open && <NewGoalForm onDone={() => onOpenChange(false)} />}</DialogContent>
+      <DialogContent className="sm:max-w-2xl">{open && <NewGoalForm onDone={() => onOpenChange(false)} initialBrief={initialBrief} />}</DialogContent>
     </Dialog>
   )
 }
 
-function NewGoalForm({ onDone }: { onDone: () => void }) {
+function NewGoalForm({ onDone, initialBrief }: { onDone: () => void; initialBrief?: string }) {
   const showOnTasks = useAppStore((s) => s.showOnTasks)
   const teamDefault = useAppStore((s) => s.settings?.security.review) ?? SecurityReviewMode.Auto
   const [list, setList] = useState<GoalTemplateList | null>(null)
   const [picked, setPicked] = useState<string>(BLANK)
   const [fields, setFields] = useState<Record<string, string>>({})
-  const [brief, setBrief] = useState("")
+  const [brief, setBrief] = useState(initialBrief ?? "")
   const [title, setTitle] = useState("")
   const [budget, setBudget] = useState("")
   const [review, setReview] = useState<SecurityReviewMode | null>(null)
