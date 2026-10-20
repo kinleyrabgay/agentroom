@@ -19,6 +19,7 @@ import { IntegrationsSection } from "./integrations-section"
 import { SecuritySection } from "./security-section"
 import { ContextSection } from "./context-section"
 import { ProofSection, QualitySection } from "./proof-section"
+import { PacksSection } from "@/features/packs/components/packs-section"
 
 /** Settings: sticky section nav and one document column. Follows `#/settings/<section>`. */
 export function SettingsPage() {
@@ -88,6 +89,7 @@ export function SettingsPage() {
               <ContextSection />
               <ProofSection />
               <QualitySection />
+              <PacksSection />
               <AlertsSection />
               <RemoteSection />
               <RunnerSection />

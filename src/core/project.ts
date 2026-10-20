@@ -70,7 +70,8 @@ export class Project {
    * sharing it with the team (only `runs/` ignored in `.gitignore`).
    */
   init(opts: { private?: boolean } = {}): string[] {
-    const created = copyTreeIfMissing(templatesDir(), this.paths.dir);
+    // Packs are installed on request (`agentroom pack add`), not copied into every project.
+    const created = copyTreeIfMissing(templatesDir(), this.paths.dir, [], ['packs']);
     if (!fs.existsSync(this.paths.tasksFile)) {
       new BoardStore(this.paths.tasksFile).write({ version: 2, goals: [], tasks: [] });
       created.push(this.paths.tasksFile);
