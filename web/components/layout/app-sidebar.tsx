@@ -42,6 +42,8 @@ import { useFindingCounts } from "@/features/security/hooks/use-finding-counts"
 import { cn } from "@/lib/utils"
 import { useIsMember } from "@/features/room/lib/room-store"
 import { OWNER_ONLY_VIEWS } from "@/features/room/components/room-presence"
+import { RepoSwitcher } from "@/features/workspaces/components/repo-switcher"
+import { useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
 
 export function AppSidebar() {
   // Teammates in the team room: no owner-only pages (sources on the owner's tokens, settings) or skill editing.
@@ -50,6 +52,10 @@ export function AppSidebar() {
     <Sidebar variant="floating" collapsible="icon">
       <SidebarHeader className="gap-2">
         <ProjectHeader />
+        {/* Multi-repo workspaces: which repo the board and map show (renders nothing outside a workspace). */}
+        <ErrorBoundary label="Repo" compact fallback={null}>
+          <RepoSwitcher className="w-full max-w-none group-data-[collapsible=icon]:hidden [&>svg:last-child]:ml-auto" />
+        </ErrorBoundary>
         <SearchButton />
       </SidebarHeader>
       <SidebarContent>
@@ -72,6 +78,7 @@ export function AppSidebar() {
 
 function ProjectHeader() {
   const info = useAppStore((s) => s.info)
+  const workspace = useWorkspaceStore((s) => s.workspace)
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -80,8 +87,14 @@ function ProjectHeader() {
           <div className="grid min-w-0 flex-1 text-left leading-tight">
             <span className="truncate font-semibold tracking-tight">{APP_NAME}</span>
             <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-              {info?.name ?? "…"}
-              {info?.branch && (
+              {workspace ? (
+                <span className="truncate">
+                  Workspace {workspace.name} · {workspace.repos.length} repos
+                </span>
+              ) : (
+                (info?.name ?? "…")
+              )}
+              {!workspace && info?.branch && (
                 <>
                   <GitBranchIcon className="size-3" />
                   <span className="truncate font-mono">{info.branch}</span>

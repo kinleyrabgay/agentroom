@@ -59,12 +59,17 @@ import { TeamsService } from './intake/teams/teams.service.js';
 import { PrReviewService } from './review/pr-review.service.js';
 import { AUTOPILOT_TEMPLATE, AutopilotService, type AutopilotGoals } from './autopilot/autopilot.service.js';
 import { designReference, FIGMA_TOKEN_SECRET } from './autopilot/design.js';
+import { loadWorkspace, ProjectRegistry } from '../core/workspaces/index.js';
+import { WorkspaceService } from './workspaces/workspace.service.js';
+import { GoalRepos } from './workspaces/goal-repos.js';
 
 export interface StartOptions {
   root: string;
   port: number;
   provider: string;
   model?: string;
+  /** Multi-repo workspace to open (its primary repo must be `root`). */
+  workspace?: string;
 }
 
 export interface RunningServer {
@@ -81,6 +86,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const providerDeps = { engine: () => project.settings.get().engine, secret: (id: string) => secretsRef?.providerKey(id), bridge: hostBridge };
   const provider = createProvider(opts.provider, providerDeps);
   const providers = new ProviderPool(provider, providerDeps);
+  // Single-project mode is a one-repo registry; a workspace adds its other repos (each keeps its own .agentroom/).
+  const registry = opts.workspace ? ProjectRegistry.fromWorkspace(loadWorkspace(opts.workspace), project) : ProjectRegistry.single(project);
   const config = project.config.get();
   if (opts.model || opts.provider !== config.provider) {
     project.config.update({ provider: provider.id as typeof config.provider, ...(opts.model ? { model: opts.model } : {}) });
@@ -149,6 +156,31 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return cap === null ? undefined : cap - ledger.spentToday();
     },
   });
+  const workspace = new WorkspaceService({
+    registry,
+    primaryContext: context,
+    // The workspace's settings and budget (the primary repo's) apply to every repo's map.
+    makeContext: (repo) =>
+      new ContextService({
+        root: repo.root,
+        hub: { state: (m) => hub.state(m.type === StateType.Context ? { ...m, repo: repo.id } : m) },
+        settings: () => project.settings.get(),
+        record: (row) => ledger.record(row),
+        dayRemaining: () => {
+          const cap = project.settings.get().budgets.perDayUsd;
+          return cap === null ? undefined : cap - ledger.spentToday();
+        },
+      }),
+  });
+  const goalRepos = new GoalRepos({
+    registry,
+    update: (id, repos) => {
+      const goal = project.goals.update(id, { repos });
+      boardChanged();
+      return goal;
+    },
+    worktreesEnabled: () => project.settings.get().worktrees.enabled,
+  });
   const proof = new ProofService({
     root: project.root,
     runsDir: project.paths.runs,
@@ -181,7 +213,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     scratchDir: path.join(worktreeHome(project.root), '.autopilot'),
   });
   const engine = new EngineService({ project, ledger, secrets, providers, scratchDir: path.join(worktreeHome(project.root), '.evals') });
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, autopilot, providers, experiments: engine.experiments });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, autopilot, providers, experiments: engine.experiments, workspace });
   const goals = new GoalRunner({
     project,
     team,
@@ -196,6 +228,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     onDone: (goal, files) => void context.onGoalDone(goal, files),
     proof,
     autopilot,
+    repos: goalRepos,
+    onRepoDone: (repo, goal, files) => workspace.onGoalDone(repo, goal, files),
   });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
@@ -443,6 +477,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     security,
     uploads,
     context,
+    workspace,
     proof,
     trackers,
     teams,
@@ -456,7 +491,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       findings.push();
       mcp.push();
       automation.push();
-      context.push();
+      workspace.push();
     },
   });
   const stopWatching = watchProject(project, hub, () => void mcp.refresh(), () => context.changed());
@@ -471,6 +506,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   mcp.start();
   automation.start();
   context.start();
+  workspace.start();
   writeSession(project.paths.sessionFile, { port: opts.port, token, url, pid: process.pid, startedAt: new Date().toISOString() });
 
   return {
@@ -481,6 +517,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       mcp.stop();
       automation.stop();
       context.stop();
+      workspace.stop();
       clearSession(project.paths.sessionFile);
       remote.close();
       teams.close();

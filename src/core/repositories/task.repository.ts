@@ -3,7 +3,7 @@ import type { NewTaskInput, Task, TaskPatch } from '../../shared/types/index.js'
 import { applyPatch, nextId, type BoardStore, type Clearable } from './board.store.js';
 
 const TASK_PREFIX = 'T-';
-const CLEARABLE = ['assignee', 'blockedReason', 'goalId'] as const;
+const CLEARABLE = ['assignee', 'blockedReason', 'goalId', 'repo'] as const;
 
 export type TaskUpdate = Clearable<TaskPatch>;
 export interface TaskFilter {

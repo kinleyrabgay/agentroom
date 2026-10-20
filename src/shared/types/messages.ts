@@ -27,7 +27,7 @@ export type StateEvent =
   | { type: typeof StateType.Config; config: Config }
   | { type: typeof StateType.Mcp; mcp: McpSnapshot }
   | { type: typeof StateType.Automation; automation: AutomationSnapshot }
-  | { type: typeof StateType.Context; context: ContextStatus };
+  | { type: typeof StateType.Context; context: ContextStatus; /** Multi-repo workspaces: which repo (unset = primary). */ repo?: string };
 
 export interface HelloMessage {
   kind: typeof ServerMessageKind.Hello;

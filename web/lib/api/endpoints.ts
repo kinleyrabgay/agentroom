@@ -7,6 +7,7 @@ import type { AutopilotIssueRun } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
 import type { CostEstimate, EvalRun, Experiment, ExperimentResult, ExperimentVariant, GoalOutcome, ProviderStatus, Suggestion } from "@shared"
+import type { CrossRepoEdge, WorkspaceGraphView, WorkspaceView } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -49,10 +50,11 @@ export const skillApi = {
   remove: (name: string) => request("DELETE", `/skills/${seg(name)}`),
 }
 
-/** A task patch where `null` clears the assignee or the blocked reason. */
-export type TaskUpdate = Omit<TaskPatch, "assignee" | "blockedReason"> & {
+/** A task patch where `null` clears the assignee, the blocked reason or the repo (back to the workspace's primary). */
+export type TaskUpdate = Omit<TaskPatch, "assignee" | "blockedReason" | "repo"> & {
   assignee?: string | null
   blockedReason?: string | null
+  repo?: string | null
 }
 
 export type TaskCreate = Omit<NewTaskInput, "acceptance" | "createdBy"> & { acceptance?: string[] }
@@ -226,14 +228,14 @@ export const remoteApi = {
 
 /** A goal's own branch: diff review, review comments, per-task revert, PR, local merge, cleanup. */
 export const goalWorkApi = {
-  changes: (id: string) => request<GoalChanges>("GET", `/goals/${seg(id)}/changes`),
+  changes: (id: string, repo?: string) => request<GoalChanges>("GET", `/goals/${seg(id)}/changes${qs({ repo })}`),
   addComment: (id: string, comment: { file: string; line?: number; body: string }) => request<Goal>("POST", `/goals/${seg(id)}/comments`, comment),
   deleteComment: (id: string, commentId: string) => request<Goal>("DELETE", `/goals/${seg(id)}/comments/${seg(commentId)}`),
   requestChanges: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/request-changes`),
   revertTask: (id: string, taskId: string) => request<Task>("POST", `/goals/${seg(id)}/tasks/${seg(taskId)}/revert`),
-  prDraft: (id: string) => request<PrDraft>("GET", `/goals/${seg(id)}/pr-draft`),
-  openPr: (id: string, input: { title: string; body: string; draft: boolean }) => request<Goal>("POST", `/goals/${seg(id)}/pr`, input),
-  mergeLocal: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/merge-local`),
+  prDraft: (id: string, repo?: string) => request<PrDraft>("GET", `/goals/${seg(id)}/pr-draft${qs({ repo })}`),
+  openPr: (id: string, input: { title: string; body: string; draft: boolean; repo?: string }) => request<Goal>("POST", `/goals/${seg(id)}/pr`, input),
+  mergeLocal: (id: string, repo?: string) => request<Goal>("POST", `/goals/${seg(id)}/merge-local`, repo ? { repo } : {}),
   cleanup: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/cleanup`),
 }
 
@@ -331,4 +333,12 @@ export const engineApi = {
   dismissSuggestion: (id: string) => request<{ ok: true }>("POST", `/engine/suggestions/${seg(id)}/dismiss`),
   evals: () => request<EvalRun[]>("GET", "/engine/evals"),
   startEval: (input: { goalId: string; botId?: string; variant: Partial<ExperimentVariant> }) => request<EvalRun>("POST", "/engine/evals", input),
+}
+
+/** Multi-repo workspaces: the workspace (null outside one), the merged map, and syncing every repo's map. */
+export const workspaceApi = {
+  get: () => request<WorkspaceView | null>("GET", "/workspace"),
+  graph: () => request<WorkspaceGraphView>("GET", "/workspace/graph"),
+  edges: () => request<CrossRepoEdge[]>("GET", "/workspace/edges"),
+  sync: (cards = false) => request<WorkspaceView | null>("POST", "/workspace/sync", { cards }),
 }

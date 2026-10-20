@@ -18,6 +18,7 @@ import type { SecurityService } from '../security/security.service.js';
 import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
 import type { McpService } from '../services/mcp/mcp.service.js';
 import type { ContextService } from '../context/context.service.js';
+import type { WorkspaceService } from '../workspaces/workspace.service.js';
 
 export interface TeamDeps {
   project: Project;
@@ -45,6 +46,8 @@ export interface TeamDeps {
   providers?: ProviderPool;
   /** A/B experiments: may change the bot's skills/prompt for runs inside goals. */
   experiments?: RunExperiments;
+  /** Multi-repo workspaces: the workspace block in bots' instructions, other repos' folders, task repo ids. */
+  workspace?: WorkspaceService;
 }
 
 /** What the learning loop does to a run: the bot as this run sees it, and the variants it's part of. */
@@ -61,6 +64,8 @@ export type DispatchOptions = RunContext & {
   attachments?: readonly string[];
   /** Folder the bot works in (a goal's own worktree); defaults to the project root. */
   cwd?: string;
+  /** Other folders the bot may read and edit (a workspace's other repos); chats get the workspace's repos by default. */
+  additionalDirectories?: string[];
   /** Stop the run once it has spent this much (USD). */
   maxBudgetUsd?: number;
 };
@@ -122,6 +127,10 @@ export class Team {
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
     const { project, hub, permissions, sessions, previews } = this.deps;
     const repoMap = this.deps.context?.promptBlock() ?? '';
+    const workspace = this.deps.workspace?.isWorkspace ? this.deps.workspace : undefined;
+    const workspaceBlock = workspace?.promptBlock() ?? '';
+    // Chats outside goals may read the workspace's other repos where they are; goal runs pass their own folders.
+    const extraDirs = opts.additionalDirectories ?? (workspace && !opts.goalId ? workspace.registry.list().filter((r) => !r.primary).map((r) => r.root) : []);
     const team = project.bots.list();
     // Chats outside goals obey the daily cap (goal runs are checked by the goal engine).
     const dayLeft = opts.goalId ? undefined : this.dayRemaining();
@@ -168,11 +177,12 @@ export class Team {
         prompt,
         ...(attachments.length ? { attachments } : {}),
         cwd: opts.cwd ?? project.root,
+        ...(extraDirs.length ? { additionalDirectories: extraDirs } : {}),
         ...(maxBudgetUsd !== undefined && Number.isFinite(maxBudgetUsd) ? { maxBudgetUsd } : {}),
         model: attempt.model,
         effort: attempt.effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
-        context: buildContext(runBot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), repoMap),
+        context: buildContext(runBot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), [repoMap, workspaceBlock].filter(Boolean).join('\n\n')),
         mcpServers: this.deps.mcp?.forBot(bot),
         // Sessions belong to one provider; another provider starts fresh.
         resumeSessionId: attempt.provider === route[0]!.provider ? sessions.get(bot.id) : undefined,
@@ -188,6 +198,7 @@ export class Team {
           memory: project.memory,
           ...(repoMap && this.deps.context ? { context: this.deps.context.reader } : {}),
           ...(this.deps.autopilot ? { autopilot: this.deps.autopilot } : {}),
+          ...(workspace ? { repos: workspace.registry.ids(), primaryRepo: workspace.registry.primaryId } : {}),
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.

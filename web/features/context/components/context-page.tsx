@@ -29,6 +29,8 @@ import { ContextSearch } from "./context-search"
 import { ImpactPanel } from "./impact-panel"
 import { CodePeekDialog } from "./code-peek"
 import { IndexDialog } from "./index-dialog"
+import { WorkspaceMap } from "@/features/workspaces/components/workspace-map"
+import { useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
 
 const nodeTypes = { module: ModuleNode, area: AreaNode }
 
@@ -49,6 +51,18 @@ export function ContextPage() {
   useEffect(() => {
     if (status?.built && !useContextStore.getState().graph) void loadGraph()
   }, [status?.built])
+
+  // Multi-repo workspaces: "All repos" shows the workspace map; picking a module there switches to its repo.
+  const workspaceAll = useWorkspaceStore((s) => !!s.workspace && s.repo === null)
+  if (workspaceAll && tab === "map")
+    return (
+      <div className="absolute inset-0">
+        <PageActions>
+          <Segmented size="sm" value={tab} onChange={setContextTab} options={TAB_OPTIONS} aria-label="Context view" />
+        </PageActions>
+        <WorkspaceMap />
+      </div>
+    )
 
   return (
     <div className="absolute inset-0">

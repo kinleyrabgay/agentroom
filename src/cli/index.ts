@@ -9,10 +9,11 @@ import { registerStart } from './commands/start.js';
 import { registerDaemon } from './commands/daemon.js';
 import { registerContext } from './commands/context.js';
 import { registerPack } from './commands/pack.js';
+import { registerWorkspace } from './commands/workspace.js';
 
 const program = new Command().name('agentroom').description('Visual control room for your coding agents').version(APP_VERSION);
 
-for (const register of [registerInit, registerStart, registerDaemon, registerBot, registerSkill, registerPack, registerContext, registerDoctor]) register(program);
+for (const register of [registerInit, registerStart, registerDaemon, registerBot, registerSkill, registerPack, registerContext, registerWorkspace, registerDoctor]) register(program);
 
 program.parseAsync().catch((err: Error) => {
   console.error(`✖ ${err.message}`);

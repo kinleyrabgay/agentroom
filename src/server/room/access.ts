@@ -27,6 +27,8 @@ const MEMBER_READ: readonly RegExp[] = [
   /^\/proof\/availability$/,
   /^\/settings$/,
   /^\/room\/(me|presence|comments|notifications|goal-owners)$/,
+  // Multi-repo workspace: the repos and the merged map (syncing is owner-only).
+  /^\/workspace(\/(graph|edges))?$/,
 ];
 
 /** Writes a viewer may make: read-only computations and their own state. */

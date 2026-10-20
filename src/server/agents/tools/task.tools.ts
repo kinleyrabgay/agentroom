@@ -18,6 +18,19 @@ export interface TaskToolDeps {
   goalId?: string;
   /** Resolves an assignee to its bot role, to infer a task's kind. */
   roleOf?: (botId: string) => string | undefined;
+  /** Multi-repo workspaces: repo ids a task may name; absent outside workspaces (the `repo` field is ignored). */
+  repos?: string[];
+  /** The workspace's primary repo id (stored as unset). */
+  primaryRepo?: string;
+}
+
+/** Validate a task's repo in a workspace: known ids only, the primary repo stored as unset. */
+export function checkTaskRepo(repo: string | null | undefined, deps: Pick<TaskToolDeps, 'repos' | 'primaryRepo'>): string | null | undefined {
+  if (repo === undefined) return undefined;
+  if (!deps.repos) return undefined;
+  if (repo === null || repo === '' || repo === deps.primaryRepo) return null;
+  if (!deps.repos.includes(repo)) throw new Error(`Unknown repo "${repo}". Repos in this workspace: ${deps.repos.join(', ')}.`);
+  return repo;
 }
 
 /**
@@ -99,8 +112,13 @@ export function taskTools(deps: TaskToolDeps, botId: string): HostToolDef[] {
         dependsOn: z.array(z.string()).optional(),
         order: z.number().optional().describe('Execution order within the goal'),
         notes: z.string().optional(),
+        ...(deps.repos ? { repo: z.string().optional().describe(`Workspace repo this task changes: ${deps.repos.join(' | ')} (omit for the primary repo)`) } : {}),
       },
-      handler: async (a) => write(() => tasks.create(withTaskDefaults({ ...a, createdBy: botId }, deps))),
+      handler: async ({ repo, ...a }) =>
+        write(() => {
+          const r = checkTaskRepo(repo as string | undefined, deps);
+          return tasks.create(withTaskDefaults({ ...a, ...(r ? { repo: r } : {}), createdBy: botId }, deps));
+        }),
     },
     {
       name: HostTool.TaskUpdate,
@@ -122,10 +140,13 @@ export function taskTools(deps: TaskToolDeps, botId: string): HostToolDef[] {
         appendLog: z.string().optional(),
         blockedReason: z.string().nullable().optional(),
         order: z.number().optional(),
+        ...(deps.repos ? { repo: z.string().nullable().optional().describe(`Workspace repo: ${deps.repos.join(' | ')}`) } : {}),
       },
-      handler: async ({ id, appendLog, acceptanceDone, acceptance, ...patch }) =>
+      handler: async ({ id, appendLog, acceptanceDone, acceptance, repo, ...patch }) =>
         write(() => {
           const update: TaskUpdate = { ...patch };
+          const r = checkTaskRepo(repo as string | null | undefined, deps);
+          if (r !== undefined) update.repo = r;
           if (acceptance) update.acceptance = acceptance.map((text: string) => ({ text, done: false }));
           let t = tasks.update(id, update);
           if (acceptanceDone?.length) t = tasks.tickAcceptance(id, acceptanceDone);

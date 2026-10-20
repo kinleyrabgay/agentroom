@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { ExternalLinkIcon, FolderXIcon, GitBranchIcon, GitMergeIcon, GitPullRequestIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
 import { GoalStatus, type Goal, type PrDraft } from "@shared"
 import { goalWorkApi } from "@/lib/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ToneBadge } from "@/components/kit/badge"
 import { isRunning } from "../lib/goal-phase"
+import { useGoalParts } from "@/features/workspaces/lib/use-goal-parts"
+import type { GoalPart } from "@/features/workspaces/lib/workspace-store"
 
 /** "⎇ agentroom/g-4 · own folder": where the goal's work lives. */
 export function GoalBranch({ goal }: { goal: Goal }) {
@@ -54,9 +56,12 @@ const run = (p: Promise<unknown>, ok?: string) =>
 /** Open PR (primary once testing or done), the PR link once open, and Merge locally / Clean up. */
 export function PublishActions({ goal }: { goal: Goal }) {
   const [prOpen, setPrOpen] = useState(false)
-  if (!goal.worktree) return null
+  const parts = useGoalParts(goal)
   const ready = goal.status === GoalStatus.Done || goal.status === GoalStatus.Testing || goal.status === GoalStatus.Verifying || goal.status === GoalStatus.Reporting
   const busy = isRunning(goal.status) && goal.status !== GoalStatus.Testing && goal.status !== GoalStatus.Verifying
+  // Multi-repo workspaces: a goal with work in several repos gets one branch and one PR per repo.
+  if (parts.length > 1) return <LinkedPublishActions goal={goal} parts={parts} ready={ready} busy={busy} />
+  if (!goal.worktree) return null
 
   return (
     <div className="flex items-center gap-1.5">
@@ -92,7 +97,62 @@ export function PublishActions({ goal }: { goal: Goal }) {
   )
 }
 
-function PrDialog({ goal, onClose }: { goal: Goal; onClose: () => void }) {
+/** A goal that spans repos: one menu with each repo's PR (open or link), merge and folder cleanup. */
+function LinkedPublishActions({ goal, parts, ready, busy }: { goal: Goal; parts: GoalPart[]; ready: boolean; busy: boolean }) {
+  const [prFor, setPrFor] = useState<GoalPart | null>(null)
+  const opened = parts.filter((p) => p.pr).length
+  const anyFolder = parts.some((p) => p.worktree)
+  if (!anyFolder) return null
+  const next = parts.find((p) => !p.pr && p.worktree)
+  return (
+    <div className="flex items-center gap-1.5">
+      {next && (
+        <Button size="sm" variant={ready ? "default" : "outline"} className={ready ? "bg-brand text-brand-foreground hover:bg-brand/90" : undefined} disabled={busy} onClick={() => setPrFor(next)}>
+          <GitPullRequestIcon data-icon="inline-start" /> Open PR · {next.repo.name}
+        </Button>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" aria-label="Pull requests per repo">
+            <GitPullRequestIcon data-icon="inline-start" /> {opened}/{parts.length} PRs
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          {parts.map((p) => (
+            <Fragment key={p.repo.id}>
+              <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-mono">{p.repo.name}</span>
+                {p.worktree && <span className="truncate font-mono">{p.worktree.branch}</span>}
+              </DropdownMenuLabel>
+              {p.pr ? (
+                <DropdownMenuItem onSelect={() => window.open(p.pr!.url, "_blank", "noopener")}>
+                  <ExternalLinkIcon /> PR {p.pr.number ? `#${p.pr.number}` : ""} on GitHub
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled={busy || !p.worktree} onSelect={() => setPrFor(p)}>
+                  <GitPullRequestIcon /> {p.worktree ? "Open PR" : "No branch of its own"}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                disabled={busy || !p.worktree}
+                onSelect={() => run(goalWorkApi.mergeLocal(goal.id, p.repo.primary ? undefined : p.repo.id), `Merged ${p.worktree?.branch} into ${p.repo.name}'s current branch`)}
+              >
+                <GitMergeIcon /> Merge into my branch
+              </DropdownMenuItem>
+            </Fragment>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={busy} onSelect={() => run(goalWorkApi.cleanup(goal.id), "Folders removed; the branches are kept")}>
+            <FolderXIcon /> Remove the goal&apos;s folders
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {prFor && <PrDialog goal={goal} repo={prFor.repo.primary ? undefined : prFor.repo.id} branch={prFor.worktree?.branch} repoName={prFor.repo.name} onClose={() => setPrFor(null)} />}
+    </div>
+  )
+}
+
+function PrDialog({ goal, repo, branch, repoName, onClose }: { goal: Goal; repo?: string; branch?: string; repoName?: string; onClose: () => void }) {
   const [draft, setDraft] = useState<PrDraft | null>(null)
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
@@ -102,7 +162,7 @@ function PrDialog({ goal, onClose }: { goal: Goal; onClose: () => void }) {
   useEffect(() => {
     let cancelled = false
     goalWorkApi
-      .prDraft(goal.id)
+      .prDraft(goal.id, repo)
       .then((d) => {
         if (cancelled) return
         setDraft(d)
@@ -113,15 +173,16 @@ function PrDialog({ goal, onClose }: { goal: Goal; onClose: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [goal.id])
+  }, [goal.id, repo])
 
   const submit = async () => {
     setBusy(true)
     try {
-      const next = await goalWorkApi.openPr(goal.id, { title, body, draft: isDraft })
-      toast.success("Pull request opened", {
-        description: next.pr?.url,
-        action: next.pr ? { label: "Open", onClick: () => window.open(next.pr!.url, "_blank", "noopener") } : undefined,
+      const next = await goalWorkApi.openPr(goal.id, { title, body, draft: isDraft, ...(repo ? { repo } : {}) })
+      const pr = repo ? next.repos?.[repo]?.pr : next.pr
+      toast.success(repoName ? `Pull request opened in ${repoName}` : "Pull request opened", {
+        description: pr?.url,
+        action: pr ? { label: "Open", onClick: () => window.open(pr.url, "_blank", "noopener") } : undefined,
       })
       onClose()
     } catch (e) {
@@ -135,9 +196,10 @@ function PrDialog({ goal, onClose }: { goal: Goal; onClose: () => void }) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Open pull request</DialogTitle>
+          <DialogTitle>Open pull request{repoName ? ` · ${repoName}` : ""}</DialogTitle>
           <DialogDescription>
-            Pushes <span className="font-mono">{goal.worktree?.branch}</span> to origin and opens a PR with your GitHub login.
+            Pushes <span className="font-mono">{branch ?? goal.worktree?.branch}</span> to {repoName ? `${repoName}'s` : ""} origin and opens a PR with your GitHub login.
+            {repoName ? " The goal's other PRs get a link to it." : ""}
           </DialogDescription>
         </DialogHeader>
         {!draft ? (

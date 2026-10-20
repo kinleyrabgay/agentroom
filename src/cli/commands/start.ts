@@ -4,6 +4,9 @@ import { ProviderId } from '../../shared/enums.js';
 import { startServer } from '../../server/index.js';
 import { currentProject, ensureInitialized } from '../context.js';
 import { liveSession } from '../../server/runner/background.js';
+import { Project } from '../../core/project.js';
+import { sharingMode } from '../../core/sharing.js';
+import { loadWorkspace, prepareMember, primaryOf } from '../../core/workspaces/index.js';
 
 export function registerStart(program: Command) {
   program
@@ -14,21 +17,25 @@ export function registerStart(program: Command) {
     .option('--port <n>', 'port (default from config)')
     .option('--no-open', 'do not open the browser')
     .option('--private', 'when setting up, keep .agentroom/ out of git for you only')
+    .option('--workspace <name>', 'open a multi-repo workspace (see `agentroom workspace`) instead of this folder')
     .action(async (opts) => {
-      const project = currentProject();
+      // A workspace runs from its primary repo; the other repos get a gitignored .agentroom/runs/ for their maps.
+      const workspace = opts.workspace ? loadWorkspace(String(opts.workspace)) : null;
+      const project = workspace ? new Project(primaryOf(workspace).path) : currentProject();
       ensureInitialized(project, { private: opts.private });
+      if (workspace) for (const r of workspace.repos) if (r.path !== project.root) prepareMember(r.path, (root) => sharingMode(root) === 'private');
       const port = Number(opts.port ?? project.config.get().port);
       // Already running for this repo (e.g. background mode)? Open that instead of starting another.
       const live = await liveSession(project.paths.sessionFile);
       if (live && (!opts.port || live.port === port)) {
-        console.log(`\n  AgentRoom is already running for ${project.info().name}`);
+        console.log(`\n  AgentRoom is already running for ${project.info().name}${workspace ? ' (stop it to open the workspace)' : ''}`);
         console.log(`  ${live.url}\n`);
         if (opts.open) await open(live.url).catch(() => {});
         process.exit(0);
       }
       try {
-        const { url, close } = await startServer({ root: project.root, port, provider: opts.provider, model: opts.model });
-        console.log(`\n  AgentRoom running for ${project.info().name}`);
+        const { url, close } = await startServer({ root: project.root, port, provider: opts.provider, model: opts.model, ...(workspace ? { workspace: workspace.name } : {}) });
+        console.log(`\n  AgentRoom running for ${workspace ? `workspace ${workspace.name} (${workspace.repos.map((r) => r.id).join(', ')})` : project.info().name}`);
         if (process.env.AGENTROOM_DAEMON === '1') {
           // Background mode writes stdout to a log file: never put the session token there.
           // `agentroom start` (or `agentroom open`) reads it from runs/session.json instead.

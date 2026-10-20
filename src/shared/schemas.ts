@@ -62,6 +62,8 @@ export const TaskSchema = z.object({
   commits: z.array(z.string()).default([]),
   /** The task's commits were reverted by the human. */
   reverted: z.boolean().optional(),
+  /** Multi-repo workspaces: the repo (workspace repo id) this task changes; unset = the workspace's primary repo. */
+  repo: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -229,6 +231,21 @@ export const GoalSchema = z.object({
   autopilot: GoalAutopilotSchema.optional(),
   /** Design to match (Implement design goals). */
   design: GoalDesignSchema.optional(),
+  /**
+   * Multi-repo workspaces: per-repo state for the other repos a goal touches (keyed by workspace repo id).
+   * The primary repo keeps using `baseRef`, `worktree` and `pr` above.
+   */
+  repos: z
+    .record(
+      z.string(),
+      z.object({
+        baseRef: z.string().optional(),
+        worktree: z.object({ path: z.string(), branch: z.string() }).optional(),
+        worktreeWarning: z.string().optional(),
+        pr: z.object({ url: z.string(), number: z.number().optional() }).optional(),
+      }),
+    )
+    .optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

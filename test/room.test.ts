@@ -259,7 +259,7 @@ describe('team room auth', () => {
 });
 
 describe('access policy', () => {
-  it('defaults to deny and limits WebSocket messages', () => {
+  it('defaults to deny', () => {
     const owns = () => false;
     expect(memberMayCall('viewer', 'GET', '/goals', owns)).toBe(true);
     expect(memberMayCall('viewer', 'GET', '/mcp', owns)).toBe(false);
@@ -270,6 +270,20 @@ describe('access policy', () => {
     expect(memberMayCall('approver', 'PUT', '/sentry/token', owns)).toBe(false);
     expect(memberMayCall('approver', 'POST', '/goals/G-1/approve', owns)).toBe(true);
 
+  });
+
+  it('lets members read the multi-repo workspace map but only the owner sync it', () => {
+    const owns = () => false;
+    for (const role of ['viewer', 'approver'] as const) {
+      expect(memberMayCall(role, 'GET', '/workspace', owns)).toBe(true);
+      expect(memberMayCall(role, 'GET', '/workspace/graph', owns)).toBe(true);
+      expect(memberMayCall(role, 'GET', '/workspace/edges', owns)).toBe(true);
+      expect(memberMayCall(role, 'POST', '/workspace/sync', owns)).toBe(false);
+    }
+    expect(memberMayCall('owner', 'POST', '/workspace/sync', owns)).toBe(true);
+  });
+
+  it('limits WebSocket messages', () => {
     expect(memberMaySend('viewer', ClientMessageType.Permission)).toBe(false);
     expect(memberMaySend('viewer', ClientMessageType.Send)).toBe(false);
     expect(memberMaySend('viewer', ClientMessageType.Presence)).toBe(true);

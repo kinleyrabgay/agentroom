@@ -60,6 +60,8 @@ import type { PrReviewService } from '../review/pr-review.service.js';
 import type { TrackerId } from '../../shared/types/index.js';
 import { autopilotRoutes } from './routes/autopilot.routes.js';
 import type { AutopilotService } from '../autopilot/autopilot.service.js';
+import { workspaceRoutes } from './routes/workspace.routes.js';
+import type { WorkspaceService } from '../workspaces/workspace.service.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -90,6 +92,8 @@ export interface AppDeps {
   uploads: UploadStore;
   /** Repo context (module map, cards). */
   context?: ContextService;
+  /** Multi-repo workspaces (also present in single-project mode, as a one-repo workspace). */
+  workspace?: WorkspaceService;
   /** Proof of work (Verify phase, Proof tab). */
   proof?: ProofService;
   /** Linear and Jira. */
@@ -144,7 +148,7 @@ export function createApp(deps: AppDeps) {
   infoRoutes(api, deps.project, deps.models);
   botRoutes(api, deps.project, deps.team);
   skillRoutes(api, deps.project);
-  taskRoutes(api, deps.project, deps.boardChanged);
+  taskRoutes(api, deps.project, deps.boardChanged, deps.workspace?.isWorkspace ? (repo) => deps.workspace!.registry.normalize(repo) ?? null : undefined);
   goalRoutes(api, deps.goals, deps.humanAudit, deps.project.goalTemplates);
   memoryRoutes(api, deps.project, deps.humanAudit);
   goalTemplateRoutes(api, deps.project, deps.humanAudit);
@@ -159,7 +163,8 @@ export function createApp(deps: AppDeps) {
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
-  if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
+  if (deps.context) contextRoutes(api, deps.workspace ? (repo) => deps.workspace!.context(repo) : deps.context, deps.humanAudit);
+  if (deps.workspace) workspaceRoutes(api, deps.workspace, deps.humanAudit);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
   if (deps.autopilot) autopilotRoutes(api, deps.autopilot, deps.goals);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);

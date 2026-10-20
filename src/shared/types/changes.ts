@@ -38,6 +38,8 @@ export interface GoalChanges {
   groups: ChangeGroup[];
   additions: number;
   deletions: number;
+  /** Multi-repo workspaces: the repo these changes are in (unset = primary). */
+  repo?: string;
 }
 
 /** Prefilled pull request for a goal, with the checks the human should see before pushing. */
@@ -49,6 +51,8 @@ export interface PrDraft {
   openFindings: number;
   /** Short test summary, e.g. "QA passed (3 tasks)"; null when unknown. */
   tests: string | null;
+  /** Multi-repo workspaces: the repo this PR is for (unset = primary). */
+  repo?: string;
 }
 
 /** Today's spend and the caps, for the top bar and goal headers. */

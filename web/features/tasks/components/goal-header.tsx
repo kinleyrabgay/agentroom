@@ -24,6 +24,7 @@ import { useGoalSpend } from "../hooks/use-goal-spend"
 import { usd } from "@/features/usage/lib/format"
 import { GoalBudget } from "./goal-budget"
 import { GoalBranch, PublishActions } from "./goal-publish"
+import { GoalRepoBadges } from "@/features/workspaces/components/repo-badge"
 import { useBudget } from "../hooks/use-budget"
 import { OctagonXIcon, PlusIcon, SirenIcon } from "lucide-react"
 import { confidenceTone } from "@/features/autopilot/lib/meta"
@@ -97,6 +98,7 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
               </ToneBadge>
             )}
             <GoalBranch goal={goal} />
+            <GoalRepoBadges goal={goal} />
             {goal.round > 0 && (
               <ToneBadge icon={RepeatIcon} aria-label="Bug-fix rounds after QA">
                 Round {goal.round + 1}

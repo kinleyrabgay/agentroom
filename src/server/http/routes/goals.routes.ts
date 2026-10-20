@@ -62,7 +62,9 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, temp
   app.get('/budgets', (c) => respond(c, () => goals.budgetSummary()));
 
   // Changes (diff review), review comments, per-task revert
-  app.get('/goals/:id/changes', (c) => respond(c, () => goals.changes(c.req.param('id'))));
+  // Multi-repo workspaces: ?repo=<id> picks one of the goal's repos (unset = primary).
+  const repoOf = (c: { req: { query: (k: string) => string | undefined } }) => c.req.query('repo') || undefined;
+  app.get('/goals/:id/changes', (c) => respond(c, () => goals.changes(c.req.param('id'), repoOf(c))));
   app.post('/goals/:id/comments', async (c) => {
     const b = await body<{ file?: string; line?: number; body?: string }>(c);
     return respond(c, () => goals.addComment(c.req.param('id'), { file: String(b.file ?? ''), line: b.line, body: String(b.body ?? '') }, goals.human()));
@@ -72,22 +74,29 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, temp
   app.post('/goals/:id/tasks/:taskId/revert', (c) => respond(c, () => goals.revertTask(c.req.param('id'), c.req.param('taskId'), goals.human())));
 
   // Publish: PR, local merge, folder cleanup
-  app.get('/goals/:id/pr-draft', (c) => respond(c, () => goals.prDraft(c.req.param('id'))));
+  app.get('/goals/:id/pr-draft', (c) => respond(c, () => goals.prDraft(c.req.param('id'), repoOf(c))));
   app.post('/goals/:id/pr', async (c) => {
     const id = c.req.param('id');
-    const b = await body<{ title?: string; body?: string; draft?: boolean }>(c);
+    const b = await body<{ title?: string; body?: string; draft?: boolean; repo?: string }>(c);
     return respond(c, async () => {
-      const goal = await goals.openPr(id, { title: b.title, body: b.body, draft: b.draft === true });
-      audit(AuditKind.Push, `Pushed ${goal.worktree?.branch ?? id}`, { goalId: id });
-      audit(AuditKind.PullRequest, `Opened PR for ${id}${goal.pr ? `: ${goal.pr.url}` : ''}`, { goalId: id, detail: { pr: goal.pr, draft: b.draft === true } });
+      const repo = typeof b.repo === 'string' && b.repo ? b.repo : undefined;
+      const goal = await goals.openPr(id, { title: b.title, body: b.body, draft: b.draft === true, ...(repo ? { repo } : {}) });
+      const part = repo ? goal.repos?.[repo] : undefined;
+      const branch = (part ? part.worktree?.branch : goal.worktree?.branch) ?? id;
+      const pr = part ? part.pr : goal.pr;
+      audit(AuditKind.Push, `Pushed ${branch}${part ? ` in ${repo}` : ''}`, { goalId: id });
+      audit(AuditKind.PullRequest, `Opened PR for ${id}${part ? ` in ${repo}` : ''}${pr ? `: ${pr.url}` : ''}`, { goalId: id, detail: { pr, draft: b.draft === true, ...(repo ? { repo } : {}) } });
       return goal;
     });
   });
-  app.post('/goals/:id/merge-local', (c) => {
+  app.post('/goals/:id/merge-local', async (c) => {
     const id = c.req.param('id');
+    const b = await body<{ repo?: string }>(c);
     return respond(c, async () => {
-      const goal = await goals.mergeLocal(id);
-      audit(AuditKind.Goal, `Merged ${goal.worktree?.branch ?? id} into the current branch`, { goalId: id });
+      const repo = typeof b.repo === 'string' && b.repo ? b.repo : undefined;
+      const goal = await goals.mergeLocal(id, repo);
+      const branch = (repo ? goal.repos?.[repo]?.worktree?.branch : goal.worktree?.branch) ?? id;
+      audit(AuditKind.Goal, `Merged ${branch} into the current branch${repo ? ` of ${repo}` : ''}`, { goalId: id });
       return goal;
     });
   });

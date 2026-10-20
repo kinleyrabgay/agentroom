@@ -1,4 +1,4 @@
-import { API_PREFIX, TOKEN_HEADER } from "@shared"
+import { API_PREFIX, REPO_HEADER, TOKEN_HEADER } from "@shared"
 import { API_BASE } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 
@@ -8,11 +8,21 @@ export class ApiError extends Error {
   }
 }
 
+/** Multi-repo workspaces: the repo context requests are about (null = the primary repo). Set by the repo switcher. */
+let contextRepo: string | null = null
+export function setContextRepo(repo: string | null) {
+  contextRepo = repo
+}
+
 /** JSON fetch against the AgentRoom server, authenticated with the session token. */
 export async function request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
     method,
-    headers: { "content-type": "application/json", [TOKEN_HEADER]: useAppStore.getState().token },
+    headers: {
+      "content-type": "application/json",
+      [TOKEN_HEADER]: useAppStore.getState().token,
+      ...(contextRepo && path.startsWith("/context") ? { [REPO_HEADER]: contextRepo } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   // An older server answers API paths it doesn't know with the web page (HTML, 200). Treat any
