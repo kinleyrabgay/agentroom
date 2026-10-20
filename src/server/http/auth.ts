@@ -15,8 +15,8 @@ export function tokenMatches(expected: string, provided: string | undefined): bo
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Only this request may carry the token in the query string: `<img src>` can't send headers. */
-const QUERY_TOKEN_ROUTE = /\/uploads\/[A-Za-z0-9_-]+$/;
+/** Only these requests may carry the token in the query string: `<img src>` can't send headers (uploads, proof frames). */
+const QUERY_TOKEN_ROUTE = /\/uploads\/[A-Za-z0-9_-]+$|\/goals\/[A-Za-z0-9_-]+\/proof\/files\/[A-Za-z0-9._-]+\.(?:png|gif)$/;
 
 export function requireToken(token: string): MiddlewareHandler {
   return async (c, next) => {

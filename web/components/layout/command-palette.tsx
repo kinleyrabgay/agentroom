@@ -53,6 +53,7 @@ const OPEN_GOALS = new Set<string>([
   GoalStatus.Building,
   GoalStatus.Securing,
   GoalStatus.Testing,
+  GoalStatus.Verifying,
   GoalStatus.Reporting,
   GoalStatus.Paused,
 ])

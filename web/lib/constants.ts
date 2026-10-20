@@ -48,6 +48,8 @@ export const GoalTab = {
   Security: "security",
   /** Replay of what each bot did. */
   Timeline: "timeline",
+  /** Proof of work: recording, before/after, quality checks. */
+  Proof: "proof",
 } as const
 export type GoalTab = ValueOf<typeof GoalTab>
 

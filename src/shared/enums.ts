@@ -43,6 +43,8 @@ export const GoalStatus = {
   /** Security Auditor reviewing the diff (between Build and Test). */
   Securing: 'securing',
   Testing: 'testing',
+  /** Proof of work: record the feature working and run quality checks (between Test and Report). */
+  Verifying: 'verifying',
   Reporting: 'reporting',
   /** Waiting on the human (blocked task or question) or paused by them. */
   Paused: 'paused',

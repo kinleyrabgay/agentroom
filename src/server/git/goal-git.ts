@@ -65,6 +65,18 @@ export async function createWorktree(root: string, dir: string, branch: string, 
   await excludeLinks(root, dir);
 }
 
+/**
+ * A throwaway folder at `ref` with no branch (the "before" side of proof and quality checks).
+ * Dependencies are linked in like a goal's folder. Remove it with removeWorktree.
+ */
+export async function createDetachedWorktree(root: string, dir: string, ref: string): Promise<void> {
+  if (fs.existsSync(dir)) await removeWorktree(root, dir).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  await git(root, ['worktree', 'add', '--detach', dir, ref]);
+  linkDependencies(root, dir);
+  await excludeLinks(root, dir);
+}
+
 /** Relative paths of node_modules folders linked into the goal folder. */
 function dependencyDirs(root: string): string[] {
   const out: string[] = [];

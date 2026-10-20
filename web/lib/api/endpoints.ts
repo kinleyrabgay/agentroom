@@ -2,6 +2,7 @@ import type { AutomationRun, AutomationSnapshot, Brief, NextRun, RunnerStatus, S
 import { request } from "./client"
 import type { BotMemory, GoalTemplateList, MemoryNote, RemoteStatus } from "@shared"
 import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
+import type { ProofAvailability, ProofScenario, ProofView } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 
 const seg = encodeURIComponent
@@ -283,4 +284,13 @@ export const contextApi = {
   reject: (id: string, section: ContextClaimSection, index: number, reason: string) =>
     request<ContextModuleDetail>("POST", `/context/module/${seg(id)}/claims/${section}/${index}/reject`, { reason }),
   setDecisions: (id: string, decisions: string[]) => request<ContextModuleDetail>("PATCH", `/context/module/${seg(id)}/decisions`, { decisions }),
+}
+
+/** Proof of work: report, frames, re-run, scenario edits, accepting failing checks. */
+export const proofApi = {
+  availability: () => request<ProofAvailability>("GET", "/proof/availability"),
+  get: (goalId: string) => request<ProofView>("GET", `/goals/${seg(goalId)}/proof`),
+  run: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/run`),
+  override: (goalId: string) => request<Goal>("POST", `/goals/${seg(goalId)}/proof/override`),
+  setScenarios: (goalId: string, scenarios: ProofScenario[]) => request<ProofScenario[]>("PUT", `/goals/${seg(goalId)}/proof/scenarios`, { scenarios }),
 }

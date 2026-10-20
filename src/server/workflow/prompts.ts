@@ -132,3 +132,23 @@ function pick(t: Task) {
   const { createdAt: _c, updatedAt: _u, ...rest } = t;
   return rest;
 }
+
+/** Verify phase: QA describes how to prove the feature works in a real browser (the engine runs it). */
+export function verifyPrompt(goal: Goal, tasks: Task[], previous: { scenarios: unknown; error?: string } | null): string {
+  return [
+    `# Proof of work for goal ${goal.id}: ${goal.title}`,
+    `Tests passed. Now AgentRoom will start the app from the goal's folder, run your scenario in a headless browser, record it as a GIF for the pull request, and run accessibility, performance and visual checks.`,
+    `Write 1–2 short scenarios that show the change working the way a user would see it. Read the code to get real paths, labels and selectors. Prefer visible text (\`text=Export\`) over brittle CSS.`,
+    `## Tasks`,
+    tasks.map((t) => `- ${taskLine(t)}`).join('\n'),
+    previous ? `## Last attempt\n${previous.error ? `It failed: ${previous.error}\n` : ''}\`\`\`json\n${JSON.stringify(previous.scenarios, null, 2)}\n\`\`\`` : '',
+    `## Format`,
+    'Reply with one ```json block, nothing after it:',
+    '```json\n{ "scenarios": [ { "name": "Export reports as CSV", "path": "/reports", "steps": [\n  { "action": "click", "target": "text=Export", "label": "Open the export menu" },\n  { "action": "click", "target": "text=CSV" },\n  { "action": "expect", "value": "Download ready" }\n] } ] }\n```',
+    `Actions: goto (target: path), click (target), fill (target, value), press (target: key), wait (value: text or ms), expect (value: text that must appear), screenshot. At most 15 steps. Only paths on the app itself; never real credentials (use obvious test values).`,
+    `If the change has no visible UI (a library, a CLI, an API), reply with \`{ "scenarios": [] }\`.`,
+    `Don't change code and don't commit.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}

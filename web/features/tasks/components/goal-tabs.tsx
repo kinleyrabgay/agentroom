@@ -1,10 +1,11 @@
 "use client"
 
-import { FileDiffIcon, HistoryIcon, ListChecksIcon, ShieldIcon, type LucideIcon } from "lucide-react"
+import { ClapperboardIcon, FileDiffIcon, HistoryIcon, ListChecksIcon, ShieldIcon, type LucideIcon } from "lucide-react"
 import { GoalTab } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { Segmented } from "@/components/kit/segmented"
 import { TONE_CLASS } from "@/components/kit/tone"
+import { ToneDot } from "@/components/kit/badge"
 import { cn } from "@/lib/utils"
 import { useFindingCounts } from "@/features/security/hooks/use-finding-counts"
 
@@ -19,6 +20,7 @@ export const GOAL_TABS: TabDef[] = [
   { id: GoalTab.Tasks, label: "Tasks", icon: ListChecksIcon },
   { id: GoalTab.Changes, label: "Changes", icon: FileDiffIcon },
   { id: GoalTab.Security, label: "Security", icon: ShieldIcon },
+  { id: GoalTab.Proof, label: "Proof", icon: ClapperboardIcon },
   { id: GoalTab.Timeline, label: "Timeline", icon: HistoryIcon },
 ]
 
@@ -27,6 +29,8 @@ export function GoalTabs({ goalId }: { goalId: string }) {
   const setTab = useAppStore((s) => s.setGoalTab)
   const counts = useFindingCounts(goalId)
   const open = counts.openCritical + counts.openWarning
+  const goal = useAppStore((s) => s.goals.find((g) => g.id === goalId))
+  const proofAlert = !!goal?.proof && (goal.proof.status === "failed" || (goal.proof.failing.length > 0 && goal.proofOverride?.round !== goal.round))
 
   return (
     <Segmented<GoalTab>
@@ -46,6 +50,7 @@ export function GoalTabs({ goalId }: { goalId: string }) {
                 {open}
               </span>
             )}
+            {id === GoalTab.Proof && proofAlert && <ToneDot tone="danger" className="ml-0.5" />}
           </>
         ),
       }))}
