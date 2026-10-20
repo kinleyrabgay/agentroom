@@ -17,6 +17,8 @@ export interface PwPage {
   getByText(text: string, opts?: { exact?: boolean }): PwLocator;
   keyboard: { press(key: string): Promise<void> };
   screenshot(opts?: { fullPage?: boolean; type?: 'png'; mask?: PwLocator[]; animations?: 'disabled' }): Promise<Buffer>;
+  setContent(html: string, opts?: { waitUntil?: 'load' | 'domcontentloaded' | 'networkidle'; timeout?: number }): Promise<void>;
+  setViewportSize(size: { width: number; height: number }): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   waitForLoadState(state?: 'load' | 'domcontentloaded' | 'networkidle', opts?: { timeout?: number }): Promise<void>;
   evaluate<T>(fn: string | ((arg: never) => T), arg?: unknown): Promise<T>;

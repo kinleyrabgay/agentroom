@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { WhenPicker } from "@/features/automation/components/when-picker"
 import { formatAt } from "@/features/automation/lib/format"
-import { BugIcon, CalendarClockIcon, FilePenLineIcon, FilePlusIcon, LayersIcon, PackageIcon, PlugIcon, RocketIcon, ShuffleIcon, SmartphoneIcon, SparklesIcon, type LucideIcon } from "lucide-react"
+import { BugIcon, CalendarClockIcon, FilePenLineIcon, FilePlusIcon, LayersIcon, PackageIcon, PaletteIcon, PlugIcon, RocketIcon, ShuffleIcon, SirenIcon, SmartphoneIcon, SparklesIcon, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { SecurityReviewMode, type GoalTemplate, type GoalTemplateList, type ScheduleWhen } from "@shared"
 import { cn } from "@/lib/utils"
@@ -17,9 +17,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ImageField } from "./image-field"
 
 /** Template icon names (frontmatter `icon`) to icons; unknown ones get a generic mark. */
-const ICONS: Record<string, LucideIcon> = { bug: BugIcon, plug: PlugIcon, shuffle: ShuffleIcon, package: PackageIcon, layers: LayersIcon, "file-plus": FilePlusIcon, smartphone: SmartphoneIcon }
+const ICONS: Record<string, LucideIcon> = { bug: BugIcon, plug: PlugIcon, shuffle: ShuffleIcon, package: PackageIcon, layers: LayersIcon, "file-plus": FilePlusIcon, smartphone: SmartphoneIcon, siren: SirenIcon, palette: PaletteIcon }
 const BLANK = "__blank__"
 
 /**
@@ -161,7 +162,9 @@ function NewGoalForm({ onDone, initialBrief }: { onDone: () => void; initialBrie
                 {f.label}
                 {!f.required && <span className="font-normal text-muted-foreground"> (optional)</span>}
               </Label>
-              {f.multiline ? (
+              {f.image ? (
+                <ImageField id={`tpl-${f.id}`} value={fields[f.id] ?? ""} onChange={(v) => setFields({ ...fields, [f.id]: v })} />
+              ) : f.multiline ? (
                 <Textarea id={`tpl-${f.id}`} rows={3} value={fields[f.id] ?? ""} placeholder={f.placeholder} onChange={(e) => setFields({ ...fields, [f.id]: e.target.value })} />
               ) : (
                 <Input id={`tpl-${f.id}`} value={fields[f.id] ?? ""} placeholder={f.placeholder} onChange={(e) => setFields({ ...fields, [f.id]: e.target.value })} />

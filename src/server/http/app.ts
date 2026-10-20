@@ -46,6 +46,8 @@ import { RegistryService } from '../registry/registry.service.js';
 import type { ContextService } from '../context/context.service.js';
 import { proofRoutes } from './routes/proof.routes.js';
 import type { ProofService } from '../proof/proof.service.js';
+import { autopilotRoutes } from './routes/autopilot.routes.js';
+import type { AutopilotService } from '../autopilot/autopilot.service.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -78,6 +80,8 @@ export interface AppDeps {
   context?: ContextService;
   /** Proof of work (Verify phase, Proof tab). */
   proof?: ProofService;
+  /** Incident autopilot (Sentry → reproduce → failing test → fix → verify). */
+  autopilot?: AutopilotService;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -129,6 +133,7 @@ export function createApp(deps: AppDeps) {
   uploadRoutes(api, deps.uploads);
   if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
+  if (deps.autopilot) autopilotRoutes(api, deps.autopilot, deps.goals);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
   api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));

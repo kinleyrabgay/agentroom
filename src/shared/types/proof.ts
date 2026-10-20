@@ -1,3 +1,5 @@
+import type { DesignMatch } from './autopilot.js';
+
 /** One step of a proof scenario. Mirrors the browser_* tool vocabulary bots already know. */
 export interface ProofStep {
   action: 'goto' | 'click' | 'fill' | 'press' | 'wait' | 'expect' | 'screenshot';
@@ -38,7 +40,7 @@ export interface ProofScenarioResult {
   before: ProofFrame[];
 }
 
-export type ProofCheckId = 'a11y' | 'perf' | 'bundle' | 'coverage' | 'visual';
+export type ProofCheckId = 'a11y' | 'perf' | 'bundle' | 'coverage' | 'visual' | 'design';
 export type ProofCheckStatus = 'pass' | 'warn' | 'fail' | 'skipped';
 
 export interface ProofCheck {
@@ -69,6 +71,8 @@ export interface ProofReport {
   checks: ProofCheck[];
   /** Set after the images were pushed to the proof branch. */
   published?: { branch: string; sha: string; base: string };
+  /** Implement design goals: the page compared with the design reference. */
+  design?: DesignMatch;
 }
 
 /** What the goal keeps about its last proof run (the full report lives in runs/proof). */

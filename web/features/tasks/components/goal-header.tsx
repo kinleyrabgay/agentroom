@@ -25,7 +25,8 @@ import { usd } from "@/features/usage/lib/format"
 import { GoalBudget } from "./goal-budget"
 import { GoalBranch, PublishActions } from "./goal-publish"
 import { useBudget } from "../hooks/use-budget"
-import { OctagonXIcon, PlusIcon } from "lucide-react"
+import { OctagonXIcon, PlusIcon, SirenIcon } from "lucide-react"
+import { confidenceTone } from "@/features/autopilot/lib/meta"
 import { GoalAttachments } from "@/features/attachments/components/goal-attachments"
 
 const STOPPED: Partial<
@@ -85,6 +86,11 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
               {meta.label}
             </ToneBadge>
             {goal.risk && <RiskBadge risk={goal.risk} />}
+            {goal.autopilot?.confidence && (
+              <ToneBadge tone={confidenceTone(goal.autopilot.confidence.score)} icon={SirenIcon} aria-label="Autopilot confidence">
+                Confidence {goal.autopilot.confidence.score}
+              </ToneBadge>
+            )}
             <GoalBranch goal={goal} />
             {goal.round > 0 && (
               <ToneBadge icon={RepeatIcon} aria-label="Bug-fix rounds after QA">

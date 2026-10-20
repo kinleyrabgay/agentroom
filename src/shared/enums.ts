@@ -269,6 +269,8 @@ export const HostTool = {
   ContextFind: 'context_find',
   ContextDeps: 'context_deps',
   ContextImpact: 'context_impact',
+  /** Autopilot goals: reproduced?, failing test (AgentRoom verifies fail → pass). */
+  AutopilotReport: 'autopilot_report',
   BrowserOpen: 'browser_open',
   BrowserSnapshot: 'browser_snapshot',
   BrowserClick: 'browser_click',

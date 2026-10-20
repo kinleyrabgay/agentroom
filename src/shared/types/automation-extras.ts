@@ -8,6 +8,8 @@ export interface GoalTemplateField {
   placeholder?: string;
   multiline?: boolean;
   required?: boolean;
+  /** An image upload (the value is the upload id; the image is attached to the goal). */
+  image?: boolean;
 }
 
 /** `.agentroom/goal-templates/<id>.md`: frontmatter describes the form, the body guides the Planner. */
@@ -20,6 +22,8 @@ export interface GoalTemplate {
   fields: GoalTemplateField[];
   securityReview?: SecurityReviewMode;
   budgetUsd?: number;
+  /** Fields `figma`, `page`, `size` and `image` describe a design the Verify step compares against. */
+  design?: boolean;
   /** Planner guidance (the markdown body). */
   guidance: string;
 }

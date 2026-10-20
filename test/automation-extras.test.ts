@@ -52,11 +52,13 @@ describe('bot memory', () => {
 });
 
 describe('goal templates', () => {
-  it('ships four parseable defaults and falls back to them', () => {
+  it('ships six parseable defaults and falls back to them', () => {
     const repo = new GoalTemplateRepository(path.join(tmp(), 'goal-templates'));
     const list = repo.list();
     expect(list.builtIn).toBe(true);
-    expect(list.templates.map((t) => t.id)).toEqual(['bug-fix', 'new-endpoint', 'refactor', 'dependency-upgrade']);
+    expect(list.templates.map((t) => t.id)).toEqual(['bug-fix', 'new-endpoint', 'refactor', 'dependency-upgrade', 'reproduce-first', 'implement-design']);
+    expect(list.templates.find((t) => t.id === 'implement-design')).toMatchObject({ design: true });
+    expect(list.templates.find((t) => t.id === 'implement-design')!.fields.find((f) => f.id === 'image')).toMatchObject({ image: true });
     expect(list.templates[0]!.guidance).toMatch(/failing test/);
     expect(fs.existsSync(path.join(templatesDir(), 'goal-templates', 'bug-fix.md'))).toBe(true);
   });
@@ -64,7 +66,7 @@ describe('goal templates', () => {
   it('saves defaults into the repo, after which the repo copy is used', () => {
     const dir = path.join(tmp(), 'goal-templates');
     const repo = new GoalTemplateRepository(dir);
-    expect(repo.saveDefaults().length).toBe(4);
+    expect(repo.saveDefaults().length).toBe(6);
     fs.writeFileSync(path.join(dir, 'zz-custom.md'), '---\nname: Spike\norder: 9\nfields:\n  - id: question\n    label: Question\n    required: true\n---\nTimebox to one hour.\n');
     const list = repo.list();
     expect(list.builtIn).toBe(false);

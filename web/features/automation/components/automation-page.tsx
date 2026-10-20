@@ -167,13 +167,17 @@ function Schedules({ list }: { list: ScheduleView[] }) {
 function triggerSentence(t: TriggerView, botName: (id?: string) => string): { when: string; then: string } {
   const when =
     t.when.source === "sentry"
-      ? `Sentry reports a new ${t.when.level ? `${t.when.level} ` : ""}issue${t.when.project ? ` in ${t.when.project}` : ""}`
+      ? t.when.event === "spike"
+        ? `a ${t.when.level ? `${t.when.level} ` : ""}Sentry issue spikes ×${t.when.spike?.factor ?? 3} within ${spikeWindow(t.when.spike?.windowMin ?? 60)}${t.when.project ? ` in ${t.when.project}` : ""}`
+        : `Sentry reports a new ${t.when.level ? `${t.when.level} ` : ""}issue${t.when.project ? ` in ${t.when.project}` : ""}`
       : t.when.source === "github"
         ? `a GitHub card moves to ${t.when.toColumn}`
         : "a goal fails"
   const mode = t.then.planOnly ? "stop after the plan" : "build it"
   const then =
-    t.then.type === "handoff"
+    t.then.type === "autopilot"
+      ? `run autopilot, ${mode}, and ${t.then.autoPr ? "open the PR when confident" : "wait for you before the PR"}`
+      : t.then.type === "handoff"
       ? `hand it to ${botName(t.then.botId)} and ${mode}`
       : t.then.type === "goal"
         ? `start a goal and ${mode}`
@@ -182,6 +186,8 @@ function triggerSentence(t: TriggerView, botName: (id?: string) => string): { wh
           : `notify you${t.then.channel && t.then.channel !== "inbox" ? ` on ${t.then.channel === "slack" ? "Slack" : "Teams"}` : ""}`
   return { when, then }
 }
+
+const spikeWindow = (min: number) => (min >= 1440 ? "a day" : min >= 60 ? `${min / 60} ${min === 60 ? "hour" : "hours"}` : `${min} minutes`)
 
 function Triggers({ list }: { list: TriggerView[] }) {
   const bots = useAppStore((s) => s.bots)

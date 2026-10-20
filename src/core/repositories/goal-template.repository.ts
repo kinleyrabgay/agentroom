@@ -15,6 +15,7 @@ const FrontmatterSchema = z.object({
   order: z.number().default(100),
   securityReview: z.enum(values(SecurityReviewMode)).optional(),
   budgetUsd: z.number().positive().optional(),
+  design: z.boolean().optional(),
   fields: z
     .array(
       z.object({
@@ -23,6 +24,7 @@ const FrontmatterSchema = z.object({
         placeholder: z.string().optional(),
         multiline: z.boolean().optional(),
         required: z.boolean().optional(),
+        image: z.boolean().optional(),
       }),
     )
     .default([]),
@@ -78,6 +80,7 @@ export function parseTemplate(id: string, text: string): GoalTemplate {
     fields: fm.fields,
     ...(fm.securityReview ? { securityReview: fm.securityReview } : {}),
     ...(fm.budgetUsd ? { budgetUsd: fm.budgetUsd } : {}),
+    ...(fm.design ? { design: true } : {}),
     guidance: body,
   };
 }
@@ -94,7 +97,8 @@ export function composeBrief(template: GoalTemplate, values: Record<string, stri
       if (f.required) throw new Error(`"${f.label}" is required for a ${template.name} goal.`);
       continue;
     }
-    parts.push(`**${f.label}**\n${v}`);
+    // Image fields hold an upload id: the image itself is attached to the goal.
+    parts.push(`**${f.label}**\n${f.image ? 'Attached image (see the goal attachments).' : v}`);
   }
   if (extra.trim()) parts.push(extra.trim());
   if (!parts.length) throw new Error('Fill in the template first.');
@@ -102,6 +106,6 @@ export function composeBrief(template: GoalTemplate, values: Record<string, stri
 }
 
 function firstValue(t: GoalTemplate, values: Record<string, string>) {
-  const f = t.fields.find((x) => String(values[x.id] ?? '').trim());
+  const f = t.fields.find((x) => !x.image && String(values[x.id] ?? '').trim());
   return f ? String(values[f.id]).trim().split('\n')[0].slice(0, 100) : t.name;
 }

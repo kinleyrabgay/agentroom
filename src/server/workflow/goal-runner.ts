@@ -47,6 +47,17 @@ export interface GoalRunnerDeps {
   onDone?: (goal: Goal, files: string[]) => void;
   /** Proof of work (Verify phase): record the feature in a browser and run quality checks. */
   proof?: ProofService;
+  /** Incident autopilot: hold unreproduced bugs, verify fail → pass before the report, open the PR when allowed. */
+  autopilot?: AutopilotHooks;
+}
+
+/** What the runner needs from the incident autopilot. */
+export interface AutopilotHooks {
+  /** Pause reason when the goal must stop for the human (e.g. the bug couldn't be reproduced). */
+  gate(goal: Goal): string | null;
+  beforeReport(goal: Goal, cwd: string): Promise<void>;
+  afterDone(goal: Goal): Promise<void>;
+  prSection(goal: Goal): string | null;
 }
 
 /** Pause reasons set by the budget gate start with this, so the UI can offer "Add budget and resume". */
@@ -184,6 +195,11 @@ export class GoalRunner {
     return next;
   }
 
+  /** Design an Implement design goal is compared against (set when the goal starts). */
+  setDesign(id: string, design: NonNullable<Goal['design']>): Goal {
+    return this.set(id, { design });
+  }
+
   update(id: string, patch: GoalPatch): Goal {
     this.require(id);
     const clean: GoalPatch = {};
@@ -251,6 +267,11 @@ export class GoalRunner {
       const goal = this.require(id);
       const roles = this.roles(goal);
       if (!roles) return;
+      const hold = this.deps.autopilot?.gate(goal);
+      if (hold) {
+        this.pauseNow(id, hold);
+        return;
+      }
 
       switch (goal.status) {
         case GoalStatus.Planning:
@@ -400,6 +421,10 @@ export class GoalRunner {
   }
 
   private async reportPhase(goal: Goal, roles: TeamRoles) {
+    if (goal.autopilot && this.deps.autopilot) {
+      this.leadStatus(BotStatus.Working, `${goal.id} · Autopilot: checking the failing test`);
+      await this.deps.autopilot.beforeReport(goal, this.cwdOf(goal)).catch(() => {});
+    }
     const out = await this.run(goal, roles, roles.lead, reportPrompt(goal, this.tasksOf(goal.id)), `Report on ${goal.id}`, { phase: WorkPhase.Reporting });
     if (this.interrupted(goal.id, out.aborted)) return;
     this.set(goal.id, { status: GoalStatus.Done, summary: out.text, reason: null });
@@ -411,6 +436,7 @@ export class GoalRunner {
       botId: roles.lead.id,
     });
     this.leadStatus(BotStatus.Idle);
+    if (this.deps.autopilot && goal.autopilot) void this.deps.autopilot.afterDone(this.require(goal.id)).catch(() => {});
     if (this.deps.onDone) {
       const done = this.require(goal.id);
       void this.changes(goal.id)
@@ -599,9 +625,10 @@ export class GoalRunner {
     const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open }).length ?? 0;
     const repo = await this.originRepo();
     const proof = this.deps.proof?.markdown(goalId, repo);
+    const autopilot = this.deps.autopilot?.prSection(goal);
     return {
       title: goal.title,
-      body: buildPrBody(goal, tasks, openFindings, repo, proof ? [proof] : []),
+      body: buildPrBody(goal, tasks, openFindings, repo, [autopilot ?? '', proof ?? ''].filter(Boolean)),
       branch: goal.worktree?.branch ?? null,
       openFindings,
       tests: testsLine(tasks),

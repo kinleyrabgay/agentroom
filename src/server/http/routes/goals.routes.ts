@@ -5,6 +5,7 @@ import type { HumanAudit } from '../../services/audit.service.js';
 import type { GoalRunner } from '../../workflow/goal-runner.js';
 import { body, respond } from '../respond.js';
 import { composeBrief, type GoalTemplateRepository } from '../../../core/repositories/goal-template.repository.js';
+import { designFromFields } from '../../autopilot/design.js';
 
 /** Goals: start a run, and the human's controls over it (approve, request changes, pause/resume, cancel). */
 export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, templates?: GoalTemplateRepository) {
@@ -32,7 +33,11 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, temp
       const template = templateId ? templates?.get(String(templateId)) : undefined;
       if (templateId && !template) throw new Error(`Unknown goal template "${templateId}".`);
       const text = template ? composeBrief(template, fields ?? {}, String(brief ?? '')) : String(brief ?? '');
+      // Implement design goals: the design to compare against; an uploaded design image is attached too.
+      const design = template ? designFromFields(template, fields ?? {}) : undefined;
+      if (design?.uploadId && !ids.includes(design.uploadId)) ids.push(design.uploadId);
       const goal = goals.start(text, title, [], securityReview ?? template?.securityReview, ids, template ? { template: { id: template.id, name: template.name }, guidance: template.guidance } : {});
+      if (design) goals.setDesign(goal.id, design);
       if (typeof budgetUsd === 'number' && budgetUsd > 0) goals.update(goal.id, { budgetUsd });
       audit(AuditKind.Goal, `Started ${goal.id}: ${goal.title}`, { goalId: goal.id, ...(template ? { detail: { template: template.id } } : {}) });
       return goal;

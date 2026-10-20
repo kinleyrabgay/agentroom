@@ -51,6 +51,11 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
   const [source, setSource] = useState<Source>(trigger?.when.source ?? "sentry")
   const [level, setLevel] = useState<string>(trigger?.when.source === "sentry" ? (trigger.when.level ?? ANY) : "fatal")
   const [project, setProject] = useState<string>(trigger?.when.source === "sentry" ? (trigger.when.project ?? ANY) : ANY)
+  const [event, setEvent] = useState<"new_issue" | "spike">(trigger?.when.source === "sentry" ? trigger.when.event : "new_issue")
+  const spikeRule = trigger?.when.source === "sentry" ? trigger.when.spike : undefined
+  const [factor, setFactor] = useState(String(spikeRule?.factor ?? 3))
+  const [windowMin, setWindowMin] = useState(String(spikeRule?.windowMin ?? 60))
+  const [autoPr, setAutoPr] = useState<"wait" | "auto">(trigger?.then.autoPr ? "auto" : "wait")
   const [column, setColumn] = useState<string>(trigger?.when.source === "github" ? trigger.when.toColumn : "")
   const [thenType, setThenType] = useState<TriggerThen["type"]>(trigger?.then.type ?? "handoff")
   const [botId, setBotId] = useState<string>(trigger?.then.botId ?? lead?.id ?? "")
@@ -83,14 +88,26 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
   // A failed goal can't be handed off; pick the closest action.
   const thenOptions = source === "goal"
     ? [{ label: "message", value: "message" as const }, { label: "start a goal", value: "goal" as const }, { label: "notify me", value: "notify" as const }]
-    : [{ label: "hand it to", value: "handoff" as const }, { label: "start a goal", value: "goal" as const }, { label: "message", value: "message" as const }, { label: "notify me", value: "notify" as const }]
+    : [
+        ...(source === "sentry" ? [{ label: "run autopilot", value: "autopilot" as const }] : []),
+        { label: "hand it to", value: "handoff" as const },
+        { label: "start a goal", value: "goal" as const },
+        { label: "message", value: "message" as const },
+        { label: "notify me", value: "notify" as const },
+      ]
   const effectiveThen = thenOptions.some((o) => o.value === thenType) ? thenType : thenOptions[0]!.value
   const botOptions = bots.map((b) => ({ label: b.name, value: b.id }))
 
   const save = async () => {
     const when: TriggerWhen =
       source === "sentry"
-        ? { source, event: "new_issue", ...(level !== ANY ? { level: level as "fatal" } : {}), ...(project !== ANY ? { project } : {}) }
+        ? {
+            source,
+            event,
+            ...(level !== ANY ? { level: level as "fatal" } : {}),
+            ...(project !== ANY ? { project } : {}),
+            ...(event === "spike" ? { spike: { factor: Number(factor) || 3, windowMin: Number(windowMin) || 60, minEvents: spikeRule?.minEvents ?? 10 } } : {}),
+          }
         : source === "github"
           ? { source, event: "card_moved", toColumn: column }
           : { source, event: "failed" }
@@ -100,6 +117,7 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
       planOnly: planOnly === "plan",
       ...(effectiveThen === "handoff" || effectiveThen === "message" ? { botId } : {}),
       ...(effectiveThen === "notify" ? { channel } : {}),
+      ...(effectiveThen === "autopilot" ? { autoPr: autoPr === "auto" } : {}),
     }
     const usd = Number(budget)
     const input: TriggerInput = {
@@ -148,7 +166,15 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
           <Pill label="sources" value={source} onChange={setSource} options={[{ label: "Sentry", value: "sentry" }, { label: "GitHub", value: "github" }, { label: "a goal", value: "goal" }]} />
           {source === "sentry" && (
             <>
-              <span>reports a new issue with</span>
+              <Pill label="events" value={event} onChange={setEvent} options={[{ label: "reports a new issue", value: "new_issue" }, { label: "sees an issue spike", value: "spike" }]} />
+              {event === "spike" && (
+                <>
+                  <Pill label="factors" value={factor} onChange={setFactor} options={["2", "3", "5", "10"].map((v) => ({ label: `×${v}`, value: v }))} />
+                  <span>within</span>
+                  <Pill label="windows" value={windowMin} onChange={setWindowMin} options={[{ label: "15 minutes", value: "15" }, { label: "1 hour", value: "60" }, { label: "6 hours", value: "360" }, { label: "a day", value: "1440" }]} />
+                </>
+              )}
+              <span>with</span>
               <Pill label="levels" value={level} onChange={setLevel} options={[{ label: "any level", value: ANY }, { label: "level fatal", value: "fatal" }, { label: "level error or worse", value: "error" }, { label: "level warning or worse", value: "warning" }]} />
               <span>in</span>
               <Pill label="projects" value={project} onChange={setProject} options={[{ label: "any project", value: ANY }, ...projects.map((p) => ({ label: p, value: p }))]} />
@@ -176,6 +202,12 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
               <Pill label="modes" value={planOnly} onChange={setPlanOnly} options={[{ label: "stop after the plan", value: "plan" }, { label: "build it and open a PR", value: "build" }]} />
             </>
           )}
+          {effectiveThen === "autopilot" && (
+            <>
+              <span>and</span>
+              <Pill label="modes" value={planOnly} onChange={setPlanOnly} options={[{ label: "stop after the plan", value: "plan" }, { label: "build without waiting", value: "build" }]} />
+            </>
+          )}
           {effectiveThen === "notify" && (
             <>
               <span>in</span>
@@ -183,8 +215,21 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
             </>
           )}
         </div>
+        {effectiveThen === "autopilot" && (
+          <div className="flex flex-wrap items-center gap-2 text-[15px]">
+            <span>When the fix is verified,</span>
+            <Pill label="PR modes" value={autoPr} onChange={setAutoPr} options={[{ label: "wait for me before the PR", value: "wait" }, { label: "open the PR when confident", value: "auto" }]} />
+          </div>
+        )}
         {planOnly === "build" && (effectiveThen === "handoff" || effectiveThen === "goal") && (
           <Callout tone="warning">The plan is approved automatically and the Developer starts building. You still review the changes before any PR.</Callout>
+        )}
+        {effectiveThen === "autopilot" && (
+          <Callout tone={autoPr === "auto" ? "warning" : "info"} title="Reproduce → failing test → fix → verify">
+            The team must reproduce the error and write a test that fails because of it. AgentRoom then checks on its own that the test fails on the
+            starting commit and passes on the fix, and scores its confidence. If it can&apos;t reproduce the bug, the goal stops and asks you.
+            {autoPr === "auto" && " The PR opens on its own only when Settings → Autopilot allows it and confidence is above the threshold."}
+          </Callout>
         )}
       </div>
 
@@ -227,7 +272,7 @@ function TriggerForm({ trigger, onDone }: { trigger: Trigger | null; onDone: () 
 }
 
 function defaultName(w: TriggerWhen): string {
-  if (w.source === "sentry") return `New ${w.level ?? ""} Sentry issues${w.project ? ` in ${w.project}` : ""}`.replace(/\s+/g, " ")
+  if (w.source === "sentry") return `${w.event === "spike" ? "Spiking" : "New"} ${w.level ?? ""} Sentry issues${w.project ? ` in ${w.project}` : ""}`.replace(/\s+/g, " ")
   if (w.source === "github") return `Cards moved to ${w.toColumn}`
   return "Failed goals"
 }
