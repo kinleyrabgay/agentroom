@@ -14,7 +14,7 @@ export type AutomationAction =
       autoBuild?: boolean;
     }
   | { type: 'message'; botId: string; text: string }
-  | { type: 'handoff'; source: 'github' | 'sentry'; ids: string[]; botId?: string; note?: string };
+  | { type: 'handoff'; source: 'github' | 'sentry' | 'linear' | 'jira'; ids: string[]; botId?: string; note?: string };
 
 /** Where automation runs. Only this machine for now. */
 export type AutomationRunner = 'local' | 'cloud';
@@ -48,7 +48,8 @@ export interface Schedule {
 export type TriggerWhen =
   | { source: 'sentry'; event: 'new_issue'; level?: 'fatal' | 'error' | 'warning'; project?: string }
   | { source: 'github'; event: 'card_moved'; toColumn: string }
-  | { source: 'goal'; event: 'failed' };
+  | { source: 'goal'; event: 'failed' }
+  | { source: 'linear' | 'jira'; event: 'issue_moved'; toState: string };
 
 export interface TriggerThen {
   type: 'handoff' | 'goal' | 'message' | 'notify';

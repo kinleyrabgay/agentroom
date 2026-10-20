@@ -4,8 +4,8 @@ import type { RemoteService } from '../../remote/remote.service.js';
 import { MOBILE_HTML } from '../../remote/mobile-page.js';
 import { body, respond } from '../respond.js';
 
-/** Paths reachable through the public tunnel; everything else is refused there. */
-export const REMOTE_PUBLIC_PATH = /^\/(m|remote-api\/.*)$/;
+/** Paths reachable through the public tunnel; everything else is refused there. The Teams webhook checks its own HMAC signature. */
+export const REMOTE_PUBLIC_PATH = /^\/(m|remote-api\/.*|teams\/inbound)$/;
 export const REMOTE_TOKEN_HEADER = 'x-remote-token';
 
 /** True for requests that came in through Cloudflare (the phone tunnel), not from this machine. */

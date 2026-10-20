@@ -42,6 +42,11 @@ import { automationRoutes, type RunnerControls } from './routes/automation.route
 import { goalTemplateRoutes } from './routes/goal-templates.routes.js';
 import { contextRoutes } from './routes/context.routes.js';
 import type { ContextService } from '../context/context.service.js';
+import { reviewRoutes, teamsPublicRoutes, teamsRoutes, trackerRoutes } from './routes/intake.routes.js';
+import type { TrackerService } from '../integrations/issues/tracker.service.js';
+import type { TeamsService } from '../intake/teams/teams.service.js';
+import type { PrReviewService } from '../review/pr-review.service.js';
+import type { TrackerId } from '../../shared/types/index.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -72,6 +77,12 @@ export interface AppDeps {
   uploads: UploadStore;
   /** Repo context (module map, cards). */
   context?: ContextService;
+  /** Linear and Jira. */
+  trackers?: Record<TrackerId, TrackerService>;
+  /** Microsoft Teams intake. */
+  teams?: TeamsService;
+  /** PR review from a link. */
+  reviews?: PrReviewService;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -122,6 +133,9 @@ export function createApp(deps: AppDeps) {
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
   if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
+  if (deps.trackers) trackerRoutes(api, deps.trackers, deps.humanAudit);
+  if (deps.teams) teamsRoutes(api, deps.teams, deps.humanName);
+  if (deps.reviews) reviewRoutes(api, deps.reviews, deps.humanName);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
   api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));
   app.route(API_PREFIX, api);
@@ -149,6 +163,7 @@ export function createApp(deps: AppDeps) {
   );
 
   if (deps.remote) remotePublicRoutes(app, deps.remote);
+  if (deps.teams) teamsPublicRoutes(app, deps.teams);
   serveUi(app, findUiDir());
   return { app, injectWebSocket };
 }

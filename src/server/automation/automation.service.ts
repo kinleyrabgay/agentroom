@@ -24,6 +24,7 @@ import { runsHere, type AutomationRepository } from '../../core/repositories/aut
 import { buildBrief, briefHasNews, digestText } from './brief.js';
 import { decide, localDay, movedCards, newSentryIssues, triggerBlocked, type ScheduleState } from './plan.js';
 import { cronError } from './time-parse.js';
+import { teamsTextMessage } from '../intake/teams/cards.js';
 
 const TICK_MS = 30_000;
 const POLL_MS = 5 * 60_000;
@@ -43,6 +44,8 @@ interface State {
   triggers: Record<string, TriggerState>;
   sentrySeen?: string[];
   githubSnapshot?: Record<string, string>;
+  /** Linear/Jira issue states at the last poll, per tracker. */
+  trackerSnapshots?: Record<string, Record<string, string>>;
   failedGoalsSeen?: string[];
   /** Goals that build without waiting for plan approval. */
   autoBuild: string[];
@@ -69,6 +72,8 @@ export interface GithubCardLite {
   status: string;
 }
 
+type HandoffSource = 'github' | 'sentry' | 'linear' | 'jira';
+
 export interface AutomationDeps {
   repo: AutomationRepository;
   stateFile: string;
@@ -82,7 +87,7 @@ export interface AutomationDeps {
   setGoalBudget?: (goalId: string, usd: number) => void;
   goals: () => Goal[];
   sendToBot: (botId: string, text: string) => void;
-  handoff: (source: 'github' | 'sentry', input: { ids: string[]; botId?: string; note?: string }) => Promise<{ botId: string; goal?: { id: string } }>;
+  handoff: (source: HandoffSource, input: { ids: string[]; botId?: string; note?: string }) => Promise<{ botId: string; goal?: { id: string } }>;
   notify: (n: { kind: NotificationKind; title: string; body: string; goalId?: string }) => void;
   notifications: () => Notification[];
   pendingApprovals: () => number;
@@ -93,6 +98,8 @@ export interface AutomationDeps {
   sentryIssues?: () => Promise<SentryIssueLite[] | null>;
   /** Board cards with their column names, or null when no board is connected. */
   githubCards?: () => Promise<GithubCardLite[] | null>;
+  /** Open issues of a connected tracker with their state names, or null when it isn't connected. */
+  trackerIssues?: (tracker: 'linear' | 'jira') => Promise<GithubCardLite[] | null>;
   webhook: (channel: 'slack' | 'teams') => string | undefined;
   post?: (url: string, body: unknown) => Promise<void>;
   projectName: string;
@@ -341,6 +348,15 @@ export class AutomationService {
       if (!match) return { wouldFire: false, reason: `No card is in "${col}" right now`, action };
       return { wouldFire: !blocked, ...(blocked ? { reason: blocked } : {}), event: `${match.title} (in ${match.status})`, action };
     }
+    if (t.when.source === 'linear' || t.when.source === 'jira') {
+      const name = t.when.source === 'linear' ? 'Linear' : 'Jira';
+      const issues = (await this.deps.trackerIssues?.(t.when.source)) ?? null;
+      if (!issues) return { wouldFire: false, reason: `${name} is not connected`, action };
+      const state = t.when.toState;
+      const match = issues.find((c) => sameColumn(c.status, state));
+      if (!match) return { wouldFire: false, reason: `No ${name} issue is in "${state}" right now`, action };
+      return { wouldFire: !blocked, ...(blocked ? { reason: blocked } : {}), event: `${match.title} (in ${match.status})`, action };
+    }
     const failed = this.deps.goals().filter((g) => g.status === GoalStatus.Failed).at(-1);
     if (!failed) return { wouldFire: false, reason: 'No goal has failed yet', action };
     return { wouldFire: !blocked, ...(blocked ? { reason: blocked } : {}), event: `${failed.id} ${failed.title} failed`, action };
@@ -556,6 +572,20 @@ export class AutomationService {
           }
         }
       }
+      for (const tracker of ['linear', 'jira'] as const) {
+        const mine = triggers.filter((t) => t.when.source === tracker);
+        if (!mine.length || !this.deps.trackerIssues) continue;
+        const issues = await this.deps.trackerIssues(tracker).catch(() => null);
+        if (!issues) continue;
+        const snaps = (this.state.trackerSnapshots ??= {});
+        const { moved, snapshot } = movedCards(issues, snaps[tracker]);
+        snaps[tracker] = snapshot;
+        for (const issue of moved) {
+          for (const t of mine.filter((t) => t.when.source === tracker && sameColumn(issue.status, t.when.toState))) {
+            await this.fireTrigger(t, { title: issue.title, url: issue.url ?? '', ids: [issue.id], source: tracker });
+          }
+        }
+      }
       this.save();
       this.push();
     } finally {
@@ -563,7 +593,7 @@ export class AutomationService {
     }
   }
 
-  private async fireTrigger(t: Trigger, ev: { title: string; url: string; ids?: string[]; source?: 'github' | 'sentry'; reason?: string }) {
+  private async fireTrigger(t: Trigger, ev: { title: string; url: string; ids?: string[]; source?: HandoffSource; reason?: string }) {
     const blocked = triggerBlocked(t, this.runsToday(t.id), this.now()) ?? this.dailyCapReached();
     const st = this.state.triggers[t.id] ?? { runsByDay: {} };
     if (blocked) {
@@ -609,7 +639,8 @@ export class AutomationService {
     const url = this.deps.webhook(channel);
     if (!url) return false;
     try {
-      await (this.deps.post ?? postJson)(url, { text });
+      // Teams Workflows webhooks only take Adaptive Card messages; older connectors accept them too.
+      await (this.deps.post ?? postJson)(url, channel === 'teams' ? teamsTextMessage(text) : { text });
       return true;
     } catch (err) {
       this.deps.notify({ kind: NotificationKind.Info, title: `Couldn't post to ${channel === 'slack' ? 'Slack' : 'Teams'}`, body: (err as Error).message });

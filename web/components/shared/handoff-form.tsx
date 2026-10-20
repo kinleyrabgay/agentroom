@@ -47,7 +47,7 @@ export interface HandoffFormProps {
   autoFocus?: boolean
   className?: string
   /** Where the work comes from, to offer "Later" (a scheduled hand-off). */
-  later?: { source: "github" | "sentry"; ids: string[]; label: string }
+  later?: { source: "github" | "sentry" | "linear" | "jira"; ids: string[]; label: string }
 }
 
 /**

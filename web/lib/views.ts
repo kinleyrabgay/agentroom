@@ -2,6 +2,7 @@ import {
   CalendarClockIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
+  GitPullRequestIcon,
   GlobeIcon,
   InboxIcon,
   NetworkIcon,
@@ -13,7 +14,7 @@ import {
   WaypointsIcon,
 } from "lucide-react"
 import type { ComponentType } from "react"
-import { GithubMark } from "@/components/kit/brand-icons"
+import { GithubMark, JiraMark, LinearMark } from "@/components/kit/brand-icons"
 import { View } from "./constants"
 
 /** Name, one-line description and icon of every view. Sidebar, top bar, ⌘K and error screens read this. */
@@ -25,6 +26,9 @@ export const VIEW_META: Record<View, { label: string; description: string; icon:
   [View.Work]: { label: "Work", description: "Goals and their tasks: plan, build, test, report.", icon: SquareKanbanIcon },
   [View.Github]: { label: "GitHub", description: "Your project board. Pick cards and hand them to the team.", icon: GithubMark },
   [View.Sentry]: { label: "Sentry", description: "Production errors. Read the trace, hand one to a bot to fix.", icon: BugIcon },
+  [View.Linear]: { label: "Linear", description: "Your team's Linear issues. Hand one to a bot; status syncs back if you ask.", icon: LinearMark },
+  [View.Jira]: { label: "Jira", description: "Your project's Jira issues, ready to hand to the team.", icon: JiraMark },
+  [View.Reviews]: { label: "PR reviews", description: "Paste a pull request link; the Reviewer drafts, you edit and post.", icon: GitPullRequestIcon },
   [View.Browser]: { label: "Browser", description: "Your app, live. Bots browse it; you can take over.", icon: GlobeIcon },
   [View.Security]: { label: "Security", description: "Scanner findings, dependency checks and reviews.", icon: ShieldIcon },
   [View.Audit]: { label: "Audit log", description: "Every command, write, push and approval, and who decided.", icon: ScrollTextIcon },

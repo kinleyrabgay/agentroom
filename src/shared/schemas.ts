@@ -98,6 +98,14 @@ export const GoalSchema = z.object({
           project: z.string().optional(),
           title: z.string(),
         }),
+        z.object({
+          type: z.literal('issue'),
+          tracker: z.enum(['linear', 'jira']),
+          itemId: z.string(),
+          key: z.string(),
+          url: z.string().optional(),
+          title: z.string(),
+        }),
       ]),
     )
     .default([]),
@@ -287,7 +295,7 @@ export const AutomationActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('message'), botId: z.string().min(1), text: z.string().min(1, 'Write the message') }),
   z.object({
     type: z.literal('handoff'),
-    source: z.enum(['github', 'sentry']),
+    source: z.enum(['github', 'sentry', 'linear', 'jira']),
     ids: z.array(z.string()).min(1, 'Pick at least one item'),
     botId: z.string().optional(),
     note: z.string().optional(),
@@ -318,6 +326,8 @@ export const TriggerSchema = z.object({
     z.object({ source: z.literal('sentry'), event: z.literal('new_issue'), level: z.enum(['fatal', 'error', 'warning']).optional(), project: z.string().optional() }),
     z.object({ source: z.literal('github'), event: z.literal('card_moved'), toColumn: z.string().min(1) }),
     z.object({ source: z.literal('goal'), event: z.literal('failed') }),
+    z.object({ source: z.literal('linear'), event: z.literal('issue_moved'), toState: z.string().min(1) }),
+    z.object({ source: z.literal('jira'), event: z.literal('issue_moved'), toState: z.string().min(1) }),
   ]),
   then: z.object({
     type: z.enum(['handoff', 'goal', 'message', 'notify']),

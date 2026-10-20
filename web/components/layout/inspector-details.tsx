@@ -10,6 +10,8 @@ import { sentryIssueLabel, SentryIssueInspector } from "@/features/sentry/compon
 import { useSentryStore } from "@/features/sentry/lib/sentry-store"
 import { contextModuleLabel, ModuleInspector } from "@/features/context/components/module-inspector"
 import { useContextStore } from "@/features/context/lib/context-store"
+import { TrackerIssueInspector } from "@/features/issues/components/tracker-inspector"
+import { trackerIssueLabel, useTrackerStore } from "@/features/issues/lib/tracker-store"
 
 /** What the Inspector shows besides a bot: the open issue, card or task of the current page. */
 export interface InspectorDetail {
@@ -33,9 +35,13 @@ export function useInspectorDetail(): InspectorDetail | null {
   const itemLabel = useGithubStore((s) => (s.openItemId ? githubItemLabel(s.openItemId) : ""))
   const moduleId = useContextStore((s) => s.openModuleId)
   const moduleLabel = useContextStore((s) => (s.openModuleId ? contextModuleLabel(s.openModuleId) : ""))
+  const tracker = view === View.Linear ? "linear" : view === View.Jira ? "jira" : null
+  const trackerIssueId = useTrackerStore((s) => (tracker ? s[tracker].openIssueId : null))
+  const trackerLabel = useTrackerStore((s) => (tracker && s[tracker].openIssueId ? trackerIssueLabel(tracker, s[tracker].openIssueId!) : ""))
   if (view === View.Work && taskId) return { key: `task:${taskId}`, label: taskId, node: <TaskInspector /> }
   if (view === View.Sentry && issueId) return { key: `sentry:${issueId}`, label: issueLabel, node: <SentryIssueInspector id={issueId} /> }
   if (view === View.Github && itemId) return { key: `github:${itemId}`, label: itemLabel, node: <GithubItemInspector id={itemId} /> }
+  if (tracker && trackerIssueId) return { key: `${tracker}:${trackerIssueId}`, label: trackerLabel, node: <TrackerIssueInspector tracker={tracker} id={trackerIssueId} /> }
   if (view === View.Context && moduleId) return { key: `context:${moduleId}`, label: moduleLabel, node: <ModuleInspector id={moduleId} /> }
   return null
 }

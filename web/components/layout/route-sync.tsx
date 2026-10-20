@@ -6,6 +6,8 @@ import { useAppStore } from "@/lib/store/app-store"
 import { useGithubStore } from "@/features/github/lib/github-store"
 import { setSentry, useSentryStore } from "@/features/sentry/lib/sentry-store"
 import { openModule, useContextStore } from "@/features/context/lib/context-store"
+import { setTracker, useTrackerStore } from "@/features/issues/lib/tracker-store"
+import { setReviews, useReviewStore } from "@/features/reviews/lib/review-store"
 
 /**
  * Hash routes for a static export (the session token stays in the query string):
@@ -14,6 +16,8 @@ import { openModule, useContextStore } from "@/features/context/lib/context-stor
  *   #/work/G-3/T-2              #/github/<itemId>
  *   #/sentry/<issueId>          #/browser
  *   #/context/<moduleId>
+ *   #/linear/<issueId>          #/jira/<issueId>
+ *   #/reviews/<reviewId>
  *   #/security?goal=G-1         #/audit
  *   #/settings/integrations
  *
@@ -58,6 +62,12 @@ export function currentHash(): string {
   } else if (a.view === View.Context) {
     const id = useContextStore.getState().openModuleId
     if (id) parts.push(id)
+  } else if (a.view === View.Linear || a.view === View.Jira) {
+    const id = useTrackerStore.getState()[a.view].openIssueId
+    if (id) parts.push(id)
+  } else if (a.view === View.Reviews) {
+    const id = useReviewStore.getState().openId
+    if (id) parts.push(id)
   } else if (a.view === View.Settings && a.settingsSection) {
     parts.push(a.settingsSection)
   }
@@ -85,6 +95,8 @@ function apply(route: Route) {
   if (route.view === View.Github) useGithubStore.setState({ openItemId: a ?? null })
   if (route.view === View.Sentry) setSentry({ openIssueId: a ?? null })
   if (route.view === View.Context && (a ?? null) !== useContextStore.getState().openModuleId) openModule(a ?? null)
+  if (route.view === View.Linear || route.view === View.Jira) setTracker(route.view, { openIssueId: a ?? null })
+  if (route.view === View.Reviews) setReviews({ openId: a ?? null })
 }
 
 /** Mount once: reads the hash on load and on back/forward, writes it when navigation state changes. */
@@ -117,7 +129,7 @@ export function RouteSync() {
     }
     window.addEventListener("hashchange", onPop)
     window.addEventListener("popstate", onPop)
-    const unsubs = [useAppStore.subscribe(write), useGithubStore.subscribe(write), useSentryStore.subscribe(write), useContextStore.subscribe(write)]
+    const unsubs = [useAppStore.subscribe(write), useGithubStore.subscribe(write), useSentryStore.subscribe(write), useContextStore.subscribe(write), useTrackerStore.subscribe(write), useReviewStore.subscribe(write)]
     return () => {
       window.removeEventListener("hashchange", onPop)
       window.removeEventListener("popstate", onPop)

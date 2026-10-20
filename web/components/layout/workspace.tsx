@@ -23,6 +23,8 @@ import { InboxPage } from "@/features/inbox/components/inbox-page"
 import { ConnectionsPage } from "@/features/connections/components/connections-page"
 import { SettingsPage } from "@/features/settings/components/settings-page"
 import { ContextPage } from "@/features/context/components/context-page"
+import { JiraPage, LinearPage } from "@/features/issues/components/tracker-page"
+import { ReviewsPage } from "@/features/reviews/components/reviews-page"
 import { useInspectorDetail } from "./inspector-details"
 
 const VIEWS: Record<View, React.ComponentType> = {
@@ -33,6 +35,9 @@ const VIEWS: Record<View, React.ComponentType> = {
   [View.Automation]: AutomationPage,
   [View.Github]: GithubBoard,
   [View.Sentry]: SentryPage,
+  [View.Linear]: LinearPage,
+  [View.Jira]: JiraPage,
+  [View.Reviews]: ReviewsPage,
   [View.Browser]: BrowserWorkspace,
   [View.Security]: SecurityPage,
   [View.Audit]: AuditPage,

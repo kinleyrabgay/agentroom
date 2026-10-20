@@ -5,6 +5,7 @@ import { readJson } from '../../core/fs/json.js';
 
 const FILE_MODE = 0o600;
 export const MCP_SECRET = /^[A-Z][A-Z0-9_]{0,63}$/;
+export type IntakeSecret = 'linearApiKey' | 'jiraEmail' | 'jiraToken' | 'teamsOutgoingSecret';
 
 /**
  * Local integration secrets (`.agentroom/runs/secrets.json`, mode 0600, never committed).
@@ -38,6 +39,16 @@ export class SecretsStore {
     }
     this.write(next);
     return this.status();
+  }
+
+  /** Set (or with '' clear) one intake credential: tracker tokens, the Teams HMAC key. Never returned over the API. */
+  setCredential(key: IntakeSecret, value: string) {
+    if (typeof value !== 'string') throw new Error(`${key} must be a string`);
+    const next: IntegrationSecrets = { ...this.read() };
+    const v = value.trim();
+    if (!v) delete next[key];
+    else next[key] = v;
+    this.write(next);
   }
 
   /** Value for a `${secret:NAME}` reference in mcp.json, or undefined. */

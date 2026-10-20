@@ -1,6 +1,9 @@
 "use client"
 
+import { useEffect } from "react"
 import { useTheme } from "next-themes"
+import { loadTrackerStatuses, useTrackerStore } from "@/features/issues/lib/tracker-store"
+import { loadReviews, useReviewStore } from "@/features/reviews/lib/review-store"
 import { useContextStore } from "@/features/context/lib/context-store"
 import { useSentryStore } from "@/features/sentry/lib/sentry-store"
 import { GitBranchIcon, GlobeIcon, MoonIcon, SearchIcon, SunIcon } from "lucide-react"
@@ -140,8 +143,19 @@ function SourcesNav() {
   const myCards = useGithubStore((s) => myOpenCount(s.board?.items, s.board?.viewer))
   // New or regressed issues in the list the Sentry page last loaded.
   const freshIssues = useSentryStore((s) => s.issues.filter((i) => i.substatus === "new" || i.substatus === "regressed").length)
+  // Linear and Jira appear once connected (or configured for the team); reviews once there is one.
+  const linearOn = useTrackerStore((s) => !!s.linear.status?.config)
+  const jiraOn = useTrackerStore((s) => !!s.jira.status?.config)
+  const draftReviews = useReviewStore((s) => s.reviews.filter((r) => r.state === "ready").length)
+  useEffect(() => {
+    void loadTrackerStatuses()
+    void loadReviews()
+  }, [])
   const items: NavItem[] = [
     { view: View.Github, badge: myCards, badgeLabel: `${myCards} open cards assigned to you` },
+    { view: View.Reviews, badge: draftReviews, tone: "warning", badgeLabel: `${draftReviews} review ${draftReviews === 1 ? "draft" : "drafts"} to post` },
+    ...(linearOn || view === View.Linear ? [{ view: View.Linear }] : []),
+    ...(jiraOn || view === View.Jira ? [{ view: View.Jira }] : []),
     { view: View.Sentry, badge: freshIssues, tone: "danger", badgeLabel: `${freshIssues} new or regressed ${freshIssues === 1 ? "issue" : "issues"}` },
     { view: View.Browser, badge: openPages, badgeLabel: `${openPages} open pages` },
   ]

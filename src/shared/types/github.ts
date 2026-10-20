@@ -127,4 +127,13 @@ export type GoalSource =
       url?: string;
       project?: string;
       title: string;
+    }
+  | {
+      type: 'issue';
+      tracker: 'linear' | 'jira';
+      itemId: string;
+      /** e.g. "ENG-123". */
+      key: string;
+      url?: string;
+      title: string;
     };

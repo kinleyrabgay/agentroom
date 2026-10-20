@@ -12,6 +12,8 @@ import { ToneBadge } from "@/components/kit/badge"
 import { GithubConnectionSettings } from "@/features/github/components/github-connection-settings"
 import { SentryConnectionSettings } from "@/features/sentry/components/sentry-connection-settings"
 import { McpServersSection } from "@/features/connections/components/connections-page"
+import { TrackerConnectionSettings } from "@/features/issues/components/tracker-connection-settings"
+import { TeamsSettings } from "@/features/teams/components/teams-settings"
 import { SettingsSection } from "../lib/constants"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -27,6 +29,9 @@ export function IntegrationsSection() {
         {/* GitHub and Sentry draw their own header and frame. */}
         <GithubConnectionSettings />
         <SentryConnectionSettings />
+        <TrackerConnectionSettings tracker="linear" />
+        <TrackerConnectionSettings tracker="jira" />
+        <TeamsSettings />
         <Block icon={<PlugIcon className="size-4" />} title="MCP servers" description="External tools your bots can use, like Sentry or Linear.">
           <McpServersSection />
         </Block>
@@ -59,7 +64,7 @@ function Block({ icon, title, description, children }: { icon: React.ReactNode; 
 type Channel = "slackWebhook" | "teamsWebhook"
 const CHANNELS: { key: Channel; status: keyof IntegrationStatus; label: string; placeholder: string }[] = [
   { key: "slackWebhook", status: "slack", label: "Slack incoming webhook", placeholder: "https://hooks.slack.com/services/…" },
-  { key: "teamsWebhook", status: "teams", label: "Microsoft Teams webhook", placeholder: "https://…webhook.office.com/…" },
+  { key: "teamsWebhook", status: "teams", label: "Microsoft Teams Workflow webhook", placeholder: "https://…logic.azure.com/… (same URL as Teams step 3)" },
 ]
 
 /** Webhook URLs (write-only: the server only says whether each is set). */

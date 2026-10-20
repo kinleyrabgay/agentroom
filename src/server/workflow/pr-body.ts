@@ -13,6 +13,9 @@ export function closingLines(goal: Goal, prRepo?: string): string[] {
       lines.push(`Closes ${ref}`);
     } else if (s.type === 'sentry') {
       lines.push(`Fixes ${s.shortId}`);
+    } else if (s.type === 'issue') {
+      // Linear and Jira link PRs that mention the key; "Fixes" also closes it in Linear.
+      lines.push(`Fixes ${s.key}`);
     }
   }
   return [...new Set(lines)];

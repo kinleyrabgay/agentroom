@@ -343,3 +343,24 @@ describe('team and personal automation', () => {
     expect(JSON.parse(fs.readFileSync(path.join(h.dir, 'triggers.json'), 'utf8')).triggers[0].owner.email).toBe('tester@example.com');
   });
 });
+
+describe('Tracker triggers', () => {
+  it('fires when a Linear issue moves into the state, not on the first look', async () => {
+    let issues = [{ id: 'u1', title: 'ENG-1: Login', url: 'https://linear.app/x/ENG-1', status: 'Todo' }];
+    const handed: string[][] = [];
+    const h = harness({
+      trackerIssues: async (t) => (t === 'linear' ? issues : null),
+      handoff: async (source, input) => {
+        handed.push([source, ...input.ids]);
+        return { botId: 'lead', goal: { id: 'G-7' } };
+      },
+    });
+    h.svc.createTrigger({ name: 'Ready to team', when: { source: 'linear', event: 'issue_moved', toState: 'Ready for dev' }, then: { type: 'handoff', planOnly: true } });
+    await h.svc.poll();
+    expect(handed).toEqual([]);
+    issues = [{ ...issues[0]!, status: 'Ready for dev' }];
+    await h.svc.poll();
+    expect(handed).toEqual([['linear', 'u1']]);
+    expect(await h.svc.testTrigger(h.deps.repo.triggers()[0]!.id)).toMatchObject({ wouldFire: true, event: 'ENG-1: Login (in Ready for dev)' });
+  });
+});

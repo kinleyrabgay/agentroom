@@ -63,13 +63,23 @@ export class PermissionGate {
     this.mcp = info;
   }
 
+  /** Bots whose every shell command needs a human, whatever the mode (e.g. reviewing an untrusted fork PR). */
+  private strict = new Map<string, string>();
+
+  /** Make every Bash call of this bot ask (sticky, never "Always allow"); `null` lifts it. */
+  setStrict(botId: string, reason: string | null) {
+    if (reason) this.strict.set(botId, reason);
+    else this.strict.delete(botId);
+  }
+
   /** Plug in the security gate (scans commits/pushes/PRs before they run). */
   useSecurity(hook: SecurityGateHook) {
     this.security = hook;
   }
 
   async ask(botId: string, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<PermissionAnswer> {
-    const decision = decide(tool, input, this.config(), this.sessionAllowed, this.mcp);
+    const strictReason = tool === ToolName.Bash ? this.strict.get(botId) : undefined;
+    const decision = strictReason ? ({ action: 'ask', reason: strictReason, sticky: true, group: tool } as const) : decide(tool, input, this.config(), this.sessionAllowed, this.mcp);
     // Only publishing shell commands are scanned; everything else stays synchronous up to the approval event.
     const hold = tool === ToolName.Bash && this.security ? await this.securityHold(botId, tool, input) : null;
     if (decision.action === 'allow' && !hold) {
