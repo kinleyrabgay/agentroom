@@ -18,6 +18,7 @@ import { GoalList } from "./goal-list"
 import { GoalTabs } from "./goal-tabs"
 import { ChangesPanel } from "./changes-panel"
 import { GoalTimeline } from "@/features/replay/components/goal-timeline"
+import { ProofPanel } from "@/features/proof/components/proof-panel"
 import { NewGoalDialog } from "./new-goal-dialog"
 import { QuickAddTask } from "./quick-add-task"
 import { TaskColumn } from "./task-column"
@@ -108,6 +109,12 @@ export function TaskBoard() {
           <div className="flex h-[max(28rem,calc(100svh-11rem))] flex-col px-6 py-4">
             <ErrorBoundary label="Changes" key={current.id}>
               <ChangesPanel goal={current} />
+            </ErrorBoundary>
+          </div>
+        ) : current && goalTab === GoalTab.Proof ? (
+          <div className="px-6 py-4">
+            <ErrorBoundary label="Proof" key={current.id}>
+              <ProofPanel goal={current} />
             </ErrorBoundary>
           </div>
         ) : current && goalTab === GoalTab.Timeline ? (

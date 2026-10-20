@@ -44,6 +44,7 @@ export const GOAL_STATUS_META: Record<GoalStatus, { label: string; tone: Tone; l
   [GoalStatus.Building]: { label: "Building", tone: "brand", live: true, dot: "bg-brand animate-pulse" },
   [GoalStatus.Securing]: { label: "Security review", tone: "danger", live: true, dot: "bg-danger animate-pulse" },
   [GoalStatus.Testing]: { label: "Testing", tone: "brand", live: true, dot: "bg-brand animate-pulse" },
+  [GoalStatus.Verifying]: { label: "Verifying", tone: "brand", live: true, dot: "bg-brand animate-pulse" },
   [GoalStatus.Reporting]: { label: "Reporting", tone: "info", live: true, dot: "bg-info animate-pulse" },
   [GoalStatus.Paused]: { label: "Paused", tone: "warning", dot: "bg-warning" },
   [GoalStatus.Done]: { label: "Done", tone: "success", dot: "bg-success" },
@@ -58,6 +59,7 @@ export const PHASES = [
   { key: "build", label: "Build" },
   { key: "security", label: "Security" },
   { key: "test", label: "Test" },
+  { key: "verify", label: "Verify" },
   { key: "report", label: "Report" },
   { key: "done", label: "Done" },
 ] as const

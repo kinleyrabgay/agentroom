@@ -27,7 +27,8 @@ export function testsLine(tasks: Task[]): string | null {
 }
 
 /** Default PR body: the Team Lead's report, what it closes/fixes, security and test status. */
-export function buildPrBody(goal: Goal, tasks: Task[], openFindings: number, prRepo?: string): string {
+/** `sections` (e.g. the Proof section) go after the checks, before the footer. */
+export function buildPrBody(goal: Goal, tasks: Task[], openFindings: number, prRepo?: string, sections: string[] = []): string {
   const parts: string[] = [];
   const report = goal.summary.trim() || goal.plan.trim() || goal.brief.trim();
   parts.push(report);
@@ -40,6 +41,7 @@ export function buildPrBody(goal: Goal, tasks: Task[], openFindings: number, prR
     testsLine(tasks) ? `Tests: ${testsLine(tasks)}` : '',
   ].filter(Boolean);
   parts.push(checks.join('\n'));
+  parts.push(...sections.filter(Boolean));
   parts.push(`_Made with AgentRoom (${goal.id})._`);
   return parts.join('\n\n');
 }

@@ -157,6 +157,19 @@ export const GoalSchema = z.object({
   pr: z.object({ url: z.string(), number: z.number().optional() }).optional(),
   /** Per-goal spend cap (USD); overrides settings.budgets.perGoalUsd. */
   budgetUsd: z.number().positive().optional(),
+  /** Last proof-of-work run (Verify phase); the full report is in runs/proof/<id>/. */
+  proof: z
+    .object({
+      round: z.number(),
+      status: z.enum(['passed', 'failed', 'skipped', 'error']),
+      at: z.string(),
+      summary: z.string(),
+      failing: z.array(z.string()).default([]),
+      gif: z.boolean().optional(),
+    })
+    .optional(),
+  /** The human approved failing quality checks for this round. */
+  proofOverride: z.object({ round: z.number(), at: z.string(), by: z.string() }).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -239,6 +252,50 @@ export const SettingsSchema = z.object({
       cardModel: z.string().min(1).default('claude-haiku-4-5-20251001'),
       /** Cards written per sync at most (cost control). */
       maxCardsPerSync: z.number().int().min(1).max(500).default(12),
+    })
+    .prefault({}),
+  /** Proof of work: the Verify phase records the feature working in a headless browser. */
+  proof: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** "branch": push images to the agentroom/proof branch so the PR can show them; "local": keep them here. */
+      publish: z.enum(['branch', 'local']).default('branch'),
+      /** Command that serves the app (default: detected from package.json, e.g. `npm run dev`). */
+      devCommand: z.string().default(''),
+      /** Use an app that's already running instead of starting one (e.g. http://localhost:3000). */
+      url: z.string().default(''),
+      /** Also screenshot the same pages on the goal's starting commit. */
+      before: z.boolean().default(true),
+      /** Give up on starting the app after this many seconds. */
+      startTimeoutSec: z.number().int().min(10).max(600).default(90),
+      /** Elements blurred in screenshots (CSS selectors). */
+      mask: z.array(z.string()).default(['input[type=password]', '[data-secret]', '[data-proof-mask]']),
+    })
+    .prefault({}),
+  /** Quality checks run in the Verify phase. Failing checks pause the goal (override with Resume). */
+  quality: z
+    .object({
+      /** Pause the goal when a check fails. */
+      gate: z.boolean().default(true),
+      a11y: z.boolean().default(true),
+      /** New accessibility issues allowed compared with the starting commit. */
+      maxNewA11yIssues: z.number().int().min(0).default(0),
+      perf: z.boolean().default(true),
+      /** Largest Contentful Paint warning threshold (dev server, so a warning only). */
+      maxLcpMs: z.number().int().min(100).default(4000),
+      visual: z.boolean().default(true),
+      /** Pages that changed more than this (percent of pixels) are flagged for a look. */
+      maxVisualDiffPct: z.number().min(0).max(100).default(40),
+      coverage: z.boolean().default(false),
+      /** Command that writes coverage/coverage-summary.json or lcov.info (e.g. `npx vitest run --coverage`). */
+      coverageCommand: z.string().default(''),
+      /** Line coverage may drop at most this many points. */
+      maxCoverageDrop: z.number().min(0).max(100).default(1),
+      bundle: z.boolean().default(false),
+      buildCommand: z.string().default(''),
+      /** Build output folder to measure (default: detected, e.g. dist, .next/static, build). */
+      bundleDir: z.string().default(''),
+      maxBundleGrowthPct: z.number().min(0).default(10),
     })
     .prefault({}),
 });

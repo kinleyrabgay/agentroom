@@ -1,3 +1,4 @@
+import { ClapperboardIcon, GaugeIcon } from "lucide-react"
 import { WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
@@ -10,6 +11,8 @@ export const SettingsSection = {
   Budgets: "budgets",
   Security: "security",
   Context: "context",
+  Proof: "proof",
+  Quality: "quality",
   Alerts: "alerts",
   Remote: "remote",
   Runner: "runner",
@@ -23,6 +26,8 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: typeof Slider
   { id: SettingsSection.Budgets, label: "Budgets", icon: WalletIcon, description: "Spend caps per goal and per day. Goals pause at a cap instead of overspending." },
   { id: SettingsSection.Security, label: "Security", icon: ShieldIcon, description: "Security review, what blocks commits and PRs, and which paths count as sensitive." },
   { id: SettingsSection.Context, label: "Context", icon: WaypointsIcon, description: "The repo map bots read instead of exploring, and the cards written about each module." },
+  { id: SettingsSection.Proof, label: "Proof", icon: ClapperboardIcon, description: "The Verify step: open the app in a headless browser, record the feature working, attach it to the PR." },
+  { id: SettingsSection.Quality, label: "Quality", icon: GaugeIcon, description: "Checks run while verifying. A failing check pauses the goal until you accept it." },
   { id: SettingsSection.Alerts, label: "Alerts", icon: BellRingIcon, description: "How AgentRoom reaches you when you're away. Personal to this machine." },
   { id: SettingsSection.Remote, label: "Remote approvals", icon: SmartphoneIcon, description: "Approve from your phone through a temporary, approvals-only link." },
   { id: SettingsSection.Runner, label: "Runner", icon: ServerIcon, description: "Where schedules and triggers run. Background mode keeps them running with the tab closed." },
@@ -51,6 +56,7 @@ export const DATA_FILES: { path: string; committed: boolean; what: string }[] = 
   { path: ".agentroom/runs/schedules.json, triggers.json", committed: false, what: "Your personal automation" },
   { path: ".agentroom/runs/audit.jsonl, ledger.jsonl", committed: false, what: "Audit log and one row per bot run" },
   { path: ".agentroom/runs/secrets.json", committed: false, what: "Tokens and webhooks; never sent back to the UI" },
+  { path: ".agentroom/runs/proof/", committed: false, what: "Proof recordings, screenshots and quality reports (pushed to agentroom/proof only when a PR opens)" },
 ]
 
 export const RETENTION_LIMITS = { min: 1, max: 3650 } as const

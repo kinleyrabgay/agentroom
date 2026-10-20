@@ -55,8 +55,8 @@ const run = (p: Promise<unknown>, ok?: string) =>
 export function PublishActions({ goal }: { goal: Goal }) {
   const [prOpen, setPrOpen] = useState(false)
   if (!goal.worktree) return null
-  const ready = goal.status === GoalStatus.Done || goal.status === GoalStatus.Testing || goal.status === GoalStatus.Reporting
-  const busy = isRunning(goal.status) && goal.status !== GoalStatus.Testing
+  const ready = goal.status === GoalStatus.Done || goal.status === GoalStatus.Testing || goal.status === GoalStatus.Verifying || goal.status === GoalStatus.Reporting
+  const busy = isRunning(goal.status) && goal.status !== GoalStatus.Testing && goal.status !== GoalStatus.Verifying
 
   return (
     <div className="flex items-center gap-1.5">

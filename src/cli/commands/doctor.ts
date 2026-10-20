@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import type { Command } from 'commander';
 import { PROJECT_DIR } from '../../shared/constants.js';
 import { currentProject } from '../context.js';
+import { proofAvailability } from '../../server/proof/browser.js';
 
 const MIN_NODE = 20;
 
@@ -18,7 +19,7 @@ export function registerDoctor(program: Command) {
   program
     .command('doctor')
     .description('check that agents can work in this project')
-    .action(() => {
+    .action(async () => {
       const major = Number(process.versions.node.split('.')[0]);
       console.log(`${major >= MIN_NODE ? '✔' : '✘'} node ${process.versions.node}`);
       check('git', 'git', ['--version']);
@@ -27,6 +28,8 @@ export function registerDoctor(program: Command) {
       check('gh auth', 'gh', ['auth', 'status', '--active']);
       check('claude CLI', 'claude', ['--version']);
       console.log(process.env.ANTHROPIC_API_KEY ? '✔ ANTHROPIC_API_KEY set' : '• ANTHROPIC_API_KEY not set (uses your Claude Code login instead)');
+      const proof = await proofAvailability(process.cwd());
+      console.log(proof.ok ? `✔ proof recording: headless ${proof.browser}` : `• proof recording off: ${proof.reason}`);
       const project = currentProject();
       const exists = project.exists();
       console.log(`${exists ? '✔' : '•'} ${PROJECT_DIR}/ ${exists ? 'present' : 'missing — run agentroom init'}`);

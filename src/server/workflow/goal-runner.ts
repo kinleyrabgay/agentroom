@@ -12,7 +12,7 @@ import { isFinished } from '../agents/tools/task.tools.js';
 import { GOAL_TITLE_MAX, MAX_FIX_ROUNDS } from '../config/constants.js';
 import type { Hub } from '../realtime/hub.js';
 import type { NotificationService } from '../services/notification.service.js';
-import { buildPrompt, planPrompt, reportPrompt, securityPrompt, testPrompt } from './prompts.js';
+import { buildPrompt, planPrompt, reportPrompt, securityPrompt, testPrompt, verifyPrompt } from './prompts.js';
 import { resolveLead, resolveRoles, resolveSecurity, type TeamRoles } from './roles.js';
 import type { SecurityService } from '../security/security.service.js';
 import { SENSITIVE_FACTOR } from '../security/risk.js';
@@ -22,6 +22,10 @@ import type { LedgerService } from '../services/ledger.service.js';
 import * as gg from '../git/goal-git.js';
 import { checkBudget, dayKey, usd, WarnOnce, type BudgetCheck } from './budget.js';
 import { buildPrBody, testsLine } from './pr-body.js';
+import type { ProofService } from '../proof/proof.service.js';
+import { PROOF_MARK } from '../proof/proof.service.js';
+import { failing, summarize, withQuality } from '../proof/checks.js';
+import { parseScenarios } from '../proof/scenario.js';
 
 export interface GoalRunnerDeps {
   project: Project;
@@ -41,6 +45,8 @@ export interface GoalRunnerDeps {
   ledger?: LedgerService;
   /** A goal finished, with the files it changed (repo context notes and re-syncs). */
   onDone?: (goal: Goal, files: string[]) => void;
+  /** Proof of work (Verify phase): record the feature in a browser and run quality checks. */
+  proof?: ProofService;
 }
 
 /** Pause reasons set by the budget gate start with this, so the UI can offer "Add budget and resume". */
@@ -56,6 +62,8 @@ export function worktreeHome(root: string) {
 
 /** Prefix of the pause reason used by the high-risk gate; resuming such a goal approves the risk. */
 const RISK_GATE = 'High risk';
+/** Prefix of the pause reason used by the quality gate; resuming approves the failing checks for this round. */
+export const QUALITY_GATE = 'Quality gate';
 
 /** Per-goal runtime flags (not persisted). */
 interface Control {
@@ -72,7 +80,7 @@ interface Control {
 type StepResult = 'progress' | 'none' | 'aborted' | { blocked: string };
 
 /** Statuses in which the engine is (or should be) driving the goal. */
-const ACTIVE: Goal['status'][] = [GoalStatus.Planning, GoalStatus.Building, GoalStatus.Securing, GoalStatus.Testing, GoalStatus.Reporting];
+const ACTIVE: Goal['status'][] = [GoalStatus.Planning, GoalStatus.Building, GoalStatus.Securing, GoalStatus.Testing, GoalStatus.Verifying, GoalStatus.Reporting];
 const FINAL: Goal['status'][] = [GoalStatus.Done, GoalStatus.Cancelled];
 const WORK_KINDS: Task['kind'][] = [TaskKind.Dev, TaskKind.Bug];
 const OPEN: Task['status'][] = [TaskStatus.Todo, TaskStatus.Doing];
@@ -156,6 +164,7 @@ export class GoalRunner {
     if (goal.status !== GoalStatus.Paused && goal.status !== GoalStatus.Failed) throw new Error(`${id} isn't paused (it is ${goal.status}).`);
     if (this.isRunning(id)) throw new Error(`${id} is still finishing its current step.`);
     if (goal.reason?.startsWith(RISK_GATE) && goal.risk) this.approveRisk(goal);
+    if (goal.reason?.startsWith(QUALITY_GATE)) this.approveQuality(goal);
     const status = this.phaseFor(this.require(id));
     const next = this.set(id, { status, reason: null });
     if (status !== GoalStatus.AwaitingApproval) this.kick(id);
@@ -169,6 +178,7 @@ export class GoalRunner {
     const ctl = this.control(id);
     ctl.cancel = true;
     if (ctl.currentBot) this.deps.team.stop(ctl.currentBot);
+    this.deps.proof?.stop(id);
     const next = this.set(id, { status: GoalStatus.Cancelled, reason: 'Cancelled by you.' });
     this.leadStatus(BotStatus.Idle);
     return next;
@@ -264,6 +274,12 @@ export class GoalRunner {
           const r = await this.testStep(goal, roles);
           if (this.interrupted(id, r === 'aborted')) return;
           if (r === 'none') this.afterTesting(this.require(id));
+          break;
+        }
+        case GoalStatus.Verifying: {
+          const out = await this.verifyStep(goal, roles);
+          if (out === 'aborted' && this.interrupted(id, true)) return;
+          if (out === 'stop') return;
           break;
         }
         case GoalStatus.Reporting:
@@ -372,7 +388,7 @@ export class GoalRunner {
       for (const t of tasks) {
         if (WORK_KINDS.includes(t.kind) && t.status === TaskStatus.Review) this.deps.project.tasks.update(t.id, { status: TaskStatus.Done });
       }
-      this.set(goal.id, { status: GoalStatus.Reporting });
+      this.set(goal.id, { status: this.needsVerify(goal) ? GoalStatus.Verifying : GoalStatus.Reporting });
       return;
     }
     if (goal.round < MAX_FIX_ROUNDS) {
@@ -581,9 +597,11 @@ export class GoalRunner {
     const goal = this.require(goalId);
     const tasks = this.tasksOf(goalId);
     const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open }).length ?? 0;
+    const repo = await this.originRepo();
+    const proof = this.deps.proof?.markdown(goalId, repo);
     return {
       title: goal.title,
-      body: buildPrBody(goal, tasks, openFindings, await this.originRepo()),
+      body: buildPrBody(goal, tasks, openFindings, repo, proof ? [proof] : []),
       branch: goal.worktree?.branch ?? null,
       openFindings,
       tests: testsLine(tasks),
@@ -599,8 +617,9 @@ export class GoalRunner {
     await gg.commitAll(cwd, `${goal.id}: remaining changes`).catch(() => null);
     const draft = await this.prDraft(goalId);
     const title = input.title?.trim() || draft.title;
-    const body = input.body?.trim() || draft.body;
+    let body = input.body?.trim() || draft.body;
     await gg.push(cwd, goal.worktree.branch);
+    if (body.includes(PROOF_MARK)) body = await this.withPublishedProof(goalId, body);
     const pr = await gg.createPr(cwd, { title, body, head: goal.worktree.branch, draft: !!input.draft });
     return this.set(goalId, { pr });
   }
@@ -684,7 +703,7 @@ export class GoalRunner {
     if (!this.deps.security) return;
     try {
       const a = await this.deps.security.assessGoal(this.require(id), opts);
-      this.set(id, { risk: a.risk });
+      this.set(id, { risk: withQuality(a.risk, this.require(id).proof) });
     } catch (err) {
       console.warn(`[agentroom] risk assessment for ${id} failed:`, (err as Error).message);
     }
@@ -779,6 +798,155 @@ export class GoalRunner {
     return this.toTesting(fresh) ? 'next' : 'stop';
   }
 
+  // ---------- proof (Verify phase) ----------
+
+  /** Whether the goal gets a Verify phase: proof on, and a web app to open in its folder. */
+  private needsVerify(goal: Goal): boolean {
+    if (!this.deps.proof || !this.deps.project.settings.get().proof.enabled) return false;
+    return this.deps.proof.hasApp(this.cwdOf(goal));
+  }
+
+  /**
+   * Verify: QA writes a browser scenario (once; the human can edit it), the engine records it and runs
+   * quality checks. A broken scenario becomes a bug (another round); failing checks pause at the quality gate.
+   * Infrastructure problems (no browser, app won't start) never fail the goal: proof is recorded as skipped.
+   */
+  private async verifyStep(goal: Goal, roles: TeamRoles): Promise<'next' | 'aborted' | 'stop'> {
+    const proof = this.deps.proof!;
+    let scenarios = proof.scenarios(goal.id);
+    if (!scenarios.length) {
+      this.leadStatus(BotStatus.Working, `${goal.id} · ${roles.qa.name} is writing the proof scenario`);
+      const prev = proof.report(goal.id);
+      const failed = prev?.scenarios.find((s) => !s.ok);
+      const out = await this.run(goal, roles, roles.qa, verifyPrompt(goal, this.tasksOf(goal.id), failed ? { scenarios: proof.scenarios(goal.id), error: failed.error } : null), `Proof scenario for ${goal.id}`, { phase: WorkPhase.Testing });
+      if (out.aborted) return 'aborted';
+      if (this.interrupted(goal.id)) return 'stop';
+      scenarios = parseScenarios(out.text);
+      if (!scenarios.length && /"scenarios"\s*:\s*\[\s*\]/.test(out.text)) {
+        this.set(goal.id, { proof: { round: goal.round, status: 'skipped', at: new Date().toISOString(), summary: `${roles.qa.name}: no visible UI to record.`, failing: [] } });
+        this.set(goal.id, { status: GoalStatus.Reporting });
+        return 'next';
+      }
+      if (scenarios.length) proof.setScenarios(goal.id, scenarios);
+    }
+
+    this.leadStatus(BotStatus.Working, `${goal.id} · Recording proof`);
+    const report = await proof.run({ goal: this.require(goal.id), cwd: this.cwdOf(goal) }, scenarios, (line) => this.leadStatus(BotStatus.Working, `${goal.id} · ${line}`));
+    if (this.control(goal.id).cancel) return 'stop';
+    const summary = summarize(report);
+    this.set(goal.id, { proof: summary });
+    await this.updateRisk(goal.id);
+    const fresh = this.require(goal.id);
+
+    if (report.status === 'skipped' || report.status === 'error') {
+      if (report.status === 'error') {
+        this.deps.notifications.create({ kind: NotificationKind.Info, title: `Proof not recorded for ${goal.id}`, body: clip(report.reason ?? 'Unknown error', 300), goalId: goal.id });
+      }
+      this.set(goal.id, { status: GoalStatus.Reporting });
+      return 'next';
+    }
+
+    if (report.status === 'failed') {
+      const broken = report.scenarios.filter((s) => !s.ok);
+      if (fresh.round >= MAX_FIX_ROUNDS) {
+        this.block(goal.id, `Proof failed after ${MAX_FIX_ROUNDS} fix rounds: ${broken.map((s) => `${s.name}: ${s.error}`).join('; ')}. Check the Proof tab: fix the scenario or the code, then resume.`);
+        return 'stop';
+      }
+      const task = this.deps.project.tasks.create({
+        title: `Proof failed: ${broken[0].name}`.slice(0, 120),
+        kind: TaskKind.Bug,
+        goalId: goal.id,
+        assignee: roles.developer.id,
+        description: [
+          'AgentRoom ran the proof scenario in a real browser and it failed:',
+          '',
+          ...broken.map((s) => `- **${s.name}**: ${s.error}`),
+          '',
+          'Make the feature work as the scenario expects (or, if the scenario is wrong, say so in the task log). The frames are in the goal\'s Proof tab.',
+        ].join('\n'),
+        acceptance: broken.map((s) => `"${s.name}" passes in the browser`),
+      });
+      this.deps.project.tasks.appendLog(task.id, ENGINE, 'Created from a failed proof run.');
+      for (const t of this.tasksOf(goal.id)) {
+        if (t.kind === TaskKind.QA && t.status === TaskStatus.Done) this.deps.project.tasks.update(t.id, { status: TaskStatus.Todo });
+      }
+      this.set(goal.id, { status: GoalStatus.Building, round: fresh.round + 1 });
+      return 'next';
+    }
+
+    const fails = failing(report.checks);
+    const gate = this.deps.project.settings.get().quality.gate;
+    if (fails.length && gate && fresh.proofOverride?.round !== fresh.round) {
+      this.block(goal.id, `${QUALITY_GATE}: ${fails.map((c) => `${c.label}: ${c.summary}`).join('; ')}. Review the Proof tab, then press Resume to accept, or request changes.`);
+      return 'stop';
+    }
+    this.set(goal.id, { status: GoalStatus.Reporting });
+    return 'next';
+  }
+
+  /** The human accepted failing quality checks for this round. */
+  private approveQuality(goal: Goal) {
+    const by = this.deps.humanName?.() ?? 'human';
+    this.set(goal.id, { proofOverride: { round: goal.round, at: new Date().toISOString(), by } });
+    this.deps.audit?.({
+      kind: AuditKind.Goal,
+      actor: { type: ActorType.Human, name: by },
+      goalId: goal.id,
+      summary: `Accepted failing quality checks in ${goal.id}: ${goal.proof?.failing.join(', ') || 'none'}`,
+      decision: 'allowed',
+      detail: { proof: goal.proof },
+    });
+  }
+
+  /** Accept the failing checks now (Proof tab). Resumes the goal when it's held at the quality gate. */
+  overrideQuality(id: string): Goal {
+    const goal = this.require(id);
+    if (!goal.proof?.failing.length) throw new Error(`${id} has no failing quality checks.`);
+    if (goal.status === GoalStatus.Paused && goal.reason?.startsWith(QUALITY_GATE)) return this.resume(id);
+    this.approveQuality(goal);
+    return this.require(id);
+  }
+
+  /** Record proof again now (Proof tab), outside the goal's run. */
+  rerunProof(id: string): Goal {
+    const goal = this.require(id);
+    if (!this.deps.proof) throw new Error('Proof is not available.');
+    if (this.isRunning(id)) throw new Error(`${id} is running; proof is recorded in its Verify step.`);
+    if (this.deps.proof.isRunning(id)) throw new Error(`Proof for ${id} is already being recorded.`);
+    if (!goal.approvedAt) throw new Error(`${id} has nothing built yet.`);
+    void this.deps.proof
+      .run({ goal, cwd: this.cwdOf(goal) }, this.deps.proof.scenarios(id))
+      .then(async (report) => {
+        if (!this.deps.project.goals.get(id)) return;
+        this.set(id, { proof: summarize(report) });
+        await this.updateRisk(id);
+      })
+      .catch((err) => console.warn(`[agentroom] proof for ${id} failed:`, (err as Error).message))
+      .finally(() => this.changed());
+    this.changed();
+    return goal;
+  }
+
+  /** Push the proof images to the proof branch and swap the PR body's placeholder for them. Never blocks the PR. */
+  private async withPublishedProof(goalId: string, body: string): Promise<string> {
+    const proof = this.deps.proof;
+    if (!proof) return body;
+    try {
+      const report = await proof.publish(goalId);
+      if (report?.published) {
+        this.deps.audit?.({ kind: AuditKind.Push, actor: { type: ActorType.Human, name: this.human() }, goalId, summary: `Pushed proof images for ${goalId} to ${report.published.branch}`, decision: 'allowed', detail: { sha: report.published.sha } });
+      }
+      const section = proof.markdown(goalId, await this.originRepo());
+      if (!section) return body.replace(PROOF_MARK, '');
+      const start = body.indexOf('### Proof');
+      const end = body.indexOf(PROOF_MARK);
+      return start >= 0 && end > start ? body.slice(0, start) + section + body.slice(end + PROOF_MARK.length) : body.replace(PROOF_MARK, '');
+    } catch (err) {
+      console.warn(`[agentroom] couldn't publish proof for ${goalId}:`, (err as Error).message);
+      return body.replace(PROOF_MARK, '_Proof images stay local (couldn\'t push them: see AgentRoom → Proof)._');
+    }
+  }
+
   // ---------- helpers ----------
 
   /** Hand a prompt to a bot as the Team Lead and wait. Throws if the run fails (not when stopped). */
@@ -865,6 +1033,7 @@ export class GoalRunner {
     if (tasks.some((t) => WORK_KINDS.includes(t.kind) && OPEN.includes(t.status))) return GoalStatus.Building;
     if (this.needsSecurity(goal) && goal.securityReviewedRound !== goal.round) return GoalStatus.Securing;
     if (tasks.some((t) => t.kind === TaskKind.QA && t.status !== TaskStatus.Done)) return GoalStatus.Testing;
+    if (this.needsVerify(goal) && goal.proof?.round !== goal.round) return GoalStatus.Verifying;
     return GoalStatus.Reporting;
   }
 

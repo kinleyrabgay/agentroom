@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { BIND_HOST, PUBLIC_HOST, TOKEN_QUERY } from '../shared/constants.js';
 import { Project } from '../core/project.js';
@@ -20,7 +21,7 @@ import { GhCliClient } from './integrations/github/gh-client.js';
 import { GithubProjectService } from './integrations/github/github-project.service.js';
 import { HandoffService } from './integrations/github/handoff.service.js';
 import { pushBoard, pushProjectState, watchProject } from './watch/project-watcher.js';
-import { GoalRunner } from './workflow/goal-runner.js';
+import { GoalRunner, worktreeHome } from './workflow/goal-runner.js';
 import { gitUser } from '../core/git.js';
 import { AuditService, humanAudit } from './services/audit.service.js';
 import { LedgerService } from './services/ledger.service.js';
@@ -44,6 +45,7 @@ import { backgroundStatus, clearSession, installBackground, uninstallBackground,
 import { composeBrief } from '../core/repositories/goal-template.repository.js';
 import { ActorType, AuditKind, StateType } from '../shared/enums.js';
 import { ContextService } from './context/context.service.js';
+import { ProofService } from './proof/proof.service.js';
 
 export interface StartOptions {
   root: string;
@@ -119,6 +121,12 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return cap === null ? undefined : cap - ledger.spentToday();
     },
   });
+  const proof = new ProofService({
+    root: project.root,
+    runsDir: project.paths.runs,
+    settings: () => project.settings.get(),
+    scratchDir: path.join(worktreeHome(project.root), '.proof'),
+  });
   const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context });
   const goals = new GoalRunner({
     project,
@@ -132,6 +140,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     audit: (e) => audit.record(e),
     humanName,
     onDone: (goal, files) => void context.onGoalDone(goal, files),
+    proof,
   });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
@@ -281,6 +290,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     security,
     uploads,
     context,
+    proof,
     humanName,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),

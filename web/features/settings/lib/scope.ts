@@ -16,6 +16,8 @@ export const SECTION_KEY: Partial<Record<SettingsSection, keyof Settings>> = {
   [SettingsSection.Budgets]: "budgets",
   [SettingsSection.Security]: "security",
   [SettingsSection.Context]: "context",
+  [SettingsSection.Proof]: "proof",
+  [SettingsSection.Quality]: "quality",
   [SettingsSection.Integrations]: "digest" as keyof Settings,
   [SettingsSection.Data]: "audit",
 }

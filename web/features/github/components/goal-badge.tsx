@@ -16,7 +16,7 @@ const GOAL_TONE: Partial<Record<GoalStatus, Tone>> = {
   [GoalStatus.Failed]: "danger",
   [GoalStatus.Cancelled]: "neutral",
 }
-const RUNNING = new Set<GoalStatus>([GoalStatus.Planning, GoalStatus.Building, GoalStatus.Securing, GoalStatus.Testing, GoalStatus.Reporting])
+const RUNNING = new Set<GoalStatus>([GoalStatus.Planning, GoalStatus.Building, GoalStatus.Securing, GoalStatus.Testing, GoalStatus.Verifying, GoalStatus.Reporting])
 
 /** "G-3 · Building": the AgentRoom goal a card or issue was handed to. Opens it in Work. */
 export function GoalBadge({ goal, className }: { goal: Goal; className?: string }) {

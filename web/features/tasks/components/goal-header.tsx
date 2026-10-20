@@ -124,12 +124,17 @@ export function GoalHeader({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
         <PhaseStepper
           current={phaseIndex(goal, tasks)}
           waiting={!!stopped || goal.status === GoalStatus.AwaitingApproval}
-          skipped={securitySkip ? { security: securitySkip } : undefined}
+          skipped={{ ...(securitySkip ? { security: securitySkip } : {}), ...(goal.proof?.status === "skipped" ? { verify: "skipped" } : {}) }}
         />
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {goal.status === GoalStatus.Securing && (
             <span className="flex items-center gap-1.5">
               <Loader2Icon className="size-3.5 animate-spin" /> Security Auditor reviewing
+            </span>
+          )}
+          {goal.status === GoalStatus.Verifying && (
+            <span className="flex items-center gap-1.5">
+              <Loader2Icon className="size-3.5 animate-spin" /> Recording proof
             </span>
           )}
           {total > 0 && (
