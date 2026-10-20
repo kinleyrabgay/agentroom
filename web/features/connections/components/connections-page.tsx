@@ -112,15 +112,17 @@ function FoundInClaudeCode({ available, checking }: { available: McpAvailable[];
   const groups = useMemo(() => {
     const m = new Map<string, McpAvailable[]>()
     for (const a of available) m.set(a.source, [...(m.get(a.source) ?? []), a])
-    return [...m.entries()]
+    // The workspace's other repos first: their team set these up for this code.
+    const fromRepo = (source: string) => (source.startsWith("workspace:") ? 0 : 1)
+    return [...m.entries()].sort(([a], [b]) => fromRepo(a) - fromRepo(b))
   }, [available])
   const connected = available.filter((a) => a.status === McpStatus.Connected).length
 
   return (
-    <Collapsible defaultOpen={false} className="rounded-xl border bg-card">
+    <Collapsible defaultOpen={available.some((a) => a.repo && !a.added)} className="rounded-xl border bg-card">
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left">
         <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-        <span className="font-medium">Found in Claude Code</span>
+        <span className="font-medium">{available.some((a) => a.repo) ? "Found in Claude Code and other repos" : "Found in Claude Code"}</span>
         <span className="text-xs text-muted-foreground">
           {checking && !available.length ? "looking…" : `${available.length} servers · ${connected} connected`}
         </span>
@@ -154,7 +156,7 @@ function AvailableRow({ a }: { a: McpAvailable }) {
     setBusy(true)
     try {
       const e = await mcpApi.import(a.name)
-      toast.success(`Added as ${e.name}`, { description: "Personal to you. Share it with the team from its menu." })
+      toast.success(`Added as ${e.name}`, { description: a.repo ? "Personal to you. Set any secrets it needs, then it starts." : "Personal to you. Share it with the team from its menu." })
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -169,8 +171,10 @@ function AvailableRow({ a }: { a: McpAvailable }) {
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm">{label}</span>
         {a.url && <span className="block truncate font-mono text-xs text-muted-foreground">{a.url}</span>}
+        {/* From another repo of the workspace: show what it would run before anyone adds it. */}
+        {a.command && <span className="block truncate font-mono text-xs text-muted-foreground" title={a.command}>{a.command}</span>}
       </span>
-      {a.status !== McpStatus.Connected && <StatusBadge status={a.status} className="hidden sm:inline-flex" />}
+      {a.status !== McpStatus.Connected && !a.repo && <StatusBadge status={a.status} className="hidden sm:inline-flex" />}
       {a.status === McpStatus.Connected && <span className="text-xs text-muted-foreground">{a.toolCount} tools</span>}
       {a.added ? (
         <span className="inline-flex items-center gap-1 text-xs tone-success tone-text">

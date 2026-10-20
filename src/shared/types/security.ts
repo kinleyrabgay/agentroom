@@ -18,6 +18,8 @@ export interface SecurityFinding {
   /** Matched code with secrets redacted (never the full secret). */
   snippet?: string;
   goalId?: string;
+  /** Workspaces: the repo the finding is in (unset = the primary repo). */
+  repo?: string;
   taskId?: string;
   botId?: string;
   status: FindingStatus;
@@ -46,6 +48,8 @@ export interface RiskAssessment {
 
 export interface FindingQuery {
   goalId?: string;
+  /** Workspaces: only this repo's findings ('' = the primary repo). */
+  repo?: string;
   status?: FindingStatus;
   severity?: FindingSeverity;
 }

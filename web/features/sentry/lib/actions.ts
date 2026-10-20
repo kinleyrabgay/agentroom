@@ -26,6 +26,7 @@ function toQuery(f: SentryFilters, cursor?: string): SentryIssueQuery {
     ...(f.query.trim() ? { query: f.query.trim() } : {}),
     ...(f.projects.length ? { projects: f.projects } : {}),
     ...(f.environment ? { environment: f.environment } : {}),
+    ...(f.repo ? { repo: f.repo } : {}),
     status: f.status,
     ...(f.level ? { level: f.level } : {}),
     assigned: f.assigned,

@@ -40,6 +40,10 @@ import { GoalRepos, linkedPrSection, LINKS_START, withLinkedSection } from '../s
 import { WorkspaceService } from '../src/server/workspaces/workspace.service.js';
 import { NotificationService } from '../src/server/services/notification.service.js';
 import { GoalRunner } from '../src/server/workflow/goal-runner.js';
+import { SecurityService } from '../src/server/security/security.service.js';
+import { FindingsStore } from '../src/server/security/findings.store.js';
+import { CliGitReader } from '../src/server/security/git.js';
+import { DependencyGuard } from '../src/server/security/dependency/dependency-guard.js';
 
 const tmp = (prefix: string) => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 const write = (root: string, rel: string, text: string) => {
@@ -73,10 +77,13 @@ afterAll(() => {
 
 describe('workspace config', () => {
   it('creates, adds, removes and lists workspaces with stable unique ids', () => {
-    const a = tmp('web-');
-    const b = tmp('api-');
+    // Only git checkouts can join (a `.git` folder is enough here).
+    const repo = (dir: string) => (fs.mkdirSync(path.join(dir, '.git'), { recursive: true }), dir);
+    const a = repo(tmp('web-'));
+    const b = repo(tmp('api-'));
     const twin = path.join(tmp('x-'), path.basename(a));
-    fs.mkdirSync(twin);
+    repo(twin);
+    expect(() => createWorkspace('plain', [tmp('plain-')])).toThrow(/isn't a git repo/);
     const workspace = createWorkspace('shop', [a, b]);
     expect(workspace.repos.map((r) => r.id)).toEqual([slugify(path.basename(a)), slugify(path.basename(b))]);
     expect(workspace.primary).toBe(workspace.repos[0]!.id);
@@ -86,7 +93,7 @@ describe('workspace config', () => {
     expect(() => addRepos('shop', [a])).toThrow(/already in the workspace/);
     // Nested repos would be indexed twice.
     const inner = path.join(a, 'packages', 'inner');
-    fs.mkdirSync(inner, { recursive: true });
+    repo(inner);
     expect(() => addRepos('shop', [inner])).toThrow(/nested/);
     expect(() => createWorkspace('shop', [a])).toThrow(/already exists/);
     expect(() => createWorkspace('Bad Name', [a])).toThrow(/lowercase/);
@@ -238,6 +245,53 @@ describe('cross-repo edges', () => {
     expect(workspace.promptBlock()).toContain('web:');
     expect(workspace.context('api')).toBe(workspace.context('api'));
     expect(() => workspace.context('ios')).toThrow(/Unknown repo/);
+  });
+
+  it('people confirm, hide and add cross-repo links; bots see confirmed ones first', () => {
+    const web = tmp('lk-web-');
+    write(web, 'src/api.ts', "export const getUser = (id: string) => fetch(`/api/users/${id}`);\n");
+    write(web, 'src/ui/page.ts', 'export const page = 1;\n');
+    const api = tmp('lk-api-');
+    write(api, 'src/server.ts', "import { Hono } from 'hono';\nconst app = new Hono();\napp.get('/users/:id', (c) => c.json({}));\n");
+    write(api, 'lib/db.ts', 'export const db = 1;\n');
+    const project = new Project(web);
+    project.init();
+    const registry = ProjectRegistry.fromWorkspace({ name: 'lk', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    const make = (root: string) => new ContextService({ root, settings: () => project.settings.get() });
+    const workspace = new WorkspaceService({ registry, primaryContext: make(web), makeContext: (r) => make(r.root) });
+    for (const root of [web, api]) {
+      fs.mkdirSync(path.join(root, '.agentroom', 'runs', 'context'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.agentroom', 'runs', 'context', 'graph.json'), JSON.stringify(buildGraph(root)));
+    }
+    const [guess] = workspace.crossEdges();
+    expect(guess).toMatchObject({ status: 'guessed', kind: 'http' });
+    expect(workspace.promptBlock()).toContain('(guessed, http');
+
+    workspace.decideLink(guess!.key!, 'confirm');
+    expect(workspace.crossEdges()[0]!.status).toBe('confirmed');
+    expect(workspace.promptBlock()).toContain('(confirmed, http');
+    // Committed in the primary repo, so the team shares it.
+    const file = path.join(web, '.agentroom', 'context', 'workspace-links.json');
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).confirmed).toEqual([guess!.key]);
+
+    workspace.decideLink(guess!.key!, 'hide');
+    expect(workspace.crossEdges()).toEqual([]);
+    expect(workspace.crossEdges({ hidden: true })[0]).toMatchObject({ hidden: true });
+    workspace.decideLink(guess!.key!, 'reset');
+    expect(workspace.crossEdges()[0]!.status).toBe('guessed');
+
+    const mods = (id: string) => Object.keys(workspace.context(id).reader.current()!.modules);
+    const from = mods('web')[0]!;
+    const to = mods('api')[0]!;
+    expect(() => workspace.addLink({ fromRepo: 'web', from, toRepo: 'web', to: from })).toThrow(/two different repos/);
+    expect(() => workspace.addLink({ fromRepo: 'web', from: 'nope', toRepo: 'api', to })).toThrow(/No module/);
+    workspace.addLink({ fromRepo: 'web', from, toRepo: 'api', to, note: 'reads the db through a proxy' }, 'Kinley');
+    const manual = workspace.crossEdges()[0]!;
+    expect(manual).toMatchObject({ kind: 'manual', status: 'manual', note: 'reads the db through a proxy' });
+    expect(workspace.promptBlock()).toContain('reads the db through a proxy');
+    expect(() => workspace.addLink({ fromRepo: 'web', from, toRepo: 'api', to })).toThrow(/already there/);
+    workspace.removeLink(manual.key!);
+    expect(workspace.crossEdges().some((e) => e.kind === 'manual')).toBe(false);
   });
 });
 
@@ -456,5 +510,111 @@ describe('a goal across repos', () => {
     await runner.cleanup(goal.id);
     expect(fs.existsSync(apiPart!.worktree!.path)).toBe(false);
     expect(sh(api, 'branch', '--list', 'agentroom/g-1')).toContain('agentroom/g-1');
+
+    // Review comments remember their repo; Request changes makes one fix task per repo.
+    expect(() => runner.addComment(goal.id, { file: 'src/server.ts', body: 'x', repo: 'ios' }, 'K')).toThrow(/Unknown repo/);
+    const withComments = runner.addComment(goal.id, { file: 'src/server.ts', line: 1, body: 'Validate the id', repo: 'api' }, 'K');
+    expect(withComments.reviewComments.at(-1)!.repo).toBe('api');
+    expect(runner.addComment(goal.id, { file: 'src/app.ts', body: 'Show a spinner', repo: 'web' }, 'K').reviewComments.at(-1)!.repo).toBeUndefined();
+    const before = new Set(project.tasks.list({ goalId: goal.id }).map((t) => t.id));
+    runner.requestChanges(goal.id);
+    runner.cancel(goal.id);
+    const fixes = project.tasks.list({ goalId: goal.id }).filter((t) => !before.has(t.id));
+    expect(fixes.map((t) => [t.title, t.repo]).sort()).toEqual([
+      ['Review changes (1 comment)', undefined],
+      [`Review changes in ${path.basename(api)} (1 comment)`, 'api'],
+    ]);
+  }, 30_000);
+});
+
+describe('security across repos', () => {
+  it('a risky change in another repo triggers the security review and blocks that repo’s PR', async () => {
+    const web = gitRepo('sec-web-', { 'src/app.ts': 'export const app = 1;\n' });
+    const api = gitRepo('sec-api-', { 'src/server.ts': 'export const server = 1;\n' });
+    const project = new Project(web);
+    project.init();
+    project.config.update({ permissionMode: 'auto' });
+    sh(web, 'add', '-A');
+    sh(web, 'commit', '-q', '-m', 'agentroom');
+    const registry = ProjectRegistry.fromWorkspace({ name: 'shop', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    const hub = new Hub(project.paths.runs);
+    const notifications = new NotificationService(hub, project.paths.inboxFile);
+    const boardChanged = () => {};
+    const repos = new GoalRepos({ registry, update: (id, r) => project.goals.update(id, { repos: r }), worktreesEnabled: () => true });
+    const security = new SecurityService({
+      git: new CliGitReader(web),
+      guard: new DependencyGuard({ cwd: web, run: async () => ({ stdout: '' }), fetch: async () => ({ ok: true, status: 200, json: async () => ({ results: [] }) }) }),
+      findings: new FindingsStore({ file: path.join(project.paths.runs, 'security.json') }),
+      settings: () => project.settings.get(),
+      notifications,
+      goalBase: (id) => project.goals.get(id)?.baseRef,
+      goalCwd: (id) => project.goals.get(id)?.worktree?.path,
+      gitFor: (cwd) => new CliGitReader(cwd),
+      goalRepos: (id) => {
+        const goal = project.goals.get(id)!;
+        return Object.entries(goal.repos ?? {}).map(([repo, st]) => ({ repo, cwd: repos.cwd(goal, repo), ...(st.baseRef ? { base: st.baseRef } : {}) }));
+      },
+    });
+    let auditorPrompt = '';
+    const provider = new FakeProvider({
+      planner: async (req, call) => {
+        const goalId = goalIdOf(req.prompt);
+        const apiTask = JSON.parse(await call(HostTool.TaskCreate, { title: 'Add the token endpoint', kind: TaskKind.Dev, goalId, assignee: 'developer', repo: 'api' }));
+        await call(HostTool.TaskCreate, { title: 'Verify', kind: TaskKind.QA, goalId, assignee: 'qa', dependsOn: [apiTask.id] });
+        return 'Planned.';
+      },
+      developer: async (req, call) => {
+        // Only the other repo changes, under a sensitive path, with a leaked key.
+        fs.mkdirSync(path.join(req.cwd, 'src', 'auth'), { recursive: true });
+        fs.writeFileSync(path.join(req.cwd, 'src', 'auth', 'keys.ts'), `export const key = 'AKIAZ7Q3X9K2M4N6P8R1';\n`);
+        await call(HostTool.TaskUpdate, { id: taskIdOf(req.prompt), status: TaskStatus.Review });
+        return 'Done.';
+      },
+      security: async (req) => {
+        auditorPrompt = req.prompt;
+        return 'Must fix: leaked key.';
+      },
+      qa: async (req, call) => {
+        await call(HostTool.TaskUpdate, { id: taskIdOf(req.prompt), status: TaskStatus.Done });
+        return 'Passed.';
+      },
+      lead: async () => 'Report.',
+    });
+    const team = new Team({
+      project,
+      hub,
+      provider,
+      previews: new PreviewService(hub),
+      permissions: new PermissionGate(hub, () => project.config.get(), web),
+      sessions: new SessionStore(project.paths.sessionsFile),
+      notifications,
+      boardChanged,
+      security,
+      workspace: new WorkspaceService({ registry, primaryContext: new ContextService({ root: web, settings: () => project.settings.get() }), makeContext: (r) => new ContextService({ root: r.root, settings: () => project.settings.get() }) }),
+    });
+    const runner = new GoalRunner({ project, team, hub, notifications, boardChanged, repos, security });
+
+    const goal = runner.start('Add a token endpoint');
+    await waitFor(() => project.goals.get(goal.id)!.status === GoalStatus.AwaitingApproval);
+    runner.approve(goal.id);
+    await waitFor(() => project.goals.get(goal.id)!.status === GoalStatus.Paused, 15_000);
+
+    const final = project.goals.get(goal.id)!;
+    // The primary repo didn't change, yet the goal was scored on the other repo's diff.
+    expect(final.risk?.factors.some((f) => f.label.includes('api/src/auth/keys.ts'))).toBe(true);
+    expect(final.securityReviewedRound).toBe(final.round);
+    expect(auditorPrompt).toContain('Other repos in this change');
+    expect(final.reason).toMatch(/critical/);
+    const leaked = security.findings.list({ goalId: goal.id }).find((f) => f.rule === 'secret.aws-access-key')!;
+    expect(leaked.repo).toBe('api');
+    expect(security.findings.openBlocking(goal.id, 'critical', '')).toHaveLength(0);
+    expect(security.findings.openBlocking(goal.id, 'critical', 'api').length).toBeGreaterThan(0);
+
+    // The api repo's PR is held until the finding is resolved.
+    await expect(runner.openPr(goal.id, { repo: 'api' })).rejects.toThrow(/blocks? this pull request/);
+
+    // A bot pushing from the goal's api folder is held too.
+    const hold = await security.gate('git push origin agentroom/g-1', { goalId: goal.id });
+    expect(hold?.reason).toMatch(/repo api/);
   }, 30_000);
 });

@@ -15,6 +15,7 @@ import { CATEGORY_META, SOURCE_LABEL, STATUS_META } from "../constants"
 import { location } from "../lib/findings"
 import { ResolveDialog, type ResolveMode } from "./resolve-dialog"
 import { SeverityBadge } from "./severity-badge"
+import { RepoBadge } from "@/features/workspaces/components/repo-badge"
 
 /** One finding: severity stripe, what and where, redacted snippet, explanation, and the human's decision. */
 export function FindingCard({ finding: f, now, showGoal = true }: { finding: SecurityFinding; now: number; showGoal?: boolean }) {
@@ -45,6 +46,8 @@ export function FindingCard({ finding: f, now, showGoal = true }: { finding: Sec
               <StatusIcon className="size-3" /> {status.label}
             </Badge>
           )}
+          {/* Workspaces: which repo the finding is in (unset = the primary repo). */}
+          <RepoBadge task={{ repo: f.repo }} />
           <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
             {showGoal && f.goalId && (
               <button

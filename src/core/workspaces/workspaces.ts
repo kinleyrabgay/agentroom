@@ -18,6 +18,10 @@ export const WorkspaceRepoSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
   /** Absolute path of the repo folder. */
   path: z.string().min(1),
+  /** Command that serves this repo's app (QA opens it to check UI changes), e.g. `npm run dev`. */
+  devCommand: z.string().max(300).optional(),
+  /** URL of this repo's app when it's running, e.g. http://localhost:5173. */
+  url: z.string().url().max(300).optional(),
 });
 
 export const WorkspaceConfigSchema = z.object({
@@ -104,6 +108,11 @@ function realFolder(p: string): string {
   return fs.realpathSync(abs);
 }
 
+/** A folder that's a git checkout (a `.git` folder, or a `.git` file for linked worktrees and submodules). */
+export function isGitRepo(dir: string): boolean {
+  return fs.existsSync(path.join(dir, '.git'));
+}
+
 const inside = (child: string, parent: string) => child !== parent && child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
 /** Add folders to a repo list: dedupe, refuse nesting (the outer repo would index the inner one twice), unique ids. */
@@ -111,6 +120,7 @@ function withRepos(existing: WorkspaceRepoConfig[], paths: string[]): WorkspaceR
   const repos = [...existing];
   for (const p of paths) {
     const real = realFolder(p);
+    if (!isGitRepo(real)) throw new Error(`${real} isn't a git repo (no .git). Run \`git init\` there first.`);
     if (repos.some((r) => r.path === real)) throw new Error(`${real} is already in the workspace.`);
     const nested = repos.find((r) => inside(real, r.path) || inside(r.path, real));
     if (nested) throw new Error(`${real} and ${nested.path} are nested; a workspace's repos must be separate folders.`);
@@ -182,6 +192,25 @@ export function prepareMember(root: string, isPrivate: (root: string) => boolean
   if (lines.includes(line) || lines.includes('.agentroom/') || lines.includes('.agentroom')) return changed;
   fs.writeFileSync(gitignore, `${current}${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`);
   return true;
+}
+
+/** Per-repo app settings (QA uses them to open a repo's UI). Empty strings clear a value. */
+export function setRepoSettings(name: string, idOrPath: string, patch: { devCommand?: string; url?: string }): WorkspaceConfig {
+  const workspace = loadWorkspace(name);
+  const repo = resolveRepo(workspace, idOrPath);
+  const repos = workspace.repos.map((r) => {
+    if (r.id !== repo.id) return r;
+    const next: WorkspaceRepoConfig = { ...r };
+    for (const key of ['devCommand', 'url'] as const) {
+      const v = patch[key];
+      if (v === undefined) continue;
+      const t = String(v).trim();
+      if (t) next[key] = t;
+      else delete next[key];
+    }
+    return next;
+  });
+  return saveWorkspace({ ...workspace, repos });
 }
 
 export function deleteWorkspace(name: string): void {

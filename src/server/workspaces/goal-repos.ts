@@ -19,6 +19,8 @@ export interface GoalReposDeps {
   /** settings.worktrees.enabled */
   worktreesEnabled: () => boolean;
   git?: RepoGit;
+  /** Dev command / URL of a repo's app (workspace file), for QA. */
+  appOf?: (repo: string) => { devCommand?: string; url?: string };
 }
 
 export { LINKS_END, LINKS_START, linkedPrSection, withLinkedSection, type PrPart } from './goal-repos-links.js';
@@ -100,6 +102,11 @@ export class GoalRepos {
     } catch (err) {
       return this.put(goal, repo, { worktreeWarning: `Working in ${root}: couldn't create the goal's own folder (${(err as Error).message}).` });
     }
+  }
+
+  /** How to run a repo's app, if the workspace says. */
+  app(repo: string): { devCommand?: string; url?: string } {
+    return this.deps.appOf?.(repo) ?? {};
   }
 
   /** Folder the goal's bots work in for a repo. */

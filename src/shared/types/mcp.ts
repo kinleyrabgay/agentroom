@@ -55,6 +55,10 @@ export interface McpAvailable {
   toolCount: number;
   /** Already added to AgentRoom under this name. */
   added?: string;
+  /** Workspaces: committed in this repo's `.agentroom/mcp.json` (source `workspace:<repo>`). */
+  repo?: string;
+  /** What a stdio server runs (shown before you add one from another repo). */
+  command?: string;
 }
 
 export interface McpSnapshot {

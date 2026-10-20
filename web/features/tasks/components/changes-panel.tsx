@@ -25,6 +25,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/kit/state-vie
 import { Segmented } from "@/components/kit/segmented"
 import { TONE_CLASS, type Tone } from "@/components/kit/tone"
 import { parseDiff, toSplit, type DiffLine } from "../lib/diff-lines"
+import { primaryRepoId, useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
 
 const STATUS: Record<ChangedFile["status"], { letter: string; tone: Tone; label: string }> = {
   added: { letter: "A", tone: "success", label: "Added" },
@@ -42,6 +43,9 @@ export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo worksp
   const [selected, setSelected] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>("unified")
   const [reload, setReload] = useState(0)
+  // Comments are stored with their repo (the primary repo as unset): show this repo's only.
+  const primary = useWorkspaceStore((s) => primaryRepoId(s.workspace))
+  const scope = repo && repo !== primary ? repo : undefined
   const commitsKey = useAppStore((s) =>
     s.tasks
       .filter((t) => t.goalId === goal.id)
@@ -81,7 +85,7 @@ export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo worksp
       />
     )
 
-  const commentsOf = (path: string) => goal.reviewComments.filter((c) => c.file === path)
+  const commentsOf = (path: string) => goal.reviewComments.filter((c) => c.file === path && (c.repo ?? undefined) === scope)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -145,15 +149,15 @@ export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo worksp
           </div>
         </aside>
 
-        {file && <FileDiff key={file.path} goal={goal} file={file} comments={commentsOf(file.path)} mode={mode} onMode={setMode} />}
+        {file && <FileDiff key={file.path} goal={goal} repo={scope} file={file} comments={commentsOf(file.path)} mode={mode} onMode={setMode} />}
       </div>
 
-      {pending.length > 0 && <RequestChangesBar goal={goal} count={pending.length} />}
+      {pending.length > 0 && <RequestChangesBar goal={goal} count={pending.length} repos={new Set(pending.map((c) => c.repo ?? "")).size} />}
     </div>
   )
 }
 
-function FileDiff({ goal, file, comments, mode, onMode }: { goal: Goal; file: ChangedFile; comments: ReviewComment[]; mode: Mode; onMode: (m: Mode) => void }) {
+function FileDiff({ goal, repo, file, comments, mode, onMode }: { goal: Goal; repo?: string; file: ChangedFile; comments: ReviewComment[]; mode: Mode; onMode: (m: Mode) => void }) {
   const lines = useMemo(() => parseDiff(file.diff), [file.diff])
   const [commenting, setCommenting] = useState<number | null>(null)
   const byLine = useMemo(() => {
@@ -166,7 +170,7 @@ function FileDiff({ goal, file, comments, mode, onMode }: { goal: Goal; file: Ch
   const thread = (line: number | undefined) => (
     <>
       {(line ? byLine.get(line) ?? [] : []).map((c) => <CommentCard key={c.id} goal={goal} comment={c} />)}
-      {commenting === line && line !== undefined && <CommentBox goal={goal} file={file.path} line={line} onDone={() => setCommenting(null)} />}
+      {commenting === line && line !== undefined && <CommentBox goal={goal} repo={repo} file={file.path} line={line} onDone={() => setCommenting(null)} />}
     </>
   )
 
@@ -186,7 +190,7 @@ function FileDiff({ goal, file, comments, mode, onMode }: { goal: Goal; file: Ch
         {(general.length > 0 || commenting === 0) && (
           <div className="space-y-2 border-b p-3">
             {general.map((c) => <CommentCard key={c.id} goal={goal} comment={c} />)}
-            {commenting === 0 && <CommentBox goal={goal} file={file.path} onDone={() => setCommenting(null)} />}
+            {commenting === 0 && <CommentBox goal={goal} repo={repo} file={file.path} onDone={() => setCommenting(null)} />}
           </div>
         )}
         {!lines.length ? (
@@ -294,14 +298,14 @@ function CommentCard({ goal, comment: c }: { goal: Goal; comment: ReviewComment 
   )
 }
 
-function CommentBox({ goal, file, line, onDone }: { goal: Goal; file: string; line?: number; onDone: () => void }) {
+function CommentBox({ goal, repo, file, line, onDone }: { goal: Goal; repo?: string; file: string; line?: number; onDone: () => void }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const save = async () => {
     if (!text.trim()) return
     setBusy(true)
     try {
-      await goalWorkApi.addComment(goal.id, { file, ...(line ? { line } : {}), body: text.trim() })
+      await goalWorkApi.addComment(goal.id, { file, ...(line ? { line } : {}), body: text.trim(), ...(repo ? { repo } : {}) })
       onDone()
     } catch (e) {
       toast.error((e as Error).message)
@@ -373,13 +377,13 @@ function RevertTask({ goal, taskId, onDone }: { goal: Goal; taskId: string; onDo
   )
 }
 
-function RequestChangesBar({ goal, count }: { goal: Goal; count: number }) {
+function RequestChangesBar({ goal, count, repos }: { goal: Goal; count: number; /** Comments span this many repos (one fix task each). */ repos: number }) {
   const [busy, setBusy] = useState(false)
   const send = async () => {
     setBusy(true)
     try {
       await goalWorkApi.requestChanges(goal.id)
-      toast.success("Sent to the Developer", { description: "A fix task was added; QA re-tests afterwards." })
+      toast.success("Sent to the Developer", { description: repos > 1 ? `A fix task per repo (${repos}); QA re-tests afterwards.` : "A fix task was added; QA re-tests afterwards." })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -389,7 +393,7 @@ function RequestChangesBar({ goal, count }: { goal: Goal; count: number }) {
   return (
     <Callout
       tone="info"
-      title={`${count} ${count === 1 ? "comment" : "comments"} pending`}
+      title={`${count} ${count === 1 ? "comment" : "comments"} pending${repos > 1 ? ` across ${repos} repos` : ""}`}
       action={
         <Button size="sm" onClick={send} disabled={busy}>
           {busy ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : <SendIcon data-icon="inline-start" />} Request changes from Developer

@@ -40,7 +40,15 @@ export interface McpServiceDeps {
   hub: Hub;
   cwd: string;
   bots: () => Bot[];
+  /**
+   * Workspaces: team servers committed in the other repos. Offered under "Found in…", never
+   * enabled on their own: the owner adds the ones they want (as Personal).
+   */
+  repoServers?: () => { repo: string; servers: McpServerEntry[] }[];
 }
+
+/** Name of a server from another workspace repo in the "available" list. */
+const repoServerName = (repo: string, name: string) => `${repo}/${name}`;
 
 export type SignInResult = { connected: true } | { connected: false; url: string; external?: boolean };
 
@@ -96,6 +104,21 @@ export class McpService {
       const name = c ? added.get(configKey(c as McpTransportConfig)) : undefined;
       return name ? { ...a, added: name } : a;
     });
+    for (const { repo, entry } of this.fromRepos()) {
+      const c = entry.config as { type?: string; url?: string; command?: string; args?: string[] };
+      const name = added.get(configKey(entry.config));
+      available.push({
+        name: repoServerName(repo, entry.name),
+        source: `workspace:${repo}`,
+        status: McpStatus.Unknown,
+        type: c.type ?? 'stdio',
+        ...(c.url ? { url: c.url } : {}),
+        ...(c.command ? { command: [c.command, ...(c.args ?? [])].join(' ') } : {}),
+        toolCount: 0,
+        repo,
+        ...(name ? { added: name } : {}),
+      });
+    }
     return {
       servers,
       available,
@@ -222,6 +245,13 @@ export class McpService {
    * lands in mcp.json); it is added as Personal, and can be shared with the team afterwards.
    */
   importAvailable(sourceName: string): McpServerEntry {
+    const fromRepo = this.fromRepos().find(({ repo, entry }) => repoServerName(repo, entry.name) === sourceName);
+    if (fromRepo) {
+      // Copied as-is: `${secret:NAME}` references stay references; you set the values here.
+      let name = safeName(fromRepo.entry.name);
+      for (let i = 2; this.deps.repo.get(name); i++) name = `${safeName(fromRepo.entry.name)}-${i}`;
+      return this.add({ name, config: fromRepo.entry.config, scope: McpScope.Personal, description: fromRepo.entry.description ?? `From the ${fromRepo.repo} repo` });
+    }
     const raw = this.availableConfigs.get(sourceName);
     if (!raw) throw new Error(`"${sourceName}" was not found in Claude Code. Refresh and try again.`);
     let name = safeName(sourceName);
@@ -327,6 +357,15 @@ export class McpService {
       for (const s of statuses) if (names.has(s.name)) this.live.set(s.name, toLive(s));
     } catch (err) {
       for (const n of Object.keys(servers)) this.live.set(n, { status: McpStatus.Failed, error: (err as Error).message, tools: [] });
+    }
+  }
+
+  /** Team servers of the workspace's other repos (unreadable ones are skipped). */
+  private fromRepos(): { repo: string; entry: McpServerEntry }[] {
+    try {
+      return (this.deps.repoServers?.() ?? []).flatMap(({ repo, servers }) => servers.filter((e) => e.config.type !== 'claudeai-proxy').map((entry) => ({ repo, entry })));
+    } catch {
+      return [];
     }
   }
 

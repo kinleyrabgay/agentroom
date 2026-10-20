@@ -23,6 +23,7 @@ import {
 import { ConfirmDelete } from "@/components/shared/confirm-delete"
 import { Markdown } from "@/components/shared/markdown"
 import { ToneBadge } from "@/components/kit/badge"
+import { RepoBadge } from "@/features/workspaces/components/repo-badge"
 import { Callout } from "@/components/kit/callout"
 import { Segmented } from "@/components/kit/segmented"
 import { ErrorState, LoadingState } from "@/components/kit/state-view"
@@ -102,6 +103,7 @@ function Header({ review: r, onBack }: { review: PrReview; onBack: () => void })
             <span className="font-mono">
               {r.repo}#{r.number}
             </span>
+            <RepoBadge task={{ repo: r.workspaceRepo }} />
             <span>@{r.author}</span>
             <span className="font-mono">
               {r.headRef} → {r.baseRef}

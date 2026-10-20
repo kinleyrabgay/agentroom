@@ -82,7 +82,8 @@ export const GoalAutopilotSchema = z.object({
   /** Reported by the bot (autopilot_report). */
   reproduced: z.boolean().optional(),
   how: z.string().optional(),
-  test: z.object({ file: z.string(), command: z.string() }).optional(),
+  /** `repo`: workspaces, the repo the test is in (unset = the primary repo). */
+  test: z.object({ file: z.string(), command: z.string(), repo: z.string().optional() }).optional(),
   /** Measured by AgentRoom: the test fails on the starting commit and passes on the goal's branch. */
   verification: z
     .object({
@@ -201,6 +202,8 @@ export const GoalSchema = z.object({
         id: z.string(),
         file: z.string(),
         line: z.number().optional(),
+        /** Workspaces: the repo the file is in (unset = the primary repo). */
+        repo: z.string().optional(),
         body: z.string(),
         author: z.string(),
         createdAt: z.string(),

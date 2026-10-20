@@ -12,6 +12,8 @@ export {
   workspaceFile,
   workspacesDir,
   setPrimary,
+  setRepoSettings,
+  isGitRepo,
   MAX_WORKSPACE_REPOS,
   WORKSPACE_NAME,
   type WorkspaceConfig,

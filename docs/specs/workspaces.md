@@ -78,11 +78,77 @@ Repo ids are slugs of the folder name (`-2` on clashes). Up to 8 repos; nested f
 - Bots' instructions get a workspace block: the repos and folders, the top cross-repo edges, and a capped
   slice of the other repos' `INDEX.md`.
 
+## Safety across repos
+
+Everything that guards a goal looks at **every repo the goal touched**, not just the primary.
+
+- **Scans and risk.** `SecurityService.assessGoal` scans the primary diff and each other repo's goal
+  folder against that repo's starting commit (`goalRepos` dep). Findings are tagged `repo` (unset =
+  primary; the dedupe key includes it). The risk score is computed over all of them together: paths
+  from other repos count as `<repo>/<path>`, sensitive paths are matched per repo, and one risky repo
+  makes the goal risky — so a sensitive change only in a secondary repo still triggers the Security
+  review and the high-risk gate.
+- **Security review.** The auditor's prompt lists the other repos' diffs (folder, base commit,
+  sensitive paths); `security_finding` takes an optional `repo`.
+- **Publish gates.** A bot's commit/push/PR command is checked in every goal folder (it may `cd`).
+  A human (or autopilot) opening a PR in a repo is refused while **that repo** has open findings at
+  the team's `blockOn` threshold (rescanned first); approve or dismiss them on the Security page.
+  PR drafts count each repo's own findings.
+- **Autopilot.** `autopilot_report` takes `repo`; AgentRoom runs the fail→pass check in that repo
+  (its goal folder for the fix, its starting commit for the base). A fix spanning several repos never
+  auto-opens PRs: each waits for a person.
+- **Tests and apps.** QA and build prompts say tests run in the task's repo with its own command, and
+  include that repo's dev command / URL from the workspace file.
+- **Proof** (recorded video/screenshots) still records the primary repo's app only; see Limits.
+
+## Workspace settings (Settings → Workspace)
+
+- Single-project mode: **Create workspace** (name + repo folders, first = primary) writes
+  `~/.agentroom/workspaces/<name>.json` and shows `agentroom start --workspace <name>`.
+- In a workspace: repos with branch and folder, **Make primary**, **Remove**, **Add a repo** (must be a
+  git checkout, not nested, not a duplicate — checked on the server), and per-repo **Dev command** /
+  **App URL**. Repo list and primary changes apply after a restart (a callout shows the command);
+  app settings apply right away. Other saved workspaces are listed with their start command.
+- ⌘K → **New workspace…** opens the section. Owner only (the team room's policy denies members).
+
+## Cross-repo links
+
+- Every inferred edge has a stable `key` (`kind|fromRepo|from|toRepo|to`) and a `status`: `guessed`,
+  `confirmed`, or `manual`. Hidden links are left out unless `?hidden=1`.
+- People's decisions live in the primary repo's **`.agentroom/context/workspace-links.json`**
+  (committed, so the team shares them): `confirmed`, `hidden`, and `manual` links (both modules must
+  exist; a short note; the author's name, never the email).
+- Map: confirmed and manual links are solid, guessed ones dashed. The "Between repos" panel has
+  Confirm / Hide / Undo per link, a **Hidden** list to bring links back, and **+** to add a link
+  (repo + module on each end, optional reason).
+- Bots' workspace block lists confirmed and manual links first, labels each `confirmed` or
+  `guessed`, and tells bots to verify guessed ones.
+
+## Other repos' Sentry and MCP
+
+- **Sentry.** Projects from the other repos' committed `sentry.json` (same org as the primary's) join
+  the Sentry page; issues are tagged with their repo (badge on the card) and a **Repo** filter appears.
+  Another org would need its own token, so those are skipped. Handing such an issue to the team adds a
+  "Where the code is" section telling the Planner to put the fix tasks in that repo.
+- **MCP.** The other repos' committed team servers (`.agentroom/mcp.json`) are listed under
+  *Found in Claude Code and other repos* with the repo and, for stdio servers, the exact command. Nothing
+  starts on its own: **Add** copies it as a Personal server (secret references stay references; set
+  the values here).
+- **Settings and budgets** stay primary-only on purpose: one workspace, one set of rules.
+
+## Review comments
+
+- Changes comments record the repo of the diff they're on (`reviewComments[].repo`); each repo's
+  Changes view shows only its own. **Request changes** creates one fix task per repo, with `repo` set.
+- PR reviews from a link accept PRs of any workspace repo (matched by `origin`), check them out in
+  that repo and show a repo badge.
+
 ## UI
 
 - Sidebar header: **Repo** switcher (All repos / each repo), remembered per workspace. Hidden outside a workspace.
-- **Context → Map, All repos**: the workspace map (repo frames side by side, dashed brand edges across
-  repos, a "Between repos" panel with evidence; picking one highlights it). Clicking a module switches
+- **Context → Map, All repos**: the workspace map (repo frames side by side, brand edges across
+  repos — solid when confirmed, dashed when guessed — and a "Between repos" panel with evidence and
+  confirm/hide/add; picking one highlights it). Clicking a module switches
   to its repo and opens its card. Ask/Tour/Docs work on the repo in view.
 - **Work**: repo badge on task cards, a Repo field in the task inspector, the board filtered to the
   repo in view, repo badges on goals that span repos, a repo switch in Changes, and per-repo PRs
@@ -98,15 +164,22 @@ Repo ids are slugs of the folder name (`-2` on clashes). Up to 8 repos; nested f
 | `/api/context/*` + `x-agentroom-repo` | Any context route for one repo |
 | `GET /api/goals/:id/changes?repo=` · `GET /pr-draft?repo=` · `POST /pr {repo}` · `POST /merge-local {repo}` | Per-repo goal work |
 | `POST/PATCH /api/tasks` `{repo}` | Workspace repo ids only; the primary is stored as unset |
+| `GET /api/workspaces` · `POST /api/workspaces {name, paths, primary?}` | Saved workspaces · create one (owner) |
+| `PATCH /api/workspaces/:name? {add \| remove \| primary \| repo+devCommand/url}` | Edit a workspace (default: the running one) |
+| `POST /api/workspace/links {key, action}` | `confirm` · `hide` · `reset` a link |
+| `POST /api/workspace/links/manual` · `DELETE …/manual?key=` | Add or remove a manual link |
+| `GET /api/sentry/issues?repo=` | One repo's Sentry projects |
+| `POST /api/goals/:id/comments {repo?}` | Review comment on a repo's diff |
 
 ## Limits (partial on purpose)
 
-- One server per workspace, run from the primary repo. Other repos' GitHub boards, Sentry config, MCP
-  servers and settings are not read; the workspace uses the primary's.
-- Security scans, the risk score, proof of work and the publish gates run on the primary repo's diff
-  only; other repos' diffs are visible in Changes but not scanned.
-- Review comments in Changes don't record which repo a file is in.
+- One server per workspace, run from the primary repo. Settings, budgets, GitHub board and schedules
+  are the primary's. Adding/removing repos or moving the primary needs a restart.
+- Proof of work records the primary repo's app only; other repos get their QA tests (in that repo)
+  and the dev command / URL in prompts, but no recording.
+- Sentry projects from another org than the primary's aren't shown (one token).
 - Hand edits to another repo's context cards aren't watched live (they show on the next read).
 - Cross-repo inference is heuristic: dynamic URLs built far from the call, gateways that rewrite
-  paths, and code generated from specs at build time can be missed or mis-attributed.
-- No workspace UI for creating/editing workspaces yet (CLI only).
+  paths, and code generated from specs at build time can be missed or mis-attributed — confirm, hide or
+  add links on the map.
+- Opening PRs against a real GitHub remote across repos hasn't been tested live.

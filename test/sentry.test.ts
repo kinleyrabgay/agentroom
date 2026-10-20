@@ -129,9 +129,46 @@ describe('SentryService', () => {
     expect(call.auth).toBe('Bearer sntrys_test');
     expect(service.status()).toMatchObject({ hasToken: true, config: { org: 'acme', regionUrl: 'https://de.sentry.io', projects: ['web'] } });
   });
+  it('in a workspace, adds the other repos’ projects (same org), tags their issues and filters by repo', async () => {
+    const { secrets, calls, service } = setup();
+    secrets.setMcpSecrets({ SENTRY_ACCESS_TOKEN: 'sntrys_test' });
+    await service.connect({ org: 'acme', projects: ['api'] });
+    service.useRepos('shop-api', () => [
+      { repo: 'shop-web', config: { org: 'acme', projects: ['web'] } },
+      // Another org would need its own token: skipped.
+      { repo: 'other', config: { org: 'elsewhere', projects: ['x'] } },
+    ]);
+    expect(service.status().repoProjects).toEqual([{ repo: 'shop-web', projects: ['web'] }]);
+    const all = await service.issues();
+    expect(calls.at(-1)!.url.searchParams.getAll('project').sort()).toEqual(['11', '12']);
+    expect(all.issues[0]!.repo).toBe('shop-web');
+    await service.issues({ repo: 'shop-web' });
+    expect(calls.at(-1)!.url.searchParams.getAll('project')).toEqual(['11']);
+    await service.issues({ repo: 'shop-api' });
+    expect(calls.at(-1)!.url.searchParams.getAll('project')).toEqual(['12']);
+    expect((await service.issues({ repo: 'nope' })).issues).toEqual([]);
+  });
 });
 
 describe('Sentry hand-off', () => {
+  it('routes issues from another workspace repo to that repo', async () => {
+    let brief = '';
+    const issue = { ...toIssue(rawIssue), repo: 'shop-web' };
+    await handoffSentry(
+      {
+        root: os.tmpdir(),
+        bots: () => [{ id: 'lead', name: 'Team Lead', role: 'lead', order: 1 }] as unknown as Bot[],
+        detail: async () => ({ issue, event: toEvent(rawEvent), tags: [] }),
+        startGoal: (b) => ((brief = b), { id: 'G-1' } as never),
+        sendToBot: () => {},
+        repoRoot: (r) => (r === 'shop-web' ? '/code/shop-web' : undefined),
+      },
+      { issueIds: ['1'] },
+    );
+    expect(brief).toContain('Where the code is');
+    expect(brief).toContain('repo: "shop-web"');
+  });
+
   const bots = [
     { id: 'lead', name: 'Team Lead', role: 'lead', order: 1 },
     { id: 'fixer', name: 'Bug Fixer', role: 'developer', reportsTo: 'lead', order: 2 },

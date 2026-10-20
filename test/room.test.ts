@@ -279,6 +279,13 @@ describe('access policy', () => {
       expect(memberMayCall(role, 'GET', '/workspace/graph', owns)).toBe(true);
       expect(memberMayCall(role, 'GET', '/workspace/edges', owns)).toBe(true);
       expect(memberMayCall(role, 'POST', '/workspace/sync', owns)).toBe(false);
+      // Settings → Workspace and link decisions are the owner's.
+      expect(memberMayCall(role, 'GET', '/workspaces', owns)).toBe(false);
+      expect(memberMayCall(role, 'POST', '/workspaces', owns)).toBe(false);
+      expect(memberMayCall(role, 'PATCH', '/workspaces/shop', owns)).toBe(false);
+      expect(memberMayCall(role, 'POST', '/workspace/links', owns)).toBe(false);
+      expect(memberMayCall(role, 'POST', '/workspace/links/manual', owns)).toBe(false);
+      expect(memberMayCall(role, 'DELETE', '/workspace/links/manual', owns)).toBe(false);
     }
     expect(memberMayCall('owner', 'POST', '/workspace/sync', owns)).toBe(true);
   });

@@ -7,7 +7,7 @@ import type { AutopilotIssueRun } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
 import type { CostEstimate, EvalRun, Experiment, ExperimentResult, ExperimentVariant, GoalOutcome, ProviderStatus, Suggestion } from "@shared"
-import type { CrossRepoEdge, WorkspaceGraphView, WorkspaceView } from "@shared"
+import type { CrossRepoEdge, WorkspaceGraphView, WorkspaceLinks, WorkspacesView, WorkspaceView } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -229,7 +229,7 @@ export const remoteApi = {
 /** A goal's own branch: diff review, review comments, per-task revert, PR, local merge, cleanup. */
 export const goalWorkApi = {
   changes: (id: string, repo?: string) => request<GoalChanges>("GET", `/goals/${seg(id)}/changes${qs({ repo })}`),
-  addComment: (id: string, comment: { file: string; line?: number; body: string }) => request<Goal>("POST", `/goals/${seg(id)}/comments`, comment),
+  addComment: (id: string, comment: { file: string; line?: number; body: string; repo?: string }) => request<Goal>("POST", `/goals/${seg(id)}/comments`, comment),
   deleteComment: (id: string, commentId: string) => request<Goal>("DELETE", `/goals/${seg(id)}/comments/${seg(commentId)}`),
   requestChanges: (id: string) => request<Goal>("POST", `/goals/${seg(id)}/request-changes`),
   revertTask: (id: string, taskId: string) => request<Task>("POST", `/goals/${seg(id)}/tasks/${seg(taskId)}/revert`),
@@ -341,4 +341,15 @@ export const workspaceApi = {
   graph: () => request<WorkspaceGraphView>("GET", "/workspace/graph"),
   edges: () => request<CrossRepoEdge[]>("GET", "/workspace/edges"),
   sync: (cards = false) => request<WorkspaceView | null>("POST", "/workspace/sync", { cards }),
+  /** With hidden links (so they can be un-hidden). */
+  graphAll: () => request<WorkspaceGraphView>("GET", "/workspace/graph?hidden=1"),
+  /** Confirm, hide or reset (back to guessed) a cross-repo link. */
+  decideLink: (key: string, action: "confirm" | "hide" | "reset") => request<WorkspaceLinks>("POST", "/workspace/links", { key, action }),
+  addLink: (input: { fromRepo: string; from: string; toRepo: string; to: string; note?: string }) => request<WorkspaceLinks>("POST", "/workspace/links/manual", input),
+  removeLink: (key: string) => request<WorkspaceLinks>("DELETE", `/workspace/links/manual?key=${encodeURIComponent(key)}`),
+  /** Settings → Workspace. */
+  list: () => request<WorkspacesView>("GET", "/workspaces"),
+  create: (input: { name: string; paths: string[]; primary?: string }) => request<{ start: string }>("POST", "/workspaces", input),
+  edit: (name: string | null, change: { add?: string; remove?: string; primary?: string; repo?: string; devCommand?: string; url?: string }) =>
+    request<{ view: WorkspaceView | null }>("PATCH", name ? `/workspaces/${encodeURIComponent(name)}` : "/workspaces", change),
 }

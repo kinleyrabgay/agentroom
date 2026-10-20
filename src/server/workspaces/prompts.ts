@@ -15,10 +15,12 @@ export function workspacePlanSection(goalId: string, repos: RepoRef[]): string {
 }
 
 /** Added to a build/test prompt when the task's repo isn't the primary one (or in any workspace). */
-export function workspaceTaskSection(task: { id: string; repo?: string }, repo: RepoRef, cwd: string, others: { id: string; dir: string }[]): string {
+export function workspaceTaskSection(task: { id: string; repo?: string }, repo: RepoRef, cwd: string, others: { id: string; dir: string }[], app: { devCommand?: string; url?: string } = {}): string {
   return [
     `## Repo for ${task.id}: \`${repo.id}\``,
     `- You're working in ${cwd}. Change files only in this repo.`,
+    `- Tests and checks for this task run in this repo's folder, with this repo's own test command.`,
+    app.devCommand || app.url ? `- This repo's app: ${[app.devCommand ? `start it with \`${app.devCommand}\` in ${cwd}` : '', app.url ? `open ${app.url}` : ''].filter(Boolean).join(', then ')}.` : '',
     others.length ? `- Other repos of the goal, to read only: ${others.map((o) => `\`${o.id}\` at ${o.dir}`).join('; ')}.` : '',
     `- If this repo needs a change in another repo first, set a blockedReason on the task naming it instead of editing there.`,
   ]

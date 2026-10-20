@@ -24,6 +24,25 @@ export interface SecurityServiceDeps {
   goalCwd?: (goalId: string) => string | undefined;
   /** Git access for another folder (a goal's worktree). */
   gitFor?: (cwd: string) => GitReader;
+  /**
+   * Workspaces: the goal's parts in repos other than the primary one (the folder its bots work in
+   * there and that repo's starting commit). Scans, risk and gates cover every one of them.
+   */
+  goalRepos?: (goalId: string) => GoalRepoTarget[];
+}
+
+/** A goal's part in another repo of a workspace. */
+export interface GoalRepoTarget {
+  repo: string;
+  cwd: string;
+  base?: string;
+}
+
+/** Per-repo diff summary inside a goal assessment (workspaces). */
+export interface RepoScan {
+  repo: string;
+  stats: DiffStats;
+  sensitive: string[];
 }
 
 export interface ScanResult {
@@ -34,8 +53,10 @@ export interface ScanResult {
 
 export interface GoalAssessment extends ScanResult {
   risk: RiskAssessment;
-  /** Diff paths matching the sensitive-path globs. */
+  /** Diff paths matching the sensitive-path globs (other repos' paths as `<repo>/<path>`). */
   sensitive: string[];
+  /** Workspaces: the goal's other repos, scanned too. Their paths in `stats` are prefixed `<repo>/`. */
+  repos: RepoScan[];
 }
 
 /** AgentRoom's own files (board, bots, runs) aren't part of the change being reviewed. */
@@ -75,9 +96,26 @@ export class SecurityService {
     return cwd && this.deps.gitFor ? this.deps.gitFor(cwd) : this.deps.git;
   }
 
-  /** Scan the working tree against `base` (a goal's base commit, or HEAD). */
-  async scan(scope: FindingScope, base?: string, opts: { dependencies?: boolean } = {}): Promise<ScanResult> {
-    const files = ownFiles(parseUnifiedDiff(await this.gitOf(scope.goalId).workingDiff(base ?? 'HEAD')));
+  /** Git for a goal's part in another repo. */
+  private gitIn(cwd: string): GitReader {
+    if (!this.deps.gitFor) throw new Error('No git access for other repos.');
+    return this.deps.gitFor(cwd);
+  }
+
+  /** The goal's parts in other repos (workspaces), or none. */
+  private others(goalId?: string): GoalRepoTarget[] {
+    if (!goalId || !this.deps.goalRepos || !this.deps.gitFor) return [];
+    try {
+      return this.deps.goalRepos(goalId);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Scan the working tree against `base` (a goal's base commit, or HEAD). With `target`, scan that other repo's part instead. */
+  async scan(scope: FindingScope, base?: string, opts: { dependencies?: boolean; target?: GoalRepoTarget } = {}): Promise<ScanResult> {
+    const git = opts.target ? this.gitIn(opts.target.cwd) : this.gitOf(scope.goalId);
+    const files = ownFiles(parseUnifiedDiff(await git.workingDiff(base ?? 'HEAD')));
     const depsChanged = this.deps.guard.touchesManifests(files);
     const runDeps = opts.dependencies !== false && depsChanged;
     const drafts = [...scanFiles(files), ...(runDeps ? await this.deps.guard.check(files) : [])];
@@ -86,12 +124,34 @@ export class SecurityService {
     return { findings: this.deps.findings.list({ goalId: scope.goalId }), stats: diffStats(files), depsChanged };
   }
 
-  /** Scan a goal's diff and score its risk. */
+  /**
+   * Scan a goal's diff and score its risk. In a workspace every repo the goal touched is scanned
+   * (findings tagged with the repo) and scored together: one risky repo makes the whole goal risky.
+   */
   async assessGoal(goal: Goal, opts: { dependencies?: boolean } = {}): Promise<GoalAssessment> {
     const scan = await this.scan({ goalId: goal.id }, goal.baseRef, opts);
     const patterns = this.deps.settings().security.sensitivePaths;
-    const risk = assessRisk({ stats: scan.stats, findings: scan.findings, depsChanged: scan.depsChanged, sensitivePatterns: patterns });
-    return { ...scan, risk, sensitive: sensitiveTouched(scan.stats.paths, patterns) };
+    const sensitive = sensitiveTouched(scan.stats.paths, patterns);
+    const repos: RepoScan[] = [];
+    let stats = scan.stats;
+    let depsChanged = scan.depsChanged;
+    for (const t of this.others(goal.id)) {
+      if (!t.base) continue;
+      const r = await this.scan({ goalId: goal.id, repo: t.repo }, t.base, { ...opts, target: t });
+      const own = sensitiveTouched(r.stats.paths, patterns);
+      repos.push({ repo: t.repo, stats: r.stats, sensitive: own });
+      sensitive.push(...own.map((p) => `${t.repo}/${p}`));
+      depsChanged ||= r.depsChanged;
+      stats = {
+        files: stats.files + r.stats.files,
+        additions: stats.additions + r.stats.additions,
+        deletions: stats.deletions + r.stats.deletions,
+        paths: [...stats.paths, ...r.stats.paths.map((p) => `${t.repo}/${p}`)],
+      };
+    }
+    const findings = this.deps.findings.list({ goalId: goal.id });
+    const risk = assessRisk({ stats, findings, depsChanged, sensitivePatterns: patterns, sensitive });
+    return { findings, stats, depsChanged, risk, sensitive, repos };
   }
 
   /**
@@ -101,27 +161,34 @@ export class SecurityService {
   async gate(command: string, scope: FindingScope): Promise<GateHold | null> {
     const action = gitActionOf(command);
     if (!action) return null;
-    const git = this.gitOf(scope.goalId);
-    let diff: string;
-    if (action === GitAction.Commit) {
-      diff = await git.stagedDiff();
-      if (commitsAll(command)) diff = `${diff}\n${await git.workingDiff('HEAD')}`;
-    } else {
-      const base = scope.goalId ? this.deps.goalBase?.(scope.goalId) : undefined;
-      diff = await git.rangeDiff(base ? `${base}..HEAD` : undefined);
+    // In a workspace the command may run in any of the goal's repos (the bot can `cd`), so every part is checked.
+    const parts: { git: GitReader; base?: string; scope: FindingScope }[] = [
+      { git: this.gitOf(scope.goalId), ...(scope.goalId && this.deps.goalBase?.(scope.goalId) ? { base: this.deps.goalBase(scope.goalId) } : {}), scope },
+      ...this.others(scope.goalId).map((t) => ({ git: this.gitIn(t.cwd), ...(t.base ? { base: t.base } : {}), scope: { ...scope, repo: t.repo } })),
+    ];
+    const found: SecurityFinding[] = [];
+    for (const part of parts) {
+      let diff: string;
+      if (action === GitAction.Commit) {
+        diff = await part.git.stagedDiff();
+        if (commitsAll(command)) diff = `${diff}\n${await part.git.workingDiff('HEAD')}`;
+      } else {
+        diff = await part.git.rangeDiff(part.base ? `${part.base}..HEAD` : undefined);
+      }
+      const files = ownFiles(parseUnifiedDiff(diff));
+      if (!files.length) continue;
+      const drafts = [...scanFiles(files), ...(this.deps.guard.touchesManifests(files) ? await this.deps.guard.check(files) : [])];
+      found.push(...this.deps.findings.record(drafts, part.scope));
     }
-    const files = ownFiles(parseUnifiedDiff(diff));
-    if (!files.length) return null;
-    const drafts = [...scanFiles(files), ...(this.deps.guard.touchesManifests(files) ? await this.deps.guard.check(files) : [])];
-    const found = this.deps.findings.record(drafts, scope);
     const threshold = this.deps.settings().security.blockOn;
     const holding = found.filter((f) => f.status === FindingStatus.Open && blocks(f.severity, threshold));
     if (!holding.length) return null;
     const critical = holding.filter((f) => f.severity === FindingSeverity.Critical).length;
     const warnings = holding.length - critical;
-    const parts = [critical ? `${critical} critical` : '', warnings ? `${warnings} ${warnings === 1 ? 'warning' : 'warnings'}` : ''].filter(Boolean);
+    const counts = [critical ? `${critical} critical` : '', warnings ? `${warnings} ${warnings === 1 ? 'warning' : 'warnings'}` : ''].filter(Boolean);
     const verb = action === GitAction.Commit ? 'commit' : action === GitAction.Push ? 'push' : 'pull request';
-    return { reason: `Security: ${parts.join(', ')} in this ${verb}`, findings: holding };
+    const where = [...new Set(holding.map((f) => f.repo).filter(Boolean))];
+    return { reason: `Security: ${counts.join(', ')} in this ${verb}${where.length ? ` (repo ${where.join(', ')})` : ''}`, findings: holding };
   }
 
   /** The human let a held commit/push/PR through: those findings are accepted risks. */

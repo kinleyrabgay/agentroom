@@ -16,6 +16,8 @@ export interface SentryStatus {
   config: SentryConfig | null;
   /** SENTRY_ACCESS_TOKEN is set in local secrets. */
   hasToken: boolean;
+  /** Workspaces: Sentry projects from the other repos' own `sentry.json` (same org), per repo. */
+  repoProjects?: { repo: string; projects: string[] }[];
 }
 
 export interface SentryOrg {
@@ -55,6 +57,8 @@ export interface SentryIssue {
   firstSeen: string;
   lastSeen: string;
   project: { id: string; slug: string; name: string; platform?: string };
+  /** Workspaces: the repo whose Sentry projects this issue belongs to (unset = the primary repo). */
+  repo?: string;
   /** Exception type and message, e.g. "TypeError" / "Cannot read properties of undefined". */
   type?: string;
   value?: string;
@@ -75,6 +79,8 @@ export interface SentryIssueQuery {
   query?: string;
   /** Project slugs; empty/absent = the configured projects. */
   projects?: string[];
+  /** Workspaces: only this repo's projects. */
+  repo?: string;
   environment?: string;
   status?: 'unresolved' | 'resolved' | 'ignored' | 'all';
   level?: SentryLevel;

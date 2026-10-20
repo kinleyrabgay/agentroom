@@ -189,6 +189,8 @@ export interface PrReview {
   headSha: string;
   /** The PR description (untrusted; shown to the bot wrapped as data). */
   description?: string;
+  /** Workspaces: the local repo the PR belongs to, when it isn't the primary one. */
+  workspaceRepo?: string;
   /** Opened from a fork: commands from it run only after the human allows them. */
   fork: boolean;
   /** The human allowed running the PR's scripts and tests. */

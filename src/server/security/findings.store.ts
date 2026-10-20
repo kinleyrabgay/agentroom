@@ -35,7 +35,13 @@ export class FindingsStore {
 
   list(q: FindingQuery = {}): SecurityFinding[] {
     return this.items
-      .filter((f) => (q.goalId === undefined || f.goalId === q.goalId) && (!q.status || f.status === q.status) && (!q.severity || f.severity === q.severity))
+      .filter(
+        (f) =>
+          (q.goalId === undefined || f.goalId === q.goalId) &&
+          (q.repo === undefined || (f.repo ?? '') === q.repo) &&
+          (!q.status || f.status === q.status) &&
+          (!q.severity || f.severity === q.severity),
+      )
       .sort((a, b) => b.ts.localeCompare(a.ts));
   }
 
@@ -52,10 +58,10 @@ export class FindingsStore {
     const seen = new Set<string>();
     const out: SecurityFinding[] = [];
     for (const d of drafts) {
-      const key = keyOf(scope.goalId, d);
+      const key = keyOf(scope.goalId, d, scope.repo);
       if (seen.has(key)) continue;
       seen.add(key);
-      let f = this.items.find((x) => keyOf(x.goalId, x) === key);
+      let f = this.items.find((x) => keyOf(x.goalId, x, x.repo) === key);
       if (f) {
         if (f.status === FindingStatus.Fixed) Object.assign(f, { status: FindingStatus.Open, ts: now, resolvedAt: undefined, resolvedBy: undefined });
         Object.assign(f, { title: d.title, detail: d.detail, severity: d.severity });
@@ -67,7 +73,7 @@ export class FindingsStore {
     }
     if (replace) {
       for (const f of this.items) {
-        if (f.goalId === scope.goalId && f.status === FindingStatus.Open && replace.sources.includes(f.source) && !seen.has(keyOf(f.goalId, f))) {
+        if (f.goalId === scope.goalId && (f.repo ?? '') === (scope.repo ?? '') && f.status === FindingStatus.Open && replace.sources.includes(f.source) && !seen.has(keyOf(f.goalId, f, f.repo))) {
           f.status = FindingStatus.Fixed;
           f.resolvedAt = now;
         }
@@ -96,9 +102,9 @@ export class FindingsStore {
     return f;
   }
 
-  /** Open findings for a goal at/above a severity threshold. */
-  openBlocking(goalId: string | undefined, threshold: 'critical' | 'warning' | 'none'): SecurityFinding[] {
-    return this.items.filter((f) => f.goalId === goalId && f.status === FindingStatus.Open && blocks(f.severity, threshold));
+  /** Open findings for a goal at/above a severity threshold (all repos, or only `repo`: '' = the primary repo). */
+  openBlocking(goalId: string | undefined, threshold: 'critical' | 'warning' | 'none', repo?: string): SecurityFinding[] {
+    return this.items.filter((f) => f.goalId === goalId && (repo === undefined || (f.repo ?? '') === repo) && f.status === FindingStatus.Open && blocks(f.severity, threshold));
   }
 
   /** Push the current findings to the UI. */
@@ -117,9 +123,10 @@ export class FindingsStore {
   }
 }
 
-function keyOf(goalId: string | undefined, d: Pick<SecurityFinding, 'rule' | 'file' | 'line' | 'snippet'>): string {
+function keyOf(goalId: string | undefined, d: Pick<SecurityFinding, 'rule' | 'file' | 'line' | 'snippet'>, repo?: string): string {
   const snippet = d.snippet ? createHash('sha1').update(d.snippet).digest('hex').slice(0, 12) : '';
-  return [goalId ?? '', d.rule, d.file ?? '', d.line ?? '', snippet].join('|');
+  // The primary repo keeps the original key, so findings recorded before workspaces still dedupe.
+  return [goalId ?? '', d.rule, d.file ?? '', d.line ?? '', snippet, ...(repo ? [repo] : [])].join('|');
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {

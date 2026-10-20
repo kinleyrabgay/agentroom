@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readJson } from '../core/fs/json.js';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { BIND_HOST, PUBLIC_HOST, TOKEN_QUERY } from '../shared/constants.js';
@@ -123,6 +124,14 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return wt && fs.existsSync(wt.path) ? wt.path : undefined;
     },
     gitFor: (cwd) => new CliGitReader(cwd),
+    // Workspaces: the goal's parts in the other repos are scanned, scored and gated too.
+    goalRepos: (id) => {
+      const goal = project.goals.get(id);
+      if (!goal?.repos || !registry.isWorkspace) return [];
+      return Object.entries(goal.repos)
+        .filter(([repo]) => registry.has(repo) && repo !== registry.primaryId)
+        .map(([repo, st]) => ({ repo, cwd: goalRepos.cwd(goal, repo), ...(st.baseRef ? { base: st.baseRef } : {}) }));
+    },
   });
   permissions.useSecurity({
     check: (botId, command, goalId) => security.gate(command, { botId, ...(goalId ? { goalId } : {}) }),
@@ -135,6 +144,16 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     hub,
     cwd: project.root,
     bots: () => project.bots.list(),
+    repoServers: () =>
+      registry
+        .list()
+        .filter((r) => !r.primary)
+        .map((r) => ({
+          repo: r.id,
+          servers: new McpRepository({ [McpScope.Team]: path.join(r.root, '.agentroom', 'mcp.json'), [McpScope.Personal]: path.join(r.root, '.agentroom', 'runs', '.none.json') })
+            .list()
+            .filter((e) => e.scope === McpScope.Team),
+        })),
   });
   permissions.useMcp(mcp);
   // Goal-level events (status moved, PR opened) for integrations that report outside AgentRoom.
@@ -180,6 +199,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       return goal;
     },
     worktreesEnabled: () => project.settings.get().worktrees.enabled,
+    appOf: (repo) => workspace.appOf(repo),
   });
   const proof = new ProofService({
     root: project.root,
@@ -198,6 +218,11 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     cwdOf: (goal) => goals.cwdOf(goal),
     openPr: (id) => goals.openPr(id, {}),
     isRunning: (id) => goals.isRunning(id),
+    repoTarget: (goal, repo) => {
+      if (!registry.isWorkspace || !registry.has(repo) || repo === registry.primaryId) return null;
+      return { root: registry.root(repo), head: goalRepos.cwd(goal, repo), ...(goal.repos?.[repo]?.baseRef ? { baseRef: goal.repos[repo].baseRef } : {}) };
+    },
+    spansRepos: (goal) => registry.isWorkspace && goalRepos.spans(goal, project.tasks.list().filter((t) => t.goalId === goal.id)).length > 0,
   });
   const autopilot = new AutopilotService({
     root: project.root,
@@ -245,6 +270,16 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     guard: (text, source) => security.guardUntrusted(text, source, {}),
   });
   const sentry = new SentryService(project.paths.sentryFile, secrets);
+  // Workspaces: the other repos' committed sentry.json projects join the Sentry page.
+  sentry.useRepos(registry.primaryId, () =>
+    registry
+      .list()
+      .filter((r) => !r.primary)
+      .map((r) => {
+        const cfg = readJson<{ org?: string; projects?: string[] } | null>(path.join(r.root, '.agentroom', 'sentry.json'), null);
+        return { repo: r.id, config: cfg && typeof cfg === 'object' ? { ...(typeof cfg.org === 'string' ? { org: cfg.org } : {}), ...(Array.isArray(cfg.projects) ? { projects: cfg.projects.filter((p: unknown): p is string => typeof p === 'string') } : {}) } : null };
+      }),
+  );
   const sentryHandoff = (input: Parameters<typeof handoffSentry>[1]) =>
     handoffSentry(
       {
@@ -255,6 +290,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
         sendToBot: (botId, text) => void team.send(botId, text).catch(() => {}),
         guard: (text, source) => security.guardUntrusted(text, source, {}),
         hasSentryTools: (bot) => mcp.hasServerFor(bot, 'sentry'),
+        repoRoot: (repo) => (registry.isWorkspace && registry.has(repo) ? registry.root(repo) : undefined),
       },
       input,
     );
@@ -357,6 +393,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     dispatch: (botId, text, o) => team.dispatch(botId, text, 'human', { cwd: o.cwd }),
     strict: (botId, reason) => permissions.setStrict(botId, reason),
     audit: (e) => audit.record(e),
+    repos: () => registry.list().filter((r) => !r.primary).map((r) => ({ id: r.id, root: r.root })),
   });
   const runnerOpts = { root: project.root, port: opts.port, provider: provider.id, logFile: project.paths.daemonLog };
   const automation = new AutomationService({

@@ -164,7 +164,7 @@ export function createApp(deps: AppDeps) {
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
   if (deps.context) contextRoutes(api, deps.workspace ? (repo) => deps.workspace!.context(repo) : deps.context, deps.humanAudit);
-  if (deps.workspace) workspaceRoutes(api, deps.workspace, deps.humanAudit);
+  if (deps.workspace) workspaceRoutes(api, deps.workspace, deps.humanAudit, deps.humanName);
   if (deps.proof) proofRoutes(api, deps.proof, deps.goals, deps.project.root, deps.humanAudit);
   if (deps.autopilot) autopilotRoutes(api, deps.autopilot, deps.goals);
   packRoutes(api, deps.project, new RegistryService(deps.project), deps.humanAudit);

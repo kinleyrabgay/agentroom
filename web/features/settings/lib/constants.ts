@@ -1,4 +1,4 @@
-import { ClapperboardIcon, CpuIcon, GaugeIcon, SirenIcon } from "lucide-react"
+import { ClapperboardIcon, CpuIcon, FolderGit2Icon, GaugeIcon, SirenIcon } from "lucide-react"
 import { PackageIcon, UsersIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
@@ -19,6 +19,7 @@ export const SettingsSection = {
   Alerts: "alerts",
   Remote: "remote",
   Room: "room",
+  Workspace: "workspace",
   Runner: "runner",
   Integrations: "integrations",
   Data: "data",
@@ -38,6 +39,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: typeof Slider
   { id: SettingsSection.Alerts, label: "Alerts", icon: BellRingIcon, description: "How AgentRoom reaches you when you're away. Personal to this machine." },
   { id: SettingsSection.Remote, label: "Remote approvals", icon: SmartphoneIcon, description: "Approve from your phone through a temporary, approvals-only link." },
   { id: SettingsSection.Room, label: "Team room", icon: UsersIcon, description: "Teammates watch, approve and comment from their own browser. Everything runs on this machine." },
+  { id: SettingsSection.Workspace, label: "Workspace", icon: FolderGit2Icon, description: "Several repos worked on as one: their folders, which one hosts the team, and how QA runs each app." },
   { id: SettingsSection.Runner, label: "Runner", icon: ServerIcon, description: "Where schedules and triggers run. Background mode keeps them running with the tab closed." },
   { id: SettingsSection.Integrations, label: "Integrations", icon: PlugIcon, description: "Services AgentRoom connects to." },
   { id: SettingsSection.Data, label: "Data", icon: DatabaseIcon, description: "What AgentRoom keeps, where, and for how long." },
@@ -58,7 +60,7 @@ export const DATA_FILES: { path: string; committed: boolean; what: string }[] = 
   { path: ".agentroom/bots/, skills/, goal-templates/", committed: true, what: "Your team, its skills, memory and goal templates" },
   { path: ".agentroom/mcp.json, sentry.json, github/", committed: true, what: "Team integrations (tokens are references, never values)" },
   { path: ".agentroom/schedules.json, triggers.json", committed: true, what: "Team automation; each item runs only on its owner's machine" },
-  { path: ".agentroom/context/", committed: true, what: "Repo map (INDEX.md) and module cards, with your notes and decisions" },
+  { path: ".agentroom/context/", committed: true, what: "Repo map (INDEX.md) and module cards, with your notes and decisions; in a workspace, the links between repos people confirmed or added" },
   { path: ".agentroom/runs/board.json", committed: false, what: "Your goals and tasks" },
   { path: ".agentroom/runs/settings.local.json, config.local.json", committed: false, what: "Your personal overrides (port, permission mode, models…)" },
   { path: ".agentroom/runs/schedules.json, triggers.json", committed: false, what: "Your personal automation" },

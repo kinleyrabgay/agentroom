@@ -21,6 +21,10 @@ export interface AutopilotGoals {
   cwdOf(goal: Goal): string;
   openPr(id: string): Promise<Goal>;
   isRunning(id: string): boolean;
+  /** Workspaces: the goal's part in another repo (repo root, the goal's folder there, its starting commit), or null. */
+  repoTarget?(goal: Goal, repo: string): { root: string; head: string; baseRef?: string } | null;
+  /** Workspaces: the goal changes repos besides the primary one. */
+  spansRepos?(goal: Goal): boolean;
 }
 
 export interface AutopilotDeps {
@@ -113,7 +117,7 @@ export class AutopilotService {
   }
 
   /** From the `autopilot_report` tool: what the bot found. Returns a line for the bot. */
-  report(goalId: string, input: { reproduced: boolean; how: string; testFile?: string; testCommand?: string }): string {
+  report(goalId: string, input: { reproduced: boolean; how: string; testFile?: string; testCommand?: string; repo?: string }): string {
     const goals = this.deps.goals();
     const goal = goals.get(goalId);
     if (!goal?.autopilot) return 'This goal is not an autopilot goal; nothing recorded.';
@@ -126,10 +130,12 @@ export class AutopilotService {
     let test: GoalAutopilot['test'];
     if (input.testFile && input.testCommand) {
       const cmd = parseTestCommand(input.testCommand);
-      const file = safeTestFile(goal.worktree?.path ?? this.deps.root, input.testFile);
+      const target = input.repo ? goals.repoTarget?.(goal, input.repo) : undefined;
+      if (input.repo && !target) problems.push(`Unknown repo "${input.repo}".`);
+      const file = safeTestFile(target?.head ?? goal.worktree?.path ?? this.deps.root, input.testFile);
       if ('error' in cmd) problems.push(cmd.error);
       if ('error' in file) problems.push(file.error);
-      if (!('error' in cmd) && !('error' in file)) test = { file: file.rel, command: input.testCommand.trim().replace(/\s+/g, ' ') };
+      if (!problems.length && !('error' in cmd) && !('error' in file)) test = { file: file.rel, command: input.testCommand.trim().replace(/\s+/g, ' '), ...(input.repo ? { repo: input.repo } : {}) };
     } else problems.push('No failing test given: pass testFile and testCommand once the test exists.');
     goals.update(goalId, { autopilot: { ...a, reproduced: true, how: input.how.slice(0, 2000), status: 'reproduced', ...(test ? { test } : {}) } });
     return problems.length ? `Recorded as reproduced, but: ${problems.join(' ')} Call autopilot_report again with a valid test file and command.` : `Recorded. AgentRoom will run \`${test!.command}\` on the starting commit (must fail) and on your fix (must pass).`;
@@ -165,12 +171,15 @@ export class AutopilotService {
     try {
       const a = goal.autopilot;
       let check: FailPass | null = null;
-      if (a.test && goal.baseRef) {
+      // A test in another repo of a workspace runs in that repo: its folder for the fix, its starting commit for the base.
+      const other = a.test?.repo ? goals.repoTarget?.(goal, a.test.repo) : undefined;
+      const where = other ? { root: other.root, head: other.head, baseRef: other.baseRef } : { root: this.deps.root, head: cwd ?? goals.cwdOf(goal), baseRef: goal.baseRef };
+      if (a.test && where.baseRef) {
         check = await (this.deps.verify ?? verifyFailPass)({
-          root: this.deps.root,
-          head: cwd ?? goals.cwdOf(goal),
-          baseRef: goal.baseRef,
-          test: a.test,
+          root: where.root,
+          head: where.head,
+          baseRef: where.baseRef,
+          test: { file: a.test.file, command: a.test.command },
           scratchDir: path.join(this.deps.scratchDir, `${goal.id.replace(/[^A-Za-z0-9_-]/g, '_')}-autopilot-base`),
           ...(signal ? { signal } : {}),
         });
@@ -199,8 +208,9 @@ export class AutopilotService {
     const a = goal.autopilot;
     if (!a || goal.pr) return;
     const s = this.deps.settings().autopilot;
-    const allow = mayAutoOpen(a, s);
     const goals = this.deps.goals();
+    // A fix that spans several repos needs one PR per repo, each opened by the human.
+    const allow = goals.spansRepos?.(goal) ? { ok: false, why: 'The fix changes more than one repo, so each PR waits for you.' } : mayAutoOpen(a, s);
     const score = a.confidence?.score;
     if (allow.ok) {
       try {

@@ -47,6 +47,38 @@ export class SentryService {
     this.client = new SentryClient(() => this.secrets.mcpSecret(SENTRY_TOKEN_SECRET), fetchImpl);
   }
 
+  private repoSources: () => { repo: string; config: { org?: string; projects?: string[] } | null }[] = () => [];
+  private primaryRepo = '';
+
+  /**
+   * Workspaces: the other repos' `sentry.json`. Their projects in the same org join the Sentry page
+   * (tagged with the repo); another org would need its own token, so those are skipped.
+   */
+  useRepos(primaryRepo: string, sources: () => { repo: string; config: { org?: string; projects?: string[] } | null }[]) {
+    this.primaryRepo = primaryRepo;
+    this.repoSources = sources;
+  }
+
+  /** Projects of the other repos (same org as this one), per repo. */
+  repoProjects(): { repo: string; projects: string[] }[] {
+    const org = this.config()?.org;
+    if (!org) return [];
+    const out: { repo: string; projects: string[] }[] = [];
+    for (const s of this.repoSources()) {
+      if (s.config?.org !== org || !s.config.projects?.length) continue;
+      out.push({ repo: s.repo, projects: [...new Set(s.config.projects)] });
+    }
+    return out;
+  }
+
+  /** Which repo an issue's project belongs to (unset = the primary repo). */
+  private tag<T extends { project: { slug: string } }>(issue: T): T & { repo?: string } {
+    const own = this.config()?.projects ?? [];
+    if (own.includes(issue.project.slug)) return issue;
+    const hit = this.repoProjects().find((r) => r.projects.includes(issue.project.slug));
+    return hit ? { ...issue, repo: hit.repo } : issue;
+  }
+
   config(): SentryConfig | null {
     if (!fs.existsSync(this.file)) return null;
     const parsed = ConfigSchema.safeParse(readJson(this.file, {}));
@@ -54,7 +86,8 @@ export class SentryService {
   }
 
   status(): SentryStatus {
-    return { config: this.config(), hasToken: !!this.secrets.mcpSecret(SENTRY_TOKEN_SECRET) };
+    const repoProjects = this.repoProjects();
+    return { config: this.config(), hasToken: !!this.secrets.mcpSecret(SENTRY_TOKEN_SECRET), ...(repoProjects.length ? { repoProjects } : {}) };
   }
 
   /** Check and store a token; returns the orgs it can see. */
@@ -124,7 +157,11 @@ export class SentryService {
 
   async issues(q: SentryIssueQuery = {}): Promise<SentryIssuePage> {
     const cfg = this.require();
-    const slugs = q.projects?.length ? q.projects : cfg.projects;
+    const others = this.repoProjects();
+    // A repo filter picks that repo's projects; otherwise the page shows this repo's and the other repos' projects.
+    const ofRepo = q.repo ? (q.repo === this.primaryRepo ? cfg.projects : (others.find((r) => r.repo === q.repo)?.projects ?? [])) : null;
+    if (q.repo && !ofRepo?.length) return { issues: [], nextCursor: null, fetchedAt: new Date().toISOString() };
+    const slugs = q.projects?.length ? q.projects : (ofRepo ?? (cfg.projects.length ? [...new Set([...cfg.projects, ...others.flatMap((r) => r.projects)])] : []));
     const ids = slugs.length ? await this.projectIds(slugs) : undefined;
     const res = await this.client.get<unknown[]>(await this.baseFor(cfg.org), `api/0/organizations/${enc(cfg.org)}/issues/`, {
       query: buildQuery(q),
@@ -137,7 +174,7 @@ export class SentryService {
       shortIdLookup: '1',
       cursor: q.cursor,
     });
-    return { issues: res.data.map(toIssue), nextCursor: res.next, fetchedAt: new Date().toISOString() };
+    return { issues: res.data.map((d) => this.tag(toIssue(d))), nextCursor: res.next, fetchedAt: new Date().toISOString() };
   }
 
   /** Issue + its latest event (stack trace, breadcrumbs) + top tags. Cached for a minute. */
@@ -159,7 +196,7 @@ export class SentryService {
       get<unknown>(`api/0/organizations/${org}/issues/${id}/events/latest/`, `api/0/issues/${id}/events/latest/`).catch(() => null),
       get<unknown>(`api/0/organizations/${org}/issues/${id}/tags/`, `api/0/issues/${id}/tags/`).catch(() => null),
     ]);
-    const value: SentryIssueDetail = { issue: toIssue(issue.data), event: event ? toEvent(event.data) : null, tags: tags ? toTags(tags.data) : [] };
+    const value: SentryIssueDetail = { issue: this.tag(toIssue(issue.data)), event: event ? toEvent(event.data) : null, tags: tags ? toTags(tags.data) : [] };
     this.details.set(id, { at: Date.now(), value });
     return value;
   }

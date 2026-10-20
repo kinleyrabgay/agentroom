@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dropdown } from "@/components/kit/dropdown"
 import { ToneBadge } from "@/components/kit/badge"
+import { RepoBadge } from "@/features/workspaces/components/repo-badge"
 import { Callout } from "@/components/kit/callout"
 import { EmptyState } from "@/components/kit/state-view"
 import { isRunning, loadReviews, putReview, setReviews, useReviewStore } from "../lib/review-store"
@@ -135,6 +136,7 @@ function ReviewRow({ review: r }: { review: PrReview }) {
           {r.repo} · @{r.author} · {r.headRef} → {r.baseRef}
         </span>
       </span>
+      <RepoBadge task={{ repo: r.workspaceRepo }} className="pointer-events-none relative" />
       {r.fork && <ToneBadge size="sm" tone="warning" icon={ShieldAlertIcon} className="pointer-events-none relative">Fork</ToneBadge>}
       {r.state === "ready" && <span className="pointer-events-none relative hidden text-xs text-muted-foreground sm:inline">{r.comments.length} comments</span>}
       <ToneBadge size="sm" tone={st.tone} dot pulse={isRunning(r)} className="pointer-events-none relative">

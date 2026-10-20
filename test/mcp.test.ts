@@ -91,3 +91,34 @@ describe('MCP tools and the approval policy', () => {
     expect(classifyToolCall('mcp__agentroom__task_list', {})).toBeNull();
   });
 });
+
+describe('MCP servers from other workspace repos', () => {
+  it('are offered with their repo and command, and only added (as personal) when asked', async () => {
+    const { McpService } = await import('../src/server/services/mcp/mcp.service.js');
+    const { SecretsStore } = await import('../src/server/services/secrets.store.js');
+    const { Hub } = await import('../src/server/realtime/hub.js');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentroom-mcp-ws-'));
+    const own = new McpRepository({ [McpScope.Team]: path.join(dir, 'mcp.json'), [McpScope.Personal]: path.join(dir, 'mcp.local.json') });
+    const other = path.join(dir, 'api-mcp.json');
+    fs.writeFileSync(other, JSON.stringify({ servers: { db: { type: 'stdio', command: 'npx', args: ['db-mcp'], env: { DB_URL: '${secret:DB_URL}' } } } }));
+    const svc = new McpService({
+      repo: own,
+      secrets: new SecretsStore(path.join(dir, 'secrets.json')),
+      hub: new Hub(dir),
+      cwd: dir,
+      bots: () => [],
+      repoServers: () => [{ repo: 'api', servers: new McpRepository({ [McpScope.Team]: other, [McpScope.Personal]: path.join(dir, 'none.json') }).list() }],
+    });
+    (svc as unknown as { refresh: () => Promise<void> }).refresh = async () => {};
+    const offered = svc.snapshot().available.find((a) => a.repo === 'api')!;
+    expect(offered).toMatchObject({ name: 'api/db', source: 'workspace:api', command: 'npx db-mcp' });
+    // Nothing runs until the owner adds it.
+    expect(svc.snapshot().servers).toEqual([]);
+    const added = svc.importAvailable('api/db');
+    expect(added.name).toBe('db');
+    const server = svc.snapshot().servers.find((s) => s.name === 'db')!;
+    expect(server.scope).toBe(McpScope.Personal);
+    expect(server.missingSecrets).toEqual(['DB_URL']);
+    expect(svc.snapshot().available.find((a) => a.repo === 'api')!.added).toBe('db');
+  });
+});

@@ -8,6 +8,8 @@ export interface RiskInput {
   findings: Pick<SecurityFinding, 'severity' | 'status'>[];
   depsChanged: boolean;
   sensitivePatterns: string[];
+  /** Precomputed sensitive paths (workspaces match each repo's paths separately); overrides `sensitivePatterns`. */
+  sensitive?: string[];
 }
 
 export const RISK_MEDIUM = 35;
@@ -41,7 +43,7 @@ export function assessRisk(input: RiskInput): RiskAssessment {
   const lines = stats.additions + stats.deletions;
   add(`${lines} changed ${lines === 1 ? 'line' : 'lines'}`, Math.min(25, lines / 40));
   add(`${stats.files} ${stats.files === 1 ? 'file' : 'files'} touched`, Math.min(15, stats.files * 1.5));
-  const sensitive = sensitiveTouched(stats.paths, input.sensitivePatterns);
+  const sensitive = input.sensitive ?? sensitiveTouched(stats.paths, input.sensitivePatterns);
   if (sensitive.length) add(`${SENSITIVE_FACTOR}: ${sensitive.slice(0, 3).join(', ')}${sensitive.length > 3 ? '…' : ''}`, 25);
   if (stats.paths.some((p) => MIGRATION.test(p))) add('Database migrations / SQL', 15);
   if (input.depsChanged) add('Dependencies changed', 10);

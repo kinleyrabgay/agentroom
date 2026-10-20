@@ -21,6 +21,8 @@ export interface SentryFilters {
   assigned: AssignedFilter
   sort: SentrySort
   period: SentryPeriod
+  /** Workspaces: only this repo's projects ("" = every repo). */
+  repo: string
 }
 
 export const DEFAULT_FILTERS: SentryFilters = {
@@ -32,6 +34,7 @@ export const DEFAULT_FILTERS: SentryFilters = {
   assigned: "any",
   sort: "date",
   period: "14d",
+  repo: "",
 }
 
 export const STATUS_OPTIONS: { value: IssueStatusFilter; label: string }[] = [

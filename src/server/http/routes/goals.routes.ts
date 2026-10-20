@@ -66,8 +66,8 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, temp
   const repoOf = (c: { req: { query: (k: string) => string | undefined } }) => c.req.query('repo') || undefined;
   app.get('/goals/:id/changes', (c) => respond(c, () => goals.changes(c.req.param('id'), repoOf(c))));
   app.post('/goals/:id/comments', async (c) => {
-    const b = await body<{ file?: string; line?: number; body?: string }>(c);
-    return respond(c, () => goals.addComment(c.req.param('id'), { file: String(b.file ?? ''), line: b.line, body: String(b.body ?? '') }, goals.human()));
+    const b = await body<{ file?: string; line?: number; body?: string; repo?: string }>(c);
+    return respond(c, () => goals.addComment(c.req.param('id'), { file: String(b.file ?? ''), line: b.line, body: String(b.body ?? ''), ...(b.repo ? { repo: String(b.repo) } : {}) }, goals.human()));
   });
   app.delete('/goals/:id/comments/:commentId', (c) => respond(c, () => goals.deleteComment(c.req.param('id'), c.req.param('commentId'))));
   app.post('/goals/:id/request-changes', (c) => respond(c, () => act(c.req.param('id'), 'Sent review comments to the Developer for', () => goals.requestChanges(c.req.param('id')))));

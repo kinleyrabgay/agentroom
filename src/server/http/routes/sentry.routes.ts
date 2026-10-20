@@ -56,6 +56,7 @@ export function sentryRoutes(app: Hono, sentry: SentryService, handoff: (input: 
       const query: SentryIssueQuery = {
         ...(q.query ? { query: q.query.slice(0, 500) } : {}),
         ...(q.projects ? { projects: q.projects.split(',').filter(Boolean) } : {}),
+        ...(q.repo ? { repo: q.repo } : {}),
         ...(q.environment ? { environment: q.environment } : {}),
         ...(q.cursor ? { cursor: q.cursor } : {}),
         status: pick('status'),

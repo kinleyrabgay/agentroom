@@ -36,6 +36,8 @@ export interface PrReviewDeps {
   changed?: () => void;
   exec?: Exec;
   now?: () => Date;
+  /** Workspaces: the other repos (id and folder); a PR in any of them can be reviewed. */
+  repos?: () => { id: string; root: string }[];
 }
 
 interface Store {
@@ -129,10 +131,18 @@ export class PrReviewService {
     return bot;
   }
 
-  /** owner/name of this repo's GitHub remote. */
-  private async originRepo(): Promise<string | undefined> {
-    const out = await this.exec('git', ['remote', 'get-url', 'origin'], { cwd: this.deps.root });
+  /** owner/name of a repo's GitHub remote (this project's by default). */
+  private async originRepo(root = this.deps.root): Promise<string | undefined> {
+    const out = await this.exec('git', ['remote', 'get-url', 'origin'], { cwd: root });
     return /github\.com[/:]([^/]+\/[^/.\s]+?)(?:\.git)?\s*$/.exec(out.stdout.trim())?.[1];
+  }
+
+  /** The local folder a review works in: its workspace repo's, else this project's. */
+  private rootOf(r: Pick<PrReview, 'workspaceRepo'>): string {
+    if (!r.workspaceRepo) return this.deps.root;
+    const repo = this.deps.repos?.().find((x) => x.id === r.workspaceRepo);
+    if (!repo) throw new Error(`Repo ${r.workspaceRepo} isn't in this workspace any more.`);
+    return repo.root;
   }
 
   /** Start reviewing a PR. Returns at once; the review fills in as the bot works. */
@@ -141,7 +151,17 @@ export class PrReviewService {
     const origin = await this.originRepo();
     const repo = ref.repo ?? origin;
     if (!repo) throw new Error('This repo has no GitHub remote; paste the full PR link.');
-    if (origin && repo.toLowerCase() !== origin.toLowerCase()) throw new Error(`That PR is in ${repo}, but this project is ${origin}. Open AgentRoom in that repo to review it.`);
+    // In a workspace, a PR in any of its repos can be reviewed (checked out in that repo).
+    let workspaceRepo: { id: string; root: string } | undefined;
+    if (origin && repo.toLowerCase() !== origin.toLowerCase()) {
+      for (const r of this.deps.repos?.() ?? []) {
+        if ((await this.originRepo(r.root))?.toLowerCase() === repo.toLowerCase()) {
+          workspaceRepo = r;
+          break;
+        }
+      }
+      if (!workspaceRepo) throw new Error(`That PR is in ${repo}, but this project is ${origin}. Open AgentRoom in that repo (or add it to the workspace) to review it.`);
+    }
     const bot = this.reviewer(input.botId);
     const busy = this.store.reviews.find((r) => r.repo === repo && r.number === ref.number && (r.state === 'preparing' || r.state === 'reviewing'));
     if (busy) throw new Error(`#${ref.number} is already being reviewed.`);
@@ -149,7 +169,7 @@ export class PrReviewService {
     const metaRaw = await this.must(
       'gh',
       ['pr', 'view', String(ref.number), '-R', repo, '--json', 'number,title,author,headRefName,baseRefName,headRefOid,isCrossRepository,url,additions,deletions,changedFiles,body'],
-      this.deps.root,
+      workspaceRepo?.root ?? this.deps.root,
     );
     const meta = JSON.parse(metaRaw) as {
       number: number;
@@ -171,6 +191,7 @@ export class PrReviewService {
       id,
       url: meta.url,
       repo,
+      ...(workspaceRepo ? { workspaceRepo: workspaceRepo.id } : {}),
       number: meta.number,
       title: meta.title,
       author: meta.author?.login ?? 'unknown',
@@ -204,11 +225,12 @@ export class PrReviewService {
   private async run(id: string) {
     try {
       const r = this.get(id);
-      const dir = path.join(this.deps.worktreeDir, `pr-${r.number}`);
+      const root = this.rootOf(r);
+      const dir = path.join(this.deps.worktreeDir, r.workspaceRepo ? `pr-${r.workspaceRepo}-${r.number}` : `pr-${r.number}`);
       // Fresh checkout every time: the PR may have new commits.
-      if (fs.existsSync(dir)) await this.exec('git', ['worktree', 'remove', '--force', dir], { cwd: this.deps.root });
+      if (fs.existsSync(dir)) await this.exec('git', ['worktree', 'remove', '--force', dir], { cwd: root });
       fs.mkdirSync(path.dirname(dir), { recursive: true });
-      await this.must('git', ['worktree', 'add', '--detach', dir, 'HEAD'], this.deps.root);
+      await this.must('git', ['worktree', 'add', '--detach', dir, 'HEAD'], root);
       await this.must('gh', ['pr', 'checkout', String(r.number), '-R', r.repo, '--detach', '--force'], dir);
       const diff = await this.must('gh', ['pr', 'diff', String(r.number), '-R', r.repo], dir);
       fs.mkdirSync(this.deps.diffDir, { recursive: true });
@@ -284,7 +306,7 @@ export class PrReviewService {
       body,
       comments: r.comments.map((c) => ({ path: c.path, line: c.line, side: c.side, body: c.severity === 'nit' ? `nit: ${c.body}` : c.body })),
     };
-    await this.must('gh', ['api', '--method', 'POST', `repos/${r.repo}/pulls/${r.number}/reviews`, '--input', '-'], this.deps.root, JSON.stringify(payload));
+    await this.must('gh', ['api', '--method', 'POST', `repos/${r.repo}/pulls/${r.number}/reviews`, '--input', '-'], this.rootOf(r), JSON.stringify(payload));
     this.deps.audit({
       kind: AuditKind.GithubWrite,
       actor: { type: ActorType.Human, name: input.by },
@@ -300,7 +322,7 @@ export class PrReviewService {
   async cleanup(id: string): Promise<PrReview> {
     const r = this.get(id);
     if (r.state === 'preparing' || r.state === 'reviewing') throw new Error(`${id} is still running.`);
-    if (r.worktree && fs.existsSync(r.worktree)) await this.exec('git', ['worktree', 'remove', '--force', r.worktree], { cwd: this.deps.root });
+    if (r.worktree && fs.existsSync(r.worktree)) await this.exec('git', ['worktree', 'remove', '--force', r.worktree], { cwd: this.rootOf(r) });
     return this.set(id, { worktree: undefined });
   }
 

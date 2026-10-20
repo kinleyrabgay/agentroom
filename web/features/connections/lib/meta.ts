@@ -18,6 +18,7 @@ export const needsAction = (s: McpServerState) => s.enabled && !!STATUS_META[s.s
 
 /** Where a Claude Code server comes from, in words. */
 export function sourceLabel(source: string) {
+  if (source.startsWith("workspace:")) return `Workspace repo ${source.slice("workspace:".length)} (its .agentroom/mcp.json)`
   switch (source) {
     case "claudeai":
       return "claude.ai"

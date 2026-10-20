@@ -7,7 +7,7 @@ import {
   OctagonXIcon,
   PlugIcon,
   SquareKanbanIcon,
-  SunIcon, CalendarClockIcon, GitPullRequestIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon, MapIcon, FileTextIcon, MessageSquareTextIcon } from "lucide-react"
+  SunIcon, CalendarClockIcon, GitPullRequestIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon, MapIcon, FileTextIcon, MessageSquareTextIcon, FolderGit2Icon } from "lucide-react"
 import { ClientMessageType, GoalStatus, type ContextHit } from "@shared"
 import { BotTab, View } from "@/lib/constants"
 import { VIEW_META } from "@/lib/views"
@@ -371,6 +371,12 @@ export function CommandPalette() {
                 <FileTextIcon className="size-4 text-muted-foreground" /> Architecture docs
               </CommandItem>
             )}
+            <CommandItem
+              value="new workspace multi repo repos frontend backend"
+              onSelect={() => run(() => app().showSettings("workspace"))}
+            >
+              <FolderGit2Icon className="size-4 text-muted-foreground" /> New workspace…
+            </CommandItem>
             <CommandItem
               value="integrations connections mcp github sentry"
               onSelect={() => run(() => app().showSettings("integrations"))}

@@ -14,6 +14,8 @@ import { GoalBadge } from "@/features/github/components/goal-badge"
 import { levelMeta, PRIORITY_TONE, SUBSTATUS_META } from "../constants"
 import { compact, initials } from "../lib/format"
 import { Sparkline } from "./sparkline"
+import { RepoBadge } from "@/features/workspaces/components/repo-badge"
+import { useSentryStore } from "../lib/sentry-store"
 
 export interface IssueCardProps {
   issue: SentryIssue
@@ -34,6 +36,8 @@ export const shortRef = (shortId: string) => shortId.split("-").pop() || shortId
 
 /** One Sentry issue as a card: what broke, where, how often, and who it hits. */
 export const IssueCard = memo(function IssueCard({ issue: i, selected, selecting, open, goal, onToggle, onOpen, onFix }: IssueCardProps) {
+  // Workspaces: say which repo an issue is from, once other repos bring their own Sentry projects.
+  const manyRepos = useSentryStore((s) => !!s.status?.repoProjects?.length)
   const level = levelMeta(i.level)
   const sub = i.substatus ? SUBSTATUS_META[i.substatus] : undefined
   const headline = i.type ?? level.label
@@ -135,6 +139,7 @@ export const IssueCard = memo(function IssueCard({ issue: i, selected, selecting
           </TooltipTrigger>
           <TooltipContent className="font-mono">{i.shortId}</TooltipContent>
         </Tooltip>
+        {manyRepos && <RepoBadge task={{ repo: i.repo }} className="pointer-events-auto" />}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 text-muted-foreground">
           <span className="flex items-center gap-1 tabular-nums" title={`${i.count} events in this period`}>

@@ -3,11 +3,11 @@ import { HostTool } from '../../../shared/enums.js';
 import type { HostToolDef } from '../../providers/provider.js';
 
 export interface AutopilotReporter {
-  report(goalId: string, input: { reproduced: boolean; how: string; testFile?: string; testCommand?: string }): string;
+  report(goalId: string, input: { reproduced: boolean; how: string; testFile?: string; testCommand?: string; repo?: string }): string;
 }
 
 /** Autopilot goals only: tell AgentRoom whether the bug was reproduced and which test proves it. */
-export function autopilotTools(reporter: AutopilotReporter, goalId: string): HostToolDef[] {
+export function autopilotTools(reporter: AutopilotReporter, goalId: string, otherRepos: string[] = []): HostToolDef[] {
   return [
     {
       name: HostTool.AutopilotReport,
@@ -18,8 +18,10 @@ export function autopilotTools(reporter: AutopilotReporter, goalId: string): Hos
         how: z.string().describe('How you reproduced it (or what you tried), in a few sentences'),
         testFile: z.string().optional().describe('Repo-relative path of the failing test'),
         testCommand: z.string().optional().describe('Command that runs only that test'),
+        ...(otherRepos.length ? { repo: z.string().optional().describe(`Workspace repo the test is in, when it isn't the primary repo: one of ${otherRepos.join(', ')}`) } : {}),
       },
-      handler: async ({ reproduced, how, testFile, testCommand }) => reporter.report(goalId, { reproduced, how, ...(testFile ? { testFile } : {}), ...(testCommand ? { testCommand } : {}) }),
+      handler: async ({ reproduced, how, testFile, testCommand, repo }) =>
+        reporter.report(goalId, { reproduced, how, ...(testFile ? { testFile } : {}), ...(testCommand ? { testCommand } : {}), ...(typeof repo === 'string' && repo ? { repo } : {}) }),
     },
   ];
 }

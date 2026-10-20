@@ -7,6 +7,8 @@ export type FindingDraft = Pick<SecurityFinding, 'severity' | 'category' | 'sour
 /** Where findings belong: a goal (and maybe a task/bot), or the working tree (no goal). */
 export interface FindingScope {
   goalId?: string;
+  /** Workspaces: a repo other than the primary one. */
+  repo?: string;
   taskId?: string;
   botId?: string;
 }

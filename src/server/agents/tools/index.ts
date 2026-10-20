@@ -60,14 +60,14 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
   if (deps.memory) tools.push(...memoryTools(bot, deps.memory, deps.notifications));
   if (deps.context) tools.push(...contextTools(deps.context));
   if (isPlannerRole(bot)) tools.push(...planningTools(board, bot.id));
-  if (deps.autopilot && deps.goalId && deps.goals.get(deps.goalId)?.autopilot) tools.push(...autopilotTools(deps.autopilot, deps.goalId));
+  if (deps.autopilot && deps.goalId && deps.goals.get(deps.goalId)?.autopilot) tools.push(...autopilotTools(deps.autopilot, deps.goalId, (deps.repos ?? []).filter((r) => r !== deps.primaryRepo)));
   if (bot.tools.includes(ToolName.Browser)) {
     const guard = deps.security
       ? (text: string, source: string) => deps.security!.guardUntrusted(text, source, { botId: bot.id, goalId: deps.goalId, runKey: signal })
       : undefined;
     tools.push(...browserTools(bot, deps.previews, deps.hub, signal, guard));
   }
-  if (deps.security && isSecurityRole(bot)) tools.push(...securityTools(bot, deps.security, deps.goalId));
+  if (deps.security && isSecurityRole(bot)) tools.push(...securityTools(bot, deps.security, deps.goalId, { ids: deps.repos ?? [], ...(deps.primaryRepo ? { primary: deps.primaryRepo } : {}) }));
   const reports = team.filter((b) => b.reportsTo === bot.id).map((b) => b.id);
   if (reports.length) tools.push(delegateTool(reports, deps.delegate));
   return tools;

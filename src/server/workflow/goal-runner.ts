@@ -527,7 +527,7 @@ export class GoalRunner {
     const others = [repos.registry.primaryId, ...repos.spans(goal, this.tasksOf(goalId))]
       .filter((id, i, all) => id !== ref.id && all.indexOf(id) === i)
       .map((id) => ({ id, dir: this.cwdOf(goal, id === repos.registry.primaryId ? undefined : id) }));
-    return `${prompt}\n\n${workspaceTaskSection(task, ref, this.cwdOf(goal, repo), others)}`;
+    return `${prompt}\n\n${workspaceTaskSection(task, ref, this.cwdOf(goal, repo), others, repos.app(ref.id))}`;
   }
 
   /** After a task's run: commit what changed in the goal's folder and record the task's commits. */
@@ -623,15 +623,18 @@ export class GoalRunner {
 
   // ---------- review comments ----------
 
-  addComment(goalId: string, input: { file: string; line?: number; body: string }, author: string): Goal {
+  addComment(goalId: string, input: { file: string; line?: number; body: string; repo?: string }, author: string): Goal {
     const goal = this.require(goalId);
     const body = String(input.body ?? '').trim();
     const file = String(input.file ?? '').trim();
     if (!body) throw new Error('Write a comment first.');
     if (!file) throw new Error('A comment needs a file.');
+    // Workspaces: which repo's diff the comment is on (unknown ids throw; the primary is stored as unset).
+    const repo = input.repo ? this.deps.repos?.registry.normalize(input.repo) : undefined;
     const comment = {
       id: randomUUID(),
       file,
+      ...(repo ? { repo } : {}),
       ...(typeof input.line === 'number' && input.line > 0 ? { line: Math.floor(input.line) } : {}),
       body,
       author,
@@ -658,14 +661,24 @@ export class GoalRunner {
     const roles = resolveRoles(this.deps.project.bots.list());
     const developer = 'missing' in roles ? undefined : roles.developer;
     const where = (c: (typeof open)[number]) => `\`${c.file}${c.line ? `:${c.line}` : ''}\``;
-    const task = this.deps.project.tasks.create({
-      title: `Review changes (${open.length} ${open.length === 1 ? 'comment' : 'comments'})`,
-      kind: TaskKind.Bug,
-      goalId,
-      ...(developer ? { assignee: developer.id } : {}),
-      description: ['The human reviewed the diff and asked for these changes:', '', ...open.map((c) => `- ${where(c)}: ${c.body}`)].join('\n'),
-      acceptance: open.map((c) => `${c.file}${c.line ? `:${c.line}` : ''}: ${c.body}`.slice(0, 200)),
-    });
+    // One fix task per repo, so each runs in the repo its comments are about.
+    const byRepo = new Map<string, typeof open>();
+    for (const c of open) byRepo.set(c.repo ?? '', [...(byRepo.get(c.repo ?? '') ?? []), c]);
+    const created: Task[] = [];
+    for (const [repo, list] of byRepo) {
+      const name = repo && this.deps.repos ? this.deps.repos.registry.ref(repo).name : '';
+      created.push(
+        this.deps.project.tasks.create({
+          title: `Review changes${name ? ` in ${name}` : ''} (${list.length} ${list.length === 1 ? 'comment' : 'comments'})`,
+          kind: TaskKind.Bug,
+          goalId,
+          ...(repo ? { repo } : {}),
+          ...(developer ? { assignee: developer.id } : {}),
+          description: [`The human reviewed the diff${name ? ` of ${name}` : ''} and asked for these changes:`, '', ...list.map((c) => `- ${where(c)}: ${c.body}`)].join('\n'),
+          acceptance: list.map((c) => `${c.file}${c.line ? `:${c.line}` : ''}: ${c.body}`.slice(0, 200)),
+        }),
+      );
+    }
     for (const t of this.tasksOf(goalId)) {
       if (t.kind === TaskKind.QA && t.status === TaskStatus.Done) this.deps.project.tasks.update(t.id, { status: TaskStatus.Todo });
     }
@@ -676,7 +689,7 @@ export class GoalRunner {
       reason: null,
       reviewComments: goal.reviewComments.map((c) => (sentIds.has(c.id) ? { ...c, sent: true } : c)),
     });
-    this.deps.project.tasks.appendLog(task.id, ENGINE, 'Created from review comments.');
+    for (const task of created) this.deps.project.tasks.appendLog(task.id, ENGINE, 'Created from review comments.');
     this.kick(goalId);
     return next;
   }
@@ -692,7 +705,8 @@ export class GoalRunner {
     const linked = !!workspaces && workspaces.parts(goal, all).length > 1;
     // In a workspace each repo's PR lists only that repo's tasks.
     const tasks = workspaces ? all.filter((t) => workspaces.repoOf(t) === other) : all;
-    const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open }).length ?? 0;
+    // In a workspace each PR counts its own repo's findings ('' = the primary repo).
+    const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open, ...(workspaces ? { repo: other ?? '' } : {}) }).length ?? 0;
     const repo = await this.originRepo(other);
     const proof = other ? undefined : this.deps.proof?.markdown(goalId, repo);
     const autopilot = other ? undefined : this.deps.autopilot?.prSection(goal);
@@ -713,6 +727,7 @@ export class GoalRunner {
     const goal = this.require(goalId);
     if (this.isRunning(goalId)) throw new Error(`${goalId} is still running. Wait for it to finish or pause it.`);
     const other = this.deps.repos?.registry.normalize(input.repo);
+    await this.publishGate(goalId, other);
     if (other) {
       if (goal.repos?.[other]?.pr) throw new Error(`${goalId} already has a PR in ${other}: ${goal.repos[other].pr!.url}`);
       const draft = await this.prDraft(goalId, other);
@@ -733,6 +748,22 @@ export class GoalRunner {
     const next = this.set(goalId, { pr });
     if (this.deps.repos?.isWorkspace) await this.linkPrs(goalId, this.deps.repos.registry.primaryId);
     return next;
+  }
+
+  /**
+   * Before a PR opens (human click or autopilot): rescan the goal (every repo it touched) and refuse
+   * while the PR's repo has open findings at the team's blocking threshold. Approve or dismiss them first.
+   */
+  private async publishGate(goalId: string, repo: string | undefined) {
+    const security = this.deps.security;
+    if (!security) return;
+    await this.updateRisk(goalId);
+    const threshold = this.deps.project.settings.get().security.blockOn;
+    const held = security.findings.openBlocking(goalId, threshold, repo ?? '');
+    if (!held.length) return;
+    const where = this.deps.repos?.isWorkspace ? ` in ${this.deps.repos.registry.ref(repo).name}` : '';
+    const list = held.slice(0, 3).map((f) => `${f.title}${f.file ? ` (${f.file}${f.line ? `:${f.line}` : ''})` : ''}`).join('; ');
+    throw new Error(`${held.length} open security ${held.length === 1 ? 'finding' : 'findings'}${where} ${held.length === 1 ? 'blocks' : 'block'} this pull request: ${list}. Approve or dismiss ${held.length === 1 ? 'it' : 'them'} on the Security page, then open the PR.`);
   }
 
   /** A goal's PR opened in a workspace: point the goal's other open PRs at the whole set. Same click, audited. */

@@ -12,6 +12,8 @@ export interface SentryHandoffDeps {
   guard?: (text: string, source: string) => string;
   /** The bot can use a Sentry MCP server (more events, tags, Seer). */
   hasSentryTools?: (bot: Bot) => boolean;
+  /** Workspaces: folder of a repo by id (issues tagged with another repo are fixed there). */
+  repoRoot?: (repo: string) => string | undefined;
 }
 
 const TITLE_MAX = 80;
@@ -40,6 +42,13 @@ export async function handoffSentry(deps: SentryHandoffDeps, input: SentryHandof
     guard: deps.guard,
     sentryTools: deps.hasSentryTools?.(bot) ?? false,
   });
+  // Workspaces: issues from another repo's Sentry projects are fixed in that repo.
+  const repos = [...new Set(details.map((d) => d.issue.repo).filter((r): r is string => !!r))];
+  const where = repos
+    .map((r) => ({ r, root: deps.repoRoot?.(r) }))
+    .filter((x) => x.root)
+    .map(({ r, root }) => `- ${details.filter((d) => d.issue.repo === r).map((d) => d.issue.shortId).join(', ')}: repo \`${r}\` (${root}). Create the fix tasks with \`repo: "${r}"\`.`);
+  const fullBrief = where.length ? `${brief}\n\n### Where the code is\nThese errors come from the workspace's other repos:\n${where.join('\n')}` : brief;
   const sources: GoalSource[] = details.map(({ issue }) => ({
     type: 'sentry',
     itemId: issue.id,
@@ -52,9 +61,9 @@ export async function handoffSentry(deps: SentryHandoffDeps, input: SentryHandof
   if (bot.id === lead?.id) {
     const first = details[0]!.issue;
     const title = details.length === 1 ? `Fix ${first.shortId}: ${first.title}` : `Fix ${details.length} Sentry issues: ${first.shortId} …`;
-    return { botId: bot.id, goal: deps.startGoal(brief, title.slice(0, TITLE_MAX), sources) };
+    return { botId: bot.id, goal: deps.startGoal(fullBrief, title.slice(0, TITLE_MAX), sources) };
   }
-  deps.sendToBot(bot.id, brief);
+  deps.sendToBot(bot.id, fullBrief);
   return { botId: bot.id };
 }
 

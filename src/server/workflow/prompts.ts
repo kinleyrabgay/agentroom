@@ -91,10 +91,19 @@ export function securityPrompt(goal: Goal, a: GoalAssessment, tasks: Task[], rol
     `## Change`,
     `${a.stats.files} files, +${a.stats.additions} −${a.stats.deletions}${goal.baseRef ? ` since commit ${goal.baseRef.slice(0, 10)} (see \`git diff ${goal.baseRef.slice(0, 10)}\`)` : ''}.`,
     a.stats.paths.length ? a.stats.paths.slice(0, 60).map((p) => `- ${p}`).join('\n') : '',
+    a.repos.length
+      ? `## Other repos in this change\nPaths above starting with a repo id are in that repo. Review them the same way:\n${a.repos
+          .map((r) => {
+            const st = goal.repos?.[r.repo];
+            const dir = st?.worktree?.path;
+            return `- \`${r.repo}\`: ${r.stats.files} files, +${r.stats.additions} −${r.stats.deletions}${dir ? ` in ${dir}` : ''}${st?.baseRef ? ` (\`git diff ${st.baseRef.slice(0, 10)}\` there)` : ''}${r.sensitive.length ? `; sensitive: ${r.sensitive.join(', ')}` : ''}`;
+          })
+          .join('\n')}\nWhen you record a finding in another repo, name the repo in its title and use that repo's file path.`
+      : '',
     `## Risk score: ${a.risk.score} (${a.risk.level})`,
     a.risk.factors.map((f) => `- ${f.label} (+${f.points})`).join('\n'),
     open.length
-      ? `## Automated findings\n${open.map((f) => `- [${f.severity}] ${f.title}${f.file ? ` — ${f.file}${f.line ? `:${f.line}` : ''}` : ''}${f.snippet ? ` — \`${f.snippet}\`` : ''}`).join('\n')}`
+      ? `## Automated findings\n${open.map((f) => `- [${f.severity}] ${f.title}${f.file ? ` — ${f.repo ? `${f.repo}/` : ''}${f.file}${f.line ? `:${f.line}` : ''}` : ''}${f.snippet ? ` — \`${f.snippet}\`` : ''}`).join('\n')}`
       : '## Automated findings\nNone.',
     `## Tasks`,
     tasks.map((t) => `- ${taskLine(t)}`).join('\n'),

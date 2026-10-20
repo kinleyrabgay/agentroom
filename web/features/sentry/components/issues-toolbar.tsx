@@ -24,6 +24,7 @@ import { PageActions } from "@/components/layout/page-actions"
 import { ASSIGNED_OPTIONS, DEFAULT_FILTERS, LEVEL_OPTIONS, PERIOD_OPTIONS, SORT_OPTIONS, STATUS_OPTIONS, type SentryFilters } from "../constants"
 import { loadIssues, loadStatus, setFilters } from "../lib/actions"
 import { setSentry, useSentryStore } from "../lib/sentry-store"
+import { primaryRepoId, useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
 
 const SEARCH_DEBOUNCE_MS = 400
 /** Dropdown value for "no filter". */
@@ -64,10 +65,21 @@ export function SentryToolbar() {
     sentryApi.environments().then(setEnvironments).catch(() => {})
   }, [config?.org])
 
-  // Only the configured projects are offered (all of the org when none are configured).
+  // Only the configured projects are offered (all of the org when none are configured), plus the workspace's other repos' projects.
   const configured = config?.projects
-  const offered = useMemo(() => (configured?.length ? projects.filter((p) => configured.includes(p.slug)) : projects), [projects, configured])
+  const repoProjects = status?.repoProjects
+  const offered = useMemo(() => {
+    const own = configured?.length ? [...configured, ...(repoProjects ?? []).flatMap((r) => r.projects)] : null
+    return own ? projects.filter((p) => own.includes(p.slug)) : projects
+  }, [projects, configured, repoProjects])
+  const workspace = useWorkspaceStore((s) => s.workspace)
+  const repoOptions = useMemo(() => {
+    if (!workspace || !repoProjects?.length) return null
+    const withProjects = new Set([...(configured?.length ? [primaryRepoId(workspace)] : []), ...repoProjects.map((r) => r.repo)])
+    return [{ value: ANY, label: "All repos" }, ...workspace.repos.filter((r) => withProjects.has(r.id)).map((r) => ({ value: r.id, label: r.name, sublabel: r.primary ? "primary" : undefined }))]
+  }, [workspace, repoProjects, configured])
   const changed =
+    !!filters.repo ||
     filters.projects.length > 0 ||
     (!!filters.environment && filters.environment !== config?.environment) ||
     filters.status !== DEFAULT_FILTERS.status ||
@@ -78,6 +90,17 @@ export function SentryToolbar() {
     <div className="flex flex-col gap-2.5">
       <SearchBox value={filters.query} />
       <div className="flex flex-wrap items-center gap-1.5">
+        {repoOptions && (
+          <Dropdown<string>
+            variant="pill"
+            label="Repo"
+            active={!!filters.repo}
+            showSearch={false}
+            datas={repoOptions}
+            selectedValue={filters.repo || ANY}
+            onSelect={(v) => setFilters({ repo: v === ANY ? "" : (v as string), projects: [] })}
+          />
+        )}
         <Dropdown<string>
           variant="pill"
           label="Project"
