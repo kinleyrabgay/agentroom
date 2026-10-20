@@ -18,18 +18,18 @@ export interface TaskToolDeps {
   goalId?: string;
   /** Resolves an assignee to its bot role, to infer a task's kind. */
   roleOf?: (botId: string) => string | undefined;
-  /** Multi-repo rooms: repo ids a task may name; absent outside rooms (the `repo` field is ignored). */
+  /** Multi-repo workspaces: repo ids a task may name; absent outside workspaces (the `repo` field is ignored). */
   repos?: string[];
-  /** The room's primary repo id (stored as unset). */
+  /** The workspace's primary repo id (stored as unset). */
   primaryRepo?: string;
 }
 
-/** Validate a task's repo in a room: known ids only, the primary repo stored as unset. */
+/** Validate a task's repo in a workspace: known ids only, the primary repo stored as unset. */
 export function checkTaskRepo(repo: string | null | undefined, deps: Pick<TaskToolDeps, 'repos' | 'primaryRepo'>): string | null | undefined {
   if (repo === undefined) return undefined;
   if (!deps.repos) return undefined;
   if (repo === null || repo === '' || repo === deps.primaryRepo) return null;
-  if (!deps.repos.includes(repo)) throw new Error(`Unknown repo "${repo}". Repos in this room: ${deps.repos.join(', ')}.`);
+  if (!deps.repos.includes(repo)) throw new Error(`Unknown repo "${repo}". Repos in this workspace: ${deps.repos.join(', ')}.`);
   return repo;
 }
 
@@ -112,7 +112,7 @@ export function taskTools(deps: TaskToolDeps, botId: string): HostToolDef[] {
         dependsOn: z.array(z.string()).optional(),
         order: z.number().optional().describe('Execution order within the goal'),
         notes: z.string().optional(),
-        ...(deps.repos ? { repo: z.string().optional().describe(`Room repo this task changes: ${deps.repos.join(' | ')} (omit for the primary repo)`) } : {}),
+        ...(deps.repos ? { repo: z.string().optional().describe(`Workspace repo this task changes: ${deps.repos.join(' | ')} (omit for the primary repo)`) } : {}),
       },
       handler: async ({ repo, ...a }) =>
         write(() => {
@@ -140,7 +140,7 @@ export function taskTools(deps: TaskToolDeps, botId: string): HostToolDef[] {
         appendLog: z.string().optional(),
         blockedReason: z.string().nullable().optional(),
         order: z.number().optional(),
-        ...(deps.repos ? { repo: z.string().nullable().optional().describe(`Room repo: ${deps.repos.join(' | ')}`) } : {}),
+        ...(deps.repos ? { repo: z.string().nullable().optional().describe(`Workspace repo: ${deps.repos.join(' | ')}`) } : {}),
       },
       handler: async ({ id, appendLog, acceptanceDone, acceptance, repo, ...patch }) =>
         write(() => {

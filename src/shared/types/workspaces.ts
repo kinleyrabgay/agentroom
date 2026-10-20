@@ -1,14 +1,14 @@
 import type { ContextModuleSummary } from './context.js';
 
-/** Multi-repo rooms: several repos, one team, one board, one context map. */
+/** Multi-repo workspaces: several repos, one team, one board, one context map. */
 
-/** One repo in a room, as the API and UI see it. */
-export interface RoomRepo {
-  /** Stable id within the room (slug of the folder name), used on tasks (`task.repo`) and in URLs. */
+/** One repo in a workspace, as the API and UI see it. */
+export interface WorkspaceRepo {
+  /** Stable id within the workspace (slug of the folder name), used on tasks (`task.repo`) and in URLs. */
   id: string;
   name: string;
   root: string;
-  /** The room's host repo: the team, board, settings and budgets live in its `.agentroom/`. */
+  /** The workspace's host repo: the team, board, settings and budgets live in its `.agentroom/`. */
   primary: boolean;
   /** Current branch of the human's working copy, null outside git. */
   branch: string | null;
@@ -16,9 +16,9 @@ export interface RoomRepo {
   initialized: boolean;
 }
 
-export interface RoomView {
+export interface WorkspaceView {
   name: string;
-  repos: RoomRepo[];
+  repos: WorkspaceRepo[];
 }
 
 /** How a cross-repo dependency was found. */
@@ -44,8 +44,8 @@ export interface CrossRepoEdge {
   evidence: CrossRepoEvidence[];
 }
 
-/** One repo's part of the room map. */
-export interface RoomGraphRepo {
+/** One repo's part of the workspace map. */
+export interface WorkspaceGraphRepo {
   id: string;
   name: string;
   primary: boolean;
@@ -56,7 +56,7 @@ export interface RoomGraphRepo {
 }
 
 /** The merged map: every repo's modules, plus the edges between repos. */
-export interface RoomGraphView {
-  repos: RoomGraphRepo[];
+export interface WorkspaceGraphView {
+  repos: WorkspaceGraphRepo[];
   crossEdges: CrossRepoEdge[];
 }

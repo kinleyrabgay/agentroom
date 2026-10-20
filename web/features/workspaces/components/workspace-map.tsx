@@ -6,9 +6,9 @@ import { useTheme } from "next-themes"
 import { Background, Controls, MarkerType, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react"
 import { ArrowRightIcon, CableIcon, FolderGit2Icon, Loader2Icon, RefreshCwIcon, WaypointsIcon } from "lucide-react"
 import { toast } from "sonner"
-import type { CrossRepoEdge, CrossRepoKind, RoomGraphView } from "@shared"
+import type { CrossRepoEdge, CrossRepoKind, WorkspaceGraphView } from "@shared"
 import { cn } from "@/lib/utils"
-import { roomApi } from "@/lib/api/endpoints"
+import { workspaceApi } from "@/lib/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { ToneBadge } from "@/components/kit/badge"
 import type { Tone } from "@/components/kit/tone"
@@ -16,8 +16,8 @@ import { ErrorState, LoadingState } from "@/components/kit/state-view"
 import { PageActions } from "@/components/layout/page-actions"
 import { AreaNode, ModuleNode, type AreaNodeData, type ModuleNodeData } from "@/features/context/components/module-node"
 import { openModule, setContextTab } from "@/features/context/lib/context-store"
-import { selectRepo, useRoomStore } from "../lib/room-store"
-import { roomLayout, roomNodeId, splitRoomNodeId, type RepoFrame } from "../lib/room-layout"
+import { selectRepo, useWorkspaceStore } from "../lib/workspace-store"
+import { workspaceLayout, workspaceNodeId, splitWorkspaceNodeId, type RepoFrame } from "../lib/workspace-layout"
 
 const KIND: Record<CrossRepoKind, { label: string; tone: Tone }> = {
   http: { label: "HTTP", tone: "brand" },
@@ -46,15 +46,15 @@ const RepoFrameNode = memo(function RepoFrameNode({ data, width, height }: NodeP
 
 const nodeTypes = { module: ModuleNode, area: AreaNode, frame: RepoFrameNode }
 
-/** The whole room: every repo's map side by side, with the edges between repos drawn across. */
-export function RoomMap() {
-  const room = useRoomStore((s) => s.room)
-  const [graph, setGraph] = useState<RoomGraphView | null>(null)
+/** The whole workspace: every repo's map side by side, with the edges between repos drawn across. */
+export function WorkspaceMap() {
+  const workspace = useWorkspaceStore((s) => s.workspace)
+  const [graph, setGraph] = useState<WorkspaceGraphView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   const load = useCallback(() => {
-    roomApi
+    workspaceApi
       .graph()
       .then((g) => {
         setGraph(g)
@@ -66,7 +66,7 @@ export function RoomMap() {
 
   const mapAll = () => {
     setSyncing(true)
-    roomApi
+    workspaceApi
       .sync(false)
       .then(() => {
         toast.success("Mapping every repo", { description: "Facts only: files, symbols, imports. No model calls." })
@@ -84,7 +84,7 @@ export function RoomMap() {
   return (
     <div className="absolute inset-0">
       <PageActions>
-        <Button size="sm" variant="outline" onClick={load} title="Reload the room map">
+        <Button size="sm" variant="outline" onClick={load} title="Reload the workspace map">
           <RefreshCwIcon data-icon="inline-start" /> Refresh
         </Button>
         <Button size="sm" onClick={mapAll} disabled={syncing} title="Update every repo's facts (no model calls)">
@@ -94,29 +94,29 @@ export function RoomMap() {
       </PageActions>
       {error && !graph ? (
         <ErrorState error={error} onRetry={load} />
-      ) : !graph || !room ? (
-        <LoadingState label="Drawing the room…" />
+      ) : !graph || !workspace ? (
+        <LoadingState label="Drawing the workspace…" />
       ) : (
-        <RoomCanvas graph={graph} />
+        <WorkspaceCanvas graph={graph} />
       )}
     </div>
   )
 }
 
-function RoomCanvas({ graph }: { graph: RoomGraphView }) {
+function WorkspaceCanvas({ graph }: { graph: WorkspaceGraphView }) {
   const { resolvedTheme } = useTheme()
   const [hover, setHover] = useState<string | null>(null)
   const [pinned, setPinned] = useState<CrossRepoEdge | null>(null)
-  const { pos, areas, frames } = useMemo(() => roomLayout(graph), [graph])
+  const { pos, areas, frames } = useMemo(() => workspaceLayout(graph), [graph])
 
   const allEdges = useMemo(() => {
-    const intra = graph.repos.flatMap((r) => r.edges.map((e) => ({ from: roomNodeId(r.id, e.from), to: roomNodeId(r.id, e.to), weight: e.weight, cross: null as CrossRepoEdge | null })))
-    const cross = graph.crossEdges.map((e) => ({ from: roomNodeId(e.fromRepo, e.from), to: roomNodeId(e.toRepo, e.to), weight: e.weight, cross: e }))
+    const intra = graph.repos.flatMap((r) => r.edges.map((e) => ({ from: workspaceNodeId(r.id, e.from), to: workspaceNodeId(r.id, e.to), weight: e.weight, cross: null as CrossRepoEdge | null })))
+    const cross = graph.crossEdges.map((e) => ({ from: workspaceNodeId(e.fromRepo, e.from), to: workspaceNodeId(e.toRepo, e.to), weight: e.weight, cross: e }))
     return [...intra, ...cross]
   }, [graph])
 
   const focus = useMemo(() => {
-    if (pinned) return new Set([roomNodeId(pinned.fromRepo, pinned.from), roomNodeId(pinned.toRepo, pinned.to)])
+    if (pinned) return new Set([workspaceNodeId(pinned.fromRepo, pinned.from), workspaceNodeId(pinned.toRepo, pinned.to)])
     if (!hover) return null
     const set = new Set([hover])
     for (const e of allEdges) {
@@ -158,7 +158,7 @@ function RoomCanvas({ graph }: { graph: RoomGraphView }) {
       ),
       ...graph.repos.flatMap((r) =>
         r.modules.map((m): Node<ModuleNodeData> => {
-          const id = roomNodeId(r.id, m.id)
+          const id = workspaceNodeId(r.id, m.id)
           return { id, type: "module", position: pos[id] ?? { x: 0, y: 0 }, data: { module: m, active: false, dim: !!focus && !focus.has(id), impact: null } }
         })
       ),
@@ -191,7 +191,7 @@ function RoomCanvas({ graph }: { graph: RoomGraphView }) {
   }, [allEdges, focus, pinned])
 
   const open = (nodeId: string) => {
-    const { repo, module } = splitRoomNodeId(nodeId)
+    const { repo, module } = splitWorkspaceNodeId(nodeId)
     selectRepo(repo)
     setContextTab("map")
     openModule(module)
@@ -221,7 +221,7 @@ function RoomCanvas({ graph }: { graph: RoomGraphView }) {
         <Controls showInteractive={false} position="bottom-left" className="overflow-hidden rounded-xl border shadow-sm" />
       </ReactFlow>
       <p className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-background/85 px-3 py-1 text-xs text-muted-foreground shadow-xs backdrop-blur-md">
-        Every repo in the room. Click a module to open its card in that repo; Ask, Tour and Docs work per repo.
+        Every repo in the workspace. Click a module to open its card in that repo; Ask, Tour and Docs work per repo.
       </p>
       <CrossEdgesPanel edges={graph.crossEdges} repos={graph.repos} pinned={pinned} onPick={setPinned} />
     </div>
@@ -229,7 +229,7 @@ function RoomCanvas({ graph }: { graph: RoomGraphView }) {
 }
 
 /** Edges between repos, with what matched; picking one highlights it on the map. */
-function CrossEdgesPanel({ edges, repos, pinned, onPick }: { edges: CrossRepoEdge[]; repos: RoomGraphView["repos"]; pinned: CrossRepoEdge | null; onPick: (e: CrossRepoEdge | null) => void }) {
+function CrossEdgesPanel({ edges, repos, pinned, onPick }: { edges: CrossRepoEdge[]; repos: WorkspaceGraphView["repos"]; pinned: CrossRepoEdge | null; onPick: (e: CrossRepoEdge | null) => void }) {
   const name = (id: string) => repos.find((r) => r.id === id)?.name ?? id
   /** `repo · folder` the way people know a module. */
   const where = (repo: string, module: string) => {

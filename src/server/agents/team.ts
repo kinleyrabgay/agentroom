@@ -15,7 +15,7 @@ import type { SecurityService } from '../security/security.service.js';
 import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
 import type { McpService } from '../services/mcp/mcp.service.js';
 import type { ContextService } from '../context/context.service.js';
-import type { RoomService } from '../rooms/room.service.js';
+import type { WorkspaceService } from '../workspaces/workspace.service.js';
 
 export interface TeamDeps {
   project: Project;
@@ -37,8 +37,8 @@ export interface TeamDeps {
   mcp?: McpService;
   /** Repo context: the map in every bot's instructions and the context_* tools. */
   context?: ContextService;
-  /** Multi-repo rooms: the room block in bots' instructions, other repos' folders, task repo ids. */
-  room?: RoomService;
+  /** Multi-repo workspaces: the workspace block in bots' instructions, other repos' folders, task repo ids. */
+  workspace?: WorkspaceService;
 }
 
 /**
@@ -50,7 +50,7 @@ export type DispatchOptions = RunContext & {
   attachments?: readonly string[];
   /** Folder the bot works in (a goal's own worktree); defaults to the project root. */
   cwd?: string;
-  /** Other folders the bot may read and edit (a room's other repos); chats get the room's repos by default. */
+  /** Other folders the bot may read and edit (a workspace's other repos); chats get the workspace's repos by default. */
   additionalDirectories?: string[];
   /** Stop the run once it has spent this much (USD). */
   maxBudgetUsd?: number;
@@ -113,10 +113,10 @@ export class Team {
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
     const { project, hub, provider, permissions, sessions, previews } = this.deps;
     const repoMap = this.deps.context?.promptBlock() ?? '';
-    const room = this.deps.room?.isRoom ? this.deps.room : undefined;
-    const roomBlock = room?.promptBlock() ?? '';
-    // Chats outside goals may read the room's other repos where they are; goal runs pass their own folders.
-    const extraDirs = opts.additionalDirectories ?? (room && !opts.goalId ? room.registry.list().filter((r) => !r.primary).map((r) => r.root) : []);
+    const workspace = this.deps.workspace?.isWorkspace ? this.deps.workspace : undefined;
+    const workspaceBlock = workspace?.promptBlock() ?? '';
+    // Chats outside goals may read the workspace's other repos where they are; goal runs pass their own folders.
+    const extraDirs = opts.additionalDirectories ?? (workspace && !opts.goalId ? workspace.registry.list().filter((r) => !r.primary).map((r) => r.root) : []);
     const team = project.bots.list();
     // Chats outside goals obey the daily cap (goal runs are checked by the goal engine).
     const dayLeft = opts.goalId ? undefined : this.dayRemaining();
@@ -162,7 +162,7 @@ export class Team {
         model,
         effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
-        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), [repoMap, roomBlock].filter(Boolean).join('\n\n')),
+        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), [repoMap, workspaceBlock].filter(Boolean).join('\n\n')),
         mcpServers: this.deps.mcp?.forBot(bot),
         resumeSessionId: sessions.get(bot.id),
         hostTools: buildHostTools(bot, team, {
@@ -176,7 +176,7 @@ export class Team {
           security: this.deps.security,
           memory: project.memory,
           ...(repoMap && this.deps.context ? { context: this.deps.context.reader } : {}),
-          ...(room ? { repos: room.registry.ids(), primaryRepo: room.registry.primaryId } : {}),
+          ...(workspace ? { repos: workspace.registry.ids(), primaryRepo: workspace.registry.primaryId } : {}),
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.

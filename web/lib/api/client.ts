@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Multi-repo rooms: the repo context requests are about (null = the primary repo). Set by the repo switcher. */
+/** Multi-repo workspaces: the repo context requests are about (null = the primary repo). Set by the repo switcher. */
 let contextRepo: string | null = null
 export function setContextRepo(repo: string | null) {
   contextRepo = repo

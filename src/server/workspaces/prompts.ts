@@ -1,8 +1,8 @@
-import type { RepoRef } from '../../core/rooms/index.js';
+import type { RepoRef } from '../../core/workspaces/index.js';
 import { HostTool } from '../../shared/enums.js';
 
-/** Added to the Planner's prompt in a room: plan per repo. */
-export function roomPlanSection(goalId: string, repos: RepoRef[]): string {
+/** Added to the Planner's prompt in a workspace: plan per repo. */
+export function workspacePlanSection(goalId: string, repos: RepoRef[]): string {
   const primary = repos.find((r) => r.primary)!;
   return [
     `## This goal can span ${repos.length} repos`,
@@ -14,8 +14,8 @@ export function roomPlanSection(goalId: string, repos: RepoRef[]): string {
   ].join('\n');
 }
 
-/** Added to a build/test prompt when the task's repo isn't the primary one (or in any room). */
-export function roomTaskSection(task: { id: string; repo?: string }, repo: RepoRef, cwd: string, others: { id: string; dir: string }[]): string {
+/** Added to a build/test prompt when the task's repo isn't the primary one (or in any workspace). */
+export function workspaceTaskSection(task: { id: string; repo?: string }, repo: RepoRef, cwd: string, others: { id: string; dir: string }[]): string {
   return [
     `## Repo for ${task.id}: \`${repo.id}\``,
     `- You're working in ${cwd}. Change files only in this repo.`,

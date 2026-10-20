@@ -36,7 +36,7 @@ const STATUS: Record<ChangedFile["status"], { letter: string; tone: Tone; label:
 type Mode = "unified" | "split"
 
 /** The goal's diff like a pull request: files by task, inline comments, revert a task, send comments back. */
-export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo rooms: which of the goal's repos (unset = primary). */ repo?: string }) {
+export function ChangesPanel({ goal, repo }: { goal: Goal; /** Multi-repo workspaces: which of the goal's repos (unset = primary). */ repo?: string }) {
   const [data, setData] = useState<GoalChanges | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)

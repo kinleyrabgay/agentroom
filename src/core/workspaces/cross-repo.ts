@@ -2,7 +2,7 @@ import type { ContextGraph } from '../context/types.js';
 import type { CrossRepoEdge, CrossRepoEvidence, CrossRepoKind } from '../../shared/types/index.js';
 
 /**
- * Edges between the repos of a room, inferred from contracts both sides can see:
+ * Edges between the repos of a workspace, inferred from contracts both sides can see:
  * HTTP routes (server route definitions, OpenAPI/Swagger specs) matched against path strings in
  * client code, GraphQL schema fields against operations, tRPC routers against `trpc.x.y` calls,
  * and package names one repo publishes and another imports. Deterministic, no model calls.
@@ -267,7 +267,7 @@ class EdgeSet {
   }
 }
 
-/** Every cross-repo edge in a room. */
+/** Every cross-repo edge in a workspace. */
 export function inferCrossRepoEdges(inputs: CrossRepoInput[]): CrossRepoEdge[] {
   if (inputs.length < 2) return [];
   const edges = new EdgeSet();

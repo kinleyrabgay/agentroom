@@ -3,16 +3,16 @@
 import { useState, type ReactNode } from "react"
 import type { Goal } from "@shared"
 import { Segmented } from "@/components/kit/segmented"
-import { useRoomStore } from "../lib/room-store"
+import { useWorkspaceStore } from "../lib/workspace-store"
 import { useGoalParts } from "../lib/use-goal-parts"
 
 /**
- * Multi-repo rooms: when a goal has work in several repos, a switch above its per-repo content
+ * Multi-repo workspaces: when a goal has work in several repos, a switch above its per-repo content
  * (Changes). `children` gets the repo id, or undefined for the primary repo.
  */
 export function GoalRepoTabs({ goal, children }: { goal: Goal; children: (repo: string | undefined) => ReactNode }) {
   const parts = useGoalParts(goal)
-  const inView = useRoomStore((s) => s.repo)
+  const inView = useWorkspaceStore((s) => s.repo)
   const [picked, setPicked] = useState<string | null>(null)
   if (parts.length < 2) return <>{children(undefined)}</>
   const current = parts.find((p) => p.repo.id === picked) ?? parts.find((p) => p.repo.id === inView) ?? parts[0]!

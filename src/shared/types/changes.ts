@@ -38,7 +38,7 @@ export interface GoalChanges {
   groups: ChangeGroup[];
   additions: number;
   deletions: number;
-  /** Multi-repo rooms: the repo these changes are in (unset = primary). */
+  /** Multi-repo workspaces: the repo these changes are in (unset = primary). */
   repo?: string;
 }
 
@@ -51,7 +51,7 @@ export interface PrDraft {
   openFindings: number;
   /** Short test summary, e.g. "QA passed (3 tasks)"; null when unknown. */
   tests: string | null;
-  /** Multi-repo rooms: the repo this PR is for (unset = primary). */
+  /** Multi-repo workspaces: the repo this PR is for (unset = primary). */
   repo?: string;
 }
 

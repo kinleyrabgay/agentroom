@@ -24,7 +24,7 @@ export const API_PREFIX = '/api';
 export const WS_PATH = '/ws';
 export const TOKEN_HEADER = 'x-agentroom-token';
 export const TOKEN_QUERY = 't';
-/** Multi-repo rooms: which repo a context request is about (unset = the primary repo). */
+/** Multi-repo workspaces: which repo a context request is about (unset = the primary repo). */
 export const REPO_HEADER = 'x-agentroom-repo';
 
 /** Skill and bot folder names: lowercase letters, digits and dashes. */

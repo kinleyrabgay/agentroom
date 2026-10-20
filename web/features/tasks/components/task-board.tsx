@@ -22,8 +22,8 @@ import { ProofPanel } from "@/features/proof/components/proof-panel"
 import { NewGoalDialog } from "./new-goal-dialog"
 import { QuickAddTask } from "./quick-add-task"
 import { TaskColumn } from "./task-column"
-import { inRepoView, useRoomStore } from "@/features/rooms/lib/room-store"
-import { GoalRepoTabs } from "@/features/rooms/components/goal-repo-tabs"
+import { inRepoView, useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
+import { GoalRepoTabs } from "@/features/workspaces/components/goal-repo-tabs"
 
 /** Work: goals on the left; the selected goal (plan review, progress, tasks) on the right. */
 export function TaskBoard() {
@@ -34,10 +34,10 @@ export function TaskBoard() {
   const selectGoal = useAppStore((s) => s.selectGoal)
   const goalTab = useAppStore((s) => s.goalTab)
   const [creating, setCreating] = useState(false)
-  // Multi-repo rooms: the repo switcher narrows the board to one repo's tasks (and the goals that have some).
-  const room = useRoomStore((s) => s.room)
-  const repoView = useRoomStore((s) => s.repo)
-  const tasks = useMemo(() => (repoView ? allTasks.filter((t) => inRepoView(t, room, repoView)) : allTasks), [allTasks, room, repoView])
+  // Multi-repo workspaces: the repo switcher narrows the board to one repo's tasks (and the goals that have some).
+  const workspace = useWorkspaceStore((s) => s.workspace)
+  const repoView = useWorkspaceStore((s) => s.repo)
+  const tasks = useMemo(() => (repoView ? allTasks.filter((t) => inRepoView(t, workspace, repoView)) : allTasks), [allTasks, workspace, repoView])
   const goals = useMemo(
     () => (repoView ? allGoals.filter((g) => !allTasks.some((t) => t.goalId === g.id) || tasks.some((t) => t.goalId === g.id)) : allGoals),
     [allGoals, allTasks, tasks, repoView]

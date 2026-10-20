@@ -9,13 +9,13 @@ import { buildGraph, readIndexable } from '../src/core/context/index.js';
 import {
   addRepos,
   clientSegments,
-  createRoom,
-  deleteRoom,
+  createWorkspace,
+  deleteWorkspace,
   graphqlFields,
   graphqlOperations,
   inferCrossRepoEdges,
-  listRooms,
-  loadRoom,
+  listWorkspaces,
+  loadWorkspace,
   matchScore,
   pathLiterals,
   prepareMember,
@@ -26,7 +26,7 @@ import {
   specPaths,
   trpcCalls,
   trpcKeys,
-} from '../src/core/rooms/index.js';
+} from '../src/core/workspaces/index.js';
 import { GoalStatus, HostTool, TaskKind, TaskStatus } from '../src/shared/enums.js';
 import { PermissionGate } from '../src/server/agents/permission-gate.js';
 import { SessionStore } from '../src/server/agents/session-store.js';
@@ -36,8 +36,8 @@ import { ContextService } from '../src/server/context/context.service.js';
 import { PreviewService } from '../src/server/preview/preview.service.js';
 import type { Provider, RunRequest, RunResult } from '../src/server/providers/provider.js';
 import { Hub } from '../src/server/realtime/hub.js';
-import { GoalRepos, linkedPrSection, LINKS_START, withLinkedSection } from '../src/server/rooms/goal-repos.js';
-import { RoomService } from '../src/server/rooms/room.service.js';
+import { GoalRepos, linkedPrSection, LINKS_START, withLinkedSection } from '../src/server/workspaces/goal-repos.js';
+import { WorkspaceService } from '../src/server/workspaces/workspace.service.js';
 import { NotificationService } from '../src/server/services/notification.service.js';
 import { GoalRunner } from '../src/server/workflow/goal-runner.js';
 
@@ -58,7 +58,7 @@ function gitRepo(prefix: string, files: Record<string, string>) {
   return root;
 }
 
-// Rooms live in $AGENTROOM_HOME/rooms; goal worktrees in $HOME/.agentroom/worktrees. Keep both in temp.
+// Workspaces live in $AGENTROOM_HOME/workspaces; goal worktrees in $HOME/.agentroom/worktrees. Keep both in temp.
 const saved = { home: process.env.HOME, arHome: process.env.AGENTROOM_HOME };
 beforeAll(() => {
   const home = tmp('agentroom-home-');
@@ -71,36 +71,36 @@ afterAll(() => {
   else process.env.AGENTROOM_HOME = saved.arHome;
 });
 
-describe('room config', () => {
-  it('creates, adds, removes and lists rooms with stable unique ids', () => {
+describe('workspace config', () => {
+  it('creates, adds, removes and lists workspaces with stable unique ids', () => {
     const a = tmp('web-');
     const b = tmp('api-');
     const twin = path.join(tmp('x-'), path.basename(a));
     fs.mkdirSync(twin);
-    const room = createRoom('shop', [a, b]);
-    expect(room.repos.map((r) => r.id)).toEqual([slugify(path.basename(a)), slugify(path.basename(b))]);
-    expect(room.primary).toBe(room.repos[0]!.id);
+    const workspace = createWorkspace('shop', [a, b]);
+    expect(workspace.repos.map((r) => r.id)).toEqual([slugify(path.basename(a)), slugify(path.basename(b))]);
+    expect(workspace.primary).toBe(workspace.repos[0]!.id);
     // Same folder name elsewhere gets a suffixed id.
     const more = addRepos('shop', [twin]);
-    expect(more.repos[2]!.id).toBe(`${room.repos[0]!.id}-2`);
-    expect(() => addRepos('shop', [a])).toThrow(/already in the room/);
+    expect(more.repos[2]!.id).toBe(`${workspace.repos[0]!.id}-2`);
+    expect(() => addRepos('shop', [a])).toThrow(/already in the workspace/);
     // Nested repos would be indexed twice.
     const inner = path.join(a, 'packages', 'inner');
     fs.mkdirSync(inner, { recursive: true });
     expect(() => addRepos('shop', [inner])).toThrow(/nested/);
-    expect(() => createRoom('shop', [a])).toThrow(/already exists/);
-    expect(() => createRoom('Bad Name', [a])).toThrow(/lowercase/);
-    expect(() => createRoom('nope', [path.join(a, 'missing')])).toThrow(/No such folder/);
+    expect(() => createWorkspace('shop', [a])).toThrow(/already exists/);
+    expect(() => createWorkspace('Bad Name', [a])).toThrow(/lowercase/);
+    expect(() => createWorkspace('nope', [path.join(a, 'missing')])).toThrow(/No such folder/);
 
     // Removing the primary repo hands the board to the next one.
-    const afterRemove = removeRepo('shop', room.repos[0]!.id);
-    expect(afterRemove.primary).toBe(room.repos[1]!.id);
+    const afterRemove = removeRepo('shop', workspace.repos[0]!.id);
+    expect(afterRemove.primary).toBe(workspace.repos[1]!.id);
     expect(setPrimary('shop', twin).primary).toBe(more.repos[2]!.id);
-    expect(listRooms().map((r) => r.name)).toContain('shop');
-    expect(loadRoom('shop').repos).toHaveLength(2);
-    expect(() => removeRepo('shop', 'missing')).toThrow(/isn't in room/);
-    deleteRoom('shop');
-    expect(() => loadRoom('shop')).toThrow(/No room "shop"/);
+    expect(listWorkspaces().map((r) => r.name)).toContain('shop');
+    expect(loadWorkspace('shop').repos).toHaveLength(2);
+    expect(() => removeRepo('shop', 'missing')).toThrow(/isn't in workspace/);
+    deleteWorkspace('shop');
+    expect(() => loadWorkspace('shop')).toThrow(/No workspace "shop"/);
   });
 
   it('prepares other repos without scaffolding a team (gitignored runs/)', () => {
@@ -120,12 +120,12 @@ describe('room config', () => {
     const api = tmp('reg-api-');
     const project = new Project(web);
     const single = ProjectRegistry.single(project);
-    expect(single.isRoom).toBe(false);
+    expect(single.isWorkspace).toBe(false);
     expect(single.view()).toBeNull();
     expect(single.normalize(undefined)).toBeUndefined();
 
-    const reg = ProjectRegistry.fromRoom({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
-    expect(reg.isRoom).toBe(true);
+    const reg = ProjectRegistry.fromWorkspace({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    expect(reg.isWorkspace).toBe(true);
     expect(reg.primaryId).toBe('web');
     expect(reg.normalize('web')).toBeUndefined();
     expect(reg.normalize('api')).toBe('api');
@@ -137,16 +137,16 @@ describe('room config', () => {
       ['web', true],
       ['api', false],
     ]);
-    expect(() => ProjectRegistry.fromRoom({ name: 'r', repos: [{ id: 'api', path: api }], createdAt: '' }, project)).toThrow(/primary repo is/);
+    expect(() => ProjectRegistry.fromWorkspace({ name: 'r', repos: [{ id: 'api', path: api }], createdAt: '' }, project)).toThrow(/primary repo is/);
   });
 
-  it('task repos are checked against the room', () => {
+  it('task repos are checked against the workspace', () => {
     const deps = { repos: ['web', 'api'], primaryRepo: 'web' };
     expect(checkTaskRepo('api', deps)).toBe('api');
     expect(checkTaskRepo('web', deps)).toBeNull();
     expect(checkTaskRepo(undefined, deps)).toBeUndefined();
     expect(() => checkTaskRepo('ios', deps)).toThrow(/Unknown repo "ios"/);
-    // Outside a room the field is ignored.
+    // Outside a workspace the field is ignored.
     expect(checkTaskRepo('api', {})).toBeUndefined();
   });
 });
@@ -213,58 +213,58 @@ describe('cross-repo edges', () => {
     expect(inferCrossRepoEdges([inputs[0]!])).toEqual([]);
   });
 
-  it('the room service merges each repo map with the edges between them', () => {
+  it('the workspace service merges each repo map with the edges between them', () => {
     const web = tmp('rs-web-');
     write(web, 'src/api.ts', "export const getUser = (id: string) => fetch(`/api/users/${id}`);\n");
     const api = tmp('rs-api-');
     write(api, 'src/server.ts', "import { Hono } from 'hono';\nconst app = new Hono();\napp.get('/users/:id', (c) => c.json({}));\n");
     const project = new Project(web);
     project.init();
-    const registry = ProjectRegistry.fromRoom({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    const registry = ProjectRegistry.fromWorkspace({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
     const make = (root: string) => new ContextService({ root, settings: () => project.settings.get() });
-    const room = new RoomService({ registry, primaryContext: make(web), makeContext: (r) => make(r.root) });
+    const workspace = new WorkspaceService({ registry, primaryContext: make(web), makeContext: (r) => make(r.root) });
     // Not mapped yet: repos show as unbuilt, no edges.
-    expect(room.graph().repos.map((r) => r.built)).toEqual([false, false]);
+    expect(workspace.graph().repos.map((r) => r.built)).toEqual([false, false]);
     for (const root of [web, api]) {
       const g = buildGraph(root);
       fs.mkdirSync(path.join(root, '.agentroom', 'runs', 'context'), { recursive: true });
       fs.writeFileSync(path.join(root, '.agentroom', 'runs', 'context', 'graph.json'), JSON.stringify(g));
     }
-    const view = room.graph();
+    const view = workspace.graph();
     expect(view.repos.every((r) => r.built && r.modules.length > 0)).toBe(true);
     expect(view.crossEdges).toHaveLength(1);
     expect(view.crossEdges[0]).toMatchObject({ fromRepo: 'web', toRepo: 'api', kind: 'http' });
-    expect(room.promptBlock()).toContain('Room "r": 2 repos');
-    expect(room.promptBlock()).toContain('web:');
-    expect(room.context('api')).toBe(room.context('api'));
-    expect(() => room.context('ios')).toThrow(/Unknown repo/);
+    expect(workspace.promptBlock()).toContain('Workspace "r": 2 repos');
+    expect(workspace.promptBlock()).toContain('web:');
+    expect(workspace.context('api')).toBe(workspace.context('api'));
+    expect(() => workspace.context('ios')).toThrow(/Unknown repo/);
   });
 });
 
-describe('room routes', () => {
-  it('context requests pick their repo from the header, tasks only take room repos', async () => {
+describe('workspace routes', () => {
+  it('context requests pick their repo from the header, tasks only take workspace repos', async () => {
     const web = tmp('rt-web-');
     write(web, 'src/web.ts', 'export const web = 1;\n');
     const api = tmp('rt-api-');
     write(api, 'src/server.ts', "import { Hono } from 'hono';\nconst app = new Hono();\napp.get('/users/:id', (c) => c.json({}));\n");
     const project = new Project(web);
     project.init();
-    const registry = ProjectRegistry.fromRoom({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    const registry = ProjectRegistry.fromWorkspace({ name: 'r', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
     const make = (root: string) => new ContextService({ root, settings: () => project.settings.get() });
-    const room = new RoomService({ registry, primaryContext: make(web), makeContext: (r) => make(r.root) });
+    const workspace = new WorkspaceService({ registry, primaryContext: make(web), makeContext: (r) => make(r.root) });
     for (const root of [web, api]) {
       fs.mkdirSync(path.join(root, '.agentroom', 'runs', 'context'), { recursive: true });
       fs.writeFileSync(path.join(root, '.agentroom', 'runs', 'context', 'graph.json'), JSON.stringify(buildGraph(root)));
     }
     const { Hono } = await import('hono');
     const { contextRoutes } = await import('../src/server/http/routes/context.routes.js');
-    const { roomRoutes } = await import('../src/server/http/routes/room.routes.js');
+    const { workspaceRoutes } = await import('../src/server/http/routes/workspace.routes.js');
     const { taskRoutes } = await import('../src/server/http/routes/tasks.routes.js');
     const { REPO_HEADER } = await import('../src/shared/constants.js');
     const app = new Hono();
     const audit = () => {};
-    contextRoutes(app, (repo) => room.context(repo), audit);
-    roomRoutes(app, room, audit);
+    contextRoutes(app, (repo) => workspace.context(repo), audit);
+    workspaceRoutes(app, workspace, audit);
     taskRoutes(app, project, () => {}, (repo) => registry.normalize(repo) ?? null);
 
     const files = async (headers: Record<string, string> = {}) => (await (await app.request('/context/files', { headers })).json()) as string[];
@@ -276,9 +276,9 @@ describe('room routes', () => {
     expect((await app.request('/context/file?path=src/server.ts')).status).toBeGreaterThanOrEqual(400);
     expect((await app.request(`/context/file?path=src/server.ts&repo=api`)).status).toBe(200);
 
-    const view = (await (await app.request('/room')).json()) as { name: string; repos: { id: string }[] };
+    const view = (await (await app.request('/workspace')).json()) as { name: string; repos: { id: string }[] };
     expect(view.repos.map((r) => r.id)).toEqual(['web', 'api']);
-    const graph = (await (await app.request('/room/graph')).json()) as { repos: unknown[]; crossEdges: unknown[] };
+    const graph = (await (await app.request('/workspace/graph')).json()) as { repos: unknown[]; crossEdges: unknown[] };
     expect(graph.repos).toHaveLength(2);
 
     const post = (body: unknown) => app.request('/tasks', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } });
@@ -352,9 +352,9 @@ describe('a goal across repos', () => {
     project.config.update({ permissionMode: 'auto' });
     sh(web, 'add', '-A');
     sh(web, 'commit', '-q', '-m', 'agentroom');
-    const registry = ProjectRegistry.fromRoom({ name: 'shop', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
+    const registry = ProjectRegistry.fromWorkspace({ name: 'shop', repos: [{ id: 'web', path: web }, { id: 'api', path: api }], primary: 'web', createdAt: '' }, project);
     const ctx = (root: string) => new ContextService({ root, settings: () => project.settings.get() });
-    const room = new RoomService({ registry, primaryContext: ctx(web), makeContext: (r) => ctx(r.root) });
+    const workspace = new WorkspaceService({ registry, primaryContext: ctx(web), makeContext: (r) => ctx(r.root) });
     const hub = new Hub(project.paths.runs);
     const notifications = new NotificationService(hub, project.paths.inboxFile);
     const boardChanged = () => {};
@@ -393,7 +393,7 @@ describe('a goal across repos', () => {
       sessions: new SessionStore(project.paths.sessionsFile),
       notifications,
       boardChanged,
-      room,
+      workspace,
     });
     const repos = new GoalRepos({ registry, update: (id, r) => project.goals.update(id, { repos: r }), worktreesEnabled: () => true });
     const done: string[] = [];

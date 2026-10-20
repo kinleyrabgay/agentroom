@@ -35,7 +35,7 @@ export interface HostToolDeps {
   memory?: MemoryRepository;
   /** Repo context (read-only map); absent when context is off. */
   context?: ContextReader;
-  /** Multi-repo rooms: repo ids tasks may name (`repo` on task_create/task_update). */
+  /** Multi-repo workspaces: repo ids tasks may name (`repo` on task_create/task_update). */
   repos?: string[];
   primaryRepo?: string;
 }

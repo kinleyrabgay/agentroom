@@ -1,9 +1,9 @@
-import type { RoomGraphView } from "@shared"
+import type { WorkspaceGraphView } from "@shared"
 import { areaLayout, NODE_HEIGHT, nodeWidth, type Area, type Point } from "@/features/context/lib/layout"
 
-/** Node id of a module on the room map. */
-export const roomNodeId = (repo: string, module: string) => `${repo}::${module}`
-export const splitRoomNodeId = (id: string): { repo: string; module: string } => {
+/** Node id of a module on the workspace map. */
+export const workspaceNodeId = (repo: string, module: string) => `${repo}::${module}`
+export const splitWorkspaceNodeId = (id: string): { repo: string; module: string } => {
   const i = id.indexOf("::")
   return { repo: id.slice(0, i), module: id.slice(i + 2) }
 }
@@ -28,11 +28,11 @@ const EMPTY_WIDTH = 320
 const EMPTY_HEIGHT = 160
 
 /**
- * The room map: each repo laid out on its own (its folders as areas, like the single-repo map),
+ * The workspace map: each repo laid out on its own (its folders as areas, like the single-repo map),
  * inside a frame, frames side by side with the primary repo first, so edges between repos run
  * across the gaps.
  */
-export function roomLayout(graph: RoomGraphView): { pos: Record<string, Point>; areas: (Area & { repo: string })[]; frames: RepoFrame[] } {
+export function workspaceLayout(graph: WorkspaceGraphView): { pos: Record<string, Point>; areas: (Area & { repo: string })[]; frames: RepoFrame[] } {
   const pos: Record<string, Point> = {}
   const areas: (Area & { repo: string })[] = []
   const frames: RepoFrame[] = []
@@ -55,7 +55,7 @@ export function roomLayout(graph: RoomGraphView): { pos: Record<string, Point>; 
       const p = local.pos[m.id] ?? { x: 0, y: 0 }
       maxX = Math.max(maxX, p.x + nodeWidth(m.files))
       maxY = Math.max(maxY, p.y + NODE_HEIGHT)
-      pos[roomNodeId(r.id, m.id)] = { x: x + FRAME_PAD + p.x, y: FRAME_HEAD + p.y }
+      pos[workspaceNodeId(r.id, m.id)] = { x: x + FRAME_PAD + p.x, y: FRAME_HEAD + p.y }
     }
     for (const a of local.areas) areas.push({ ...a, key: `${r.id}:${a.key}`, repo: r.id, x: x + FRAME_PAD + a.x, y: FRAME_HEAD + a.y })
     const width = maxX + FRAME_PAD * 2

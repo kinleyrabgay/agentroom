@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ProjectRegistry } from '../../core/rooms/index.js';
+import type { ProjectRegistry } from '../../core/workspaces/index.js';
 import type { ChangeGroup, Goal, GoalChanges, GoalRepoState, Task } from '../../shared/types/index.js';
 import * as gg from '../git/goal-git.js';
 import { worktreeHome } from '../workflow/goal-runner.js';
@@ -24,7 +24,7 @@ export interface GoalReposDeps {
 export { LINKS_END, LINKS_START, linkedPrSection, withLinkedSection, type PrPart } from './goal-repos-links.js';
 
 /**
- * The parts of a goal that live in the room's other repos: their own folder and branch per repo,
+ * The parts of a goal that live in the workspace's other repos: their own folder and branch per repo,
  * checkpoints, diffs, pull requests and cleanup. The primary repo stays with the goal runner's
  * own fields (`worktree`, `baseRef`, `pr`), so single-repo goals are unchanged.
  */
@@ -35,8 +35,8 @@ export class GoalRepos {
     this.git = deps.git ?? gg;
   }
 
-  get isRoom(): boolean {
-    return this.deps.registry.isRoom;
+  get isWorkspace(): boolean {
+    return this.deps.registry.isWorkspace;
   }
 
   get registry(): ProjectRegistry {
@@ -50,7 +50,7 @@ export class GoalRepos {
     return id === this.deps.registry.primaryId ? undefined : id;
   }
 
-  /** Non-primary repos a goal touches, in room order. */
+  /** Non-primary repos a goal touches, in workspace order. */
   spans(goal: Goal, tasks: Task[]): string[] {
     const used = new Set<string>(Object.keys(goal.repos ?? {}));
     for (const t of tasks) {
@@ -225,7 +225,7 @@ export class GoalRepos {
    * working copies of other repos.
    */
   extraDirs(goal: Goal | null, current: string | undefined, mode: 'plan' | 'work'): string[] {
-    if (!this.isRoom) return [];
+    if (!this.isWorkspace) return [];
     const out: string[] = [];
     for (const r of this.deps.registry.list()) {
       if ((current ?? this.deps.registry.primaryId) === r.id) continue;

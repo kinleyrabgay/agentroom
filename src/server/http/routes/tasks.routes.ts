@@ -6,7 +6,7 @@ import { body, respond } from '../respond.js';
 
 /**
  * Board tasks. PATCH: `null` (or "") clears assignee, blockedReason, goalId, repo.
- * `repoCheck` (multi-repo rooms) validates a task's repo: unknown ids throw, the primary repo is stored as unset.
+ * `repoCheck` (multi-repo workspaces) validates a task's repo: unknown ids throw, the primary repo is stored as unset.
  */
 export function taskRoutes(app: Hono, project: Project, changed: () => void, repoCheck?: (repo: string) => string | null) {
   const withRepo = <T extends { repo?: string | null }>(input: T): T => {

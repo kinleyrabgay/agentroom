@@ -29,7 +29,7 @@ export interface RunRequest {
   /** Files the human attached (images, PDFs, text, other files). */
   attachments?: ResolvedAttachment[];
   cwd: string;
-  /** Extra folders the agent may work in besides `cwd` (a room's other repos). */
+  /** Extra folders the agent may work in besides `cwd` (a workspace's other repos). */
   additionalDirectories?: string[];
   /** Stop once the run has spent this much (USD). */
   maxBudgetUsd?: number;

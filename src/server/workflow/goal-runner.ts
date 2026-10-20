@@ -26,9 +26,9 @@ import type { ProofService } from '../proof/proof.service.js';
 import { PROOF_MARK } from '../proof/proof.service.js';
 import { failing, summarize, withQuality } from '../proof/checks.js';
 import { parseScenarios } from '../proof/scenario.js';
-import type { GoalRepos } from '../rooms/goal-repos.js';
-import { linkedPrSection, withLinkedSection } from '../rooms/goal-repos-links.js';
-import { roomPlanSection, roomTaskSection } from '../rooms/prompts.js';
+import type { GoalRepos } from '../workspaces/goal-repos.js';
+import { linkedPrSection, withLinkedSection } from '../workspaces/goal-repos-links.js';
+import { workspacePlanSection, workspaceTaskSection } from '../workspaces/prompts.js';
 
 export interface GoalRunnerDeps {
   project: Project;
@@ -50,9 +50,9 @@ export interface GoalRunnerDeps {
   onDone?: (goal: Goal, files: string[]) => void;
   /** Proof of work (Verify phase): record the feature in a browser and run quality checks. */
   proof?: ProofService;
-  /** Multi-repo rooms: the goal's work in the room's other repos (folders, checkpoints, PRs). */
+  /** Multi-repo workspaces: the goal's work in the workspace's other repos (folders, checkpoints, PRs). */
   repos?: GoalRepos;
-  /** Multi-repo rooms: a goal finished with these files changed in another repo. */
+  /** Multi-repo workspaces: a goal finished with these files changed in another repo. */
   onRepoDone?: (repo: string, goal: Goal, files: string[]) => void;
 }
 
@@ -300,8 +300,8 @@ export class GoalRunner {
 
   private async planPhase(goal: Goal, roles: TeamRoles) {
     this.leadStatus(BotStatus.Working, `${goal.id} · Planning with ${roles.planner.name}`);
-    const rooms = this.deps.repos?.isRoom ? this.deps.repos : undefined;
-    const prompt = planPrompt(goal, roles, this.tasksOf(goal.id)) + (rooms ? `\n\n${roomPlanSection(goal.id, rooms.registry.list())}` : '');
+    const workspaces = this.deps.repos?.isWorkspace ? this.deps.repos : undefined;
+    const prompt = planPrompt(goal, roles, this.tasksOf(goal.id)) + (workspaces ? `\n\n${workspacePlanSection(goal.id, workspaces.registry.list())}` : '');
     const out = await this.run(goal, roles, roles.planner, prompt, `Plan ${goal.id}: ${goal.title}`, { phase: WorkPhase.Planning });
     if (this.interrupted(goal.id, out.aborted)) return;
 
@@ -469,7 +469,7 @@ export class GoalRunner {
     }
   }
 
-  /** Folder the goal's bots work in (for a room's other repo: that repo's goal folder). */
+  /** Folder the goal's bots work in (for a workspace's other repo: that repo's goal folder). */
   cwdOf(goal: Goal, repo?: string): string {
     if (repo && this.deps.repos) return this.deps.repos.cwd(goal, repo);
     return goal.worktree && fs.existsSync(goal.worktree.path) ? goal.worktree.path : this.deps.project.root;
@@ -481,7 +481,7 @@ export class GoalRunner {
     return goal.worktree && this.cwdOf(goal) === goal.worktree.path ? gg.head(goal.worktree.path) : null;
   }
 
-  // ---------- rooms (several repos) ----------
+  // ---------- workspaces (several repos) ----------
 
   /** The non-primary repo a task changes (its folder is created on first use), or undefined. */
   private async taskRepo(goalId: string, task: Task): Promise<string | undefined> {
@@ -492,16 +492,16 @@ export class GoalRunner {
     return repo;
   }
 
-  /** In a room, tell the bot which repo the task is in and where the goal's other repos are. */
+  /** In a workspace, tell the bot which repo the task is in and where the goal's other repos are. */
   private withRepo(prompt: string, goalId: string, task: Task, repo: string | undefined): string {
     const repos = this.deps.repos;
-    if (!repos?.isRoom) return prompt;
+    if (!repos?.isWorkspace) return prompt;
     const goal = this.require(goalId);
     const ref = repos.registry.ref(repo);
     const others = [repos.registry.primaryId, ...repos.spans(goal, this.tasksOf(goalId))]
       .filter((id, i, all) => id !== ref.id && all.indexOf(id) === i)
       .map((id) => ({ id, dir: this.cwdOf(goal, id === repos.registry.primaryId ? undefined : id) }));
-    return `${prompt}\n\n${roomTaskSection(task, ref, this.cwdOf(goal, repo), others)}`;
+    return `${prompt}\n\n${workspaceTaskSection(task, ref, this.cwdOf(goal, repo), others)}`;
   }
 
   /** After a task's run: commit what changed in the goal's folder and record the task's commits. */
@@ -523,7 +523,7 @@ export class GoalRunner {
     }
   }
 
-  /** Checkpoint in one of a room's other repos. */
+  /** Checkpoint in one of a workspace's other repos. */
   private async checkpointIn(goal: Goal, taskId: string, before: string | null, repo: string) {
     const task = this.deps.project.tasks.get(taskId);
     if (!task || !this.deps.repos) return;
@@ -661,18 +661,18 @@ export class GoalRunner {
   async prDraft(goalId: string, repoId?: string): Promise<PrDraft> {
     const goal = this.require(goalId);
     const all = this.tasksOf(goalId);
-    const rooms = this.deps.repos?.isRoom ? this.deps.repos : undefined;
-    const other = rooms?.registry.normalize(repoId);
-    const linked = !!rooms && rooms.parts(goal, all).length > 1;
-    // In a room each repo's PR lists only that repo's tasks.
-    const tasks = rooms ? all.filter((t) => rooms.repoOf(t) === other) : all;
+    const workspaces = this.deps.repos?.isWorkspace ? this.deps.repos : undefined;
+    const other = workspaces?.registry.normalize(repoId);
+    const linked = !!workspaces && workspaces.parts(goal, all).length > 1;
+    // In a workspace each repo's PR lists only that repo's tasks.
+    const tasks = workspaces ? all.filter((t) => workspaces.repoOf(t) === other) : all;
     const openFindings = this.deps.security?.findings.list({ goalId, status: FindingStatus.Open }).length ?? 0;
     const repo = await this.originRepo(other);
     const proof = other ? undefined : this.deps.proof?.markdown(goalId, repo);
     let body = buildPrBody(goal, tasks, openFindings, repo, proof ? [proof] : []);
-    if (linked) body = withLinkedSection(body, linkedPrSection(goal.id, rooms!.prParts(goal, all), other ?? rooms!.registry.primaryId));
+    if (linked) body = withLinkedSection(body, linkedPrSection(goal.id, workspaces!.prParts(goal, all), other ?? workspaces!.registry.primaryId));
     return {
-      title: linked ? `${goal.title} (${rooms!.registry.ref(other).name})` : goal.title,
+      title: linked ? `${goal.title} (${workspaces!.registry.ref(other).name})` : goal.title,
       body,
       branch: (other ? goal.repos?.[other]?.worktree?.branch : goal.worktree?.branch) ?? null,
       openFindings,
@@ -704,11 +704,11 @@ export class GoalRunner {
     if (body.includes(PROOF_MARK)) body = await this.withPublishedProof(goalId, body);
     const pr = await gg.createPr(cwd, { title, body, head: goal.worktree.branch, draft: !!input.draft });
     const next = this.set(goalId, { pr });
-    if (this.deps.repos?.isRoom) await this.linkPrs(goalId, this.deps.repos.registry.primaryId);
+    if (this.deps.repos?.isWorkspace) await this.linkPrs(goalId, this.deps.repos.registry.primaryId);
     return next;
   }
 
-  /** A goal's PR opened in a room: point the goal's other open PRs at the whole set. Same click, audited. */
+  /** A goal's PR opened in a workspace: point the goal's other open PRs at the whole set. Same click, audited. */
   private async linkPrs(goalId: string, opened: string) {
     const repos = this.deps.repos!;
     const errors = await repos.refreshLinks(this.require(goalId), this.tasksOf(goalId), opened).catch((e: Error) => [e.message]);

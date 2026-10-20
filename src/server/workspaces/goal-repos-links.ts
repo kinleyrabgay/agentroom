@@ -1,4 +1,4 @@
-/** The block that ties a goal's pull requests across a room's repos together ("Part 2 of 3"). */
+/** The block that ties a goal's pull requests across a workspace's repos together ("Part 2 of 3"). */
 
 export const LINKS_START = '<!-- agentroom:linked-prs -->';
 export const LINKS_END = '<!-- /agentroom:linked-prs -->';

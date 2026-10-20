@@ -15,8 +15,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ToneBadge } from "@/components/kit/badge"
 import { isRunning } from "../lib/goal-phase"
-import { useGoalParts } from "@/features/rooms/lib/use-goal-parts"
-import type { GoalPart } from "@/features/rooms/lib/room-store"
+import { useGoalParts } from "@/features/workspaces/lib/use-goal-parts"
+import type { GoalPart } from "@/features/workspaces/lib/workspace-store"
 
 /** "⎇ agentroom/g-4 · own folder": where the goal's work lives. */
 export function GoalBranch({ goal }: { goal: Goal }) {
@@ -59,7 +59,7 @@ export function PublishActions({ goal }: { goal: Goal }) {
   const parts = useGoalParts(goal)
   const ready = goal.status === GoalStatus.Done || goal.status === GoalStatus.Testing || goal.status === GoalStatus.Verifying || goal.status === GoalStatus.Reporting
   const busy = isRunning(goal.status) && goal.status !== GoalStatus.Testing && goal.status !== GoalStatus.Verifying
-  // Multi-repo rooms: a goal with work in several repos gets one branch and one PR per repo.
+  // Multi-repo workspaces: a goal with work in several repos gets one branch and one PR per repo.
   if (parts.length > 1) return <LinkedPublishActions goal={goal} parts={parts} ready={ready} busy={busy} />
   if (!goal.worktree) return null
 

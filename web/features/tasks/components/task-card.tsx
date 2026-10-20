@@ -14,7 +14,7 @@ import { useAppStore } from "@/lib/store/app-store"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { KindBadge } from "./kind-badge"
 import { ToneBadge } from "@/components/kit/badge"
-import { RepoBadge } from "@/features/rooms/components/repo-badge"
+import { RepoBadge } from "@/features/workspaces/components/repo-badge"
 
 /** A task card. Click opens the detail sheet; drag moves/reorders. */
 export const TaskCard = memo(function TaskCard({

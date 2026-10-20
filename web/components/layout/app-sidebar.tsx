@@ -37,15 +37,15 @@ import { useGithubStore } from "@/features/github/lib/github-store"
 import { myOpenCount } from "@/features/github/lib/board-view"
 import { useFindingCounts } from "@/features/security/hooks/use-finding-counts"
 import { cn } from "@/lib/utils"
-import { RepoSwitcher } from "@/features/rooms/components/repo-switcher"
-import { useRoomStore } from "@/features/rooms/lib/room-store"
+import { RepoSwitcher } from "@/features/workspaces/components/repo-switcher"
+import { useWorkspaceStore } from "@/features/workspaces/lib/workspace-store"
 
 export function AppSidebar() {
   return (
     <Sidebar variant="floating" collapsible="icon">
       <SidebarHeader className="gap-2">
         <ProjectHeader />
-        {/* Multi-repo rooms: which repo the board and map show (renders nothing outside a room). */}
+        {/* Multi-repo workspaces: which repo the board and map show (renders nothing outside a workspace). */}
         <ErrorBoundary label="Repo" compact fallback={null}>
           <RepoSwitcher className="w-full max-w-none group-data-[collapsible=icon]:hidden [&>svg:last-child]:ml-auto" />
         </ErrorBoundary>
@@ -71,7 +71,7 @@ export function AppSidebar() {
 
 function ProjectHeader() {
   const info = useAppStore((s) => s.info)
-  const room = useRoomStore((s) => s.room)
+  const workspace = useWorkspaceStore((s) => s.workspace)
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -80,14 +80,14 @@ function ProjectHeader() {
           <div className="grid min-w-0 flex-1 text-left leading-tight">
             <span className="truncate font-semibold tracking-tight">{APP_NAME}</span>
             <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-              {room ? (
+              {workspace ? (
                 <span className="truncate">
-                  Room {room.name} · {room.repos.length} repos
+                  Workspace {workspace.name} · {workspace.repos.length} repos
                 </span>
               ) : (
                 (info?.name ?? "…")
               )}
-              {!room && info?.branch && (
+              {!workspace && info?.branch && (
                 <>
                   <GitBranchIcon className="size-3" />
                   <span className="truncate font-mono">{info.branch}</span>

@@ -5,7 +5,7 @@ import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
 import type { ProofAvailability, ProofScenario, ProofView } from "@shared"
 import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 import type { ContextAsk, ContextDocFileId, ContextDocPreview, ContextTour } from "@shared"
-import type { CrossRepoEdge, RoomGraphView, RoomView } from "@shared"
+import type { CrossRepoEdge, WorkspaceGraphView, WorkspaceView } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -48,7 +48,7 @@ export const skillApi = {
   remove: (name: string) => request("DELETE", `/skills/${seg(name)}`),
 }
 
-/** A task patch where `null` clears the assignee, the blocked reason or the repo (back to the room's primary). */
+/** A task patch where `null` clears the assignee, the blocked reason or the repo (back to the workspace's primary). */
 export type TaskUpdate = Omit<TaskPatch, "assignee" | "blockedReason" | "repo"> & {
   assignee?: string | null
   blockedReason?: string | null
@@ -306,10 +306,10 @@ export const proofApi = {
   setScenarios: (goalId: string, scenarios: ProofScenario[]) => request<ProofScenario[]>("PUT", `/goals/${seg(goalId)}/proof/scenarios`, { scenarios }),
 }
 
-/** Multi-repo rooms: the room (null outside one), the merged map, and syncing every repo's map. */
-export const roomApi = {
-  get: () => request<RoomView | null>("GET", "/room"),
-  graph: () => request<RoomGraphView>("GET", "/room/graph"),
-  edges: () => request<CrossRepoEdge[]>("GET", "/room/edges"),
-  sync: (cards = false) => request<RoomView | null>("POST", "/room/sync", { cards }),
+/** Multi-repo workspaces: the workspace (null outside one), the merged map, and syncing every repo's map. */
+export const workspaceApi = {
+  get: () => request<WorkspaceView | null>("GET", "/workspace"),
+  graph: () => request<WorkspaceGraphView>("GET", "/workspace/graph"),
+  edges: () => request<CrossRepoEdge[]>("GET", "/workspace/edges"),
+  sync: (cards = false) => request<WorkspaceView | null>("POST", "/workspace/sync", { cards }),
 }

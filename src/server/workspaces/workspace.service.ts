@@ -1,14 +1,14 @@
-import { inferCrossRepoEdges, type CrossRepoInput, type ProjectRegistry, type RepoRef } from '../../core/rooms/index.js';
+import { inferCrossRepoEdges, type CrossRepoInput, type ProjectRegistry, type RepoRef } from '../../core/workspaces/index.js';
 import { readIndexable } from '../../core/context/index.js';
 import type { Project } from '../../core/project.js';
-import type { CrossRepoEdge, Goal, RoomGraphRepo, RoomGraphView, RoomView } from '../../shared/types/index.js';
+import type { CrossRepoEdge, Goal, WorkspaceGraphRepo, WorkspaceGraphView, WorkspaceView } from '../../shared/types/index.js';
 import type { ContextService } from '../context/context.service.js';
 
-export interface RoomServiceDeps {
+export interface WorkspaceServiceDeps {
   registry: ProjectRegistry;
   /** The primary repo's context (the one the server always has). */
   primaryContext: ContextService;
-  /** Context for another repo of the room, created on first use. */
+  /** Context for another repo of the workspace, created on first use. */
   makeContext: (repo: RepoRef, project: Project) => ContextService;
 }
 
@@ -18,15 +18,15 @@ const OTHER_INDEX_CHARS = 2400;
 const PROMPT_EDGES = 12;
 
 /**
- * The room as a whole: its repos, a context service per repo, the merged map with edges between
- * repos, and the room block in bots' instructions. In single-project mode it's a thin pass-through
+ * The workspace as a whole: its repos, a context service per repo, the merged map with edges between
+ * repos, and the workspace block in bots' instructions. In single-project mode it's a thin pass-through
  * to the primary context.
  */
-export class RoomService {
+export class WorkspaceService {
   private readonly contexts = new Map<string, ContextService>();
   private edgeCache: { key: string; edges: CrossRepoEdge[] } | null = null;
 
-  constructor(private readonly deps: RoomServiceDeps) {
+  constructor(private readonly deps: WorkspaceServiceDeps) {
     this.contexts.set(deps.registry.primaryId, deps.primaryContext);
   }
 
@@ -34,11 +34,11 @@ export class RoomService {
     return this.deps.registry;
   }
 
-  get isRoom(): boolean {
-    return this.deps.registry.isRoom;
+  get isWorkspace(): boolean {
+    return this.deps.registry.isWorkspace;
   }
 
-  view(): RoomView | null {
+  view(): WorkspaceView | null {
     return this.deps.registry.view();
   }
 
@@ -55,7 +55,7 @@ export class RoomService {
 
   /** Facts-only sync of every other repo at startup (the primary starts on its own). */
   start(): void {
-    if (!this.isRoom) return;
+    if (!this.isWorkspace) return;
     for (const r of this.deps.registry.list()) if (!r.primary) this.context(r.id).start();
   }
 
@@ -70,8 +70,8 @@ export class RoomService {
 
   // ── Merged map ─────────────────────────────────────────────────────────
 
-  graph(): RoomGraphView {
-    const repos: RoomGraphRepo[] = this.deps.registry.list().map((r) => {
+  graph(): WorkspaceGraphView {
+    const repos: WorkspaceGraphRepo[] = this.deps.registry.list().map((r) => {
       const c = this.context(r.id);
       const built = !!c.reader.current();
       const g = built ? c.graph() : { modules: [], edges: [] };
@@ -82,7 +82,7 @@ export class RoomService {
 
   /** Edges between repos; recomputed only when a repo's graph changed. */
   crossEdges(): CrossRepoEdge[] {
-    if (!this.isRoom) return [];
+    if (!this.isWorkspace) return [];
     const inputs: CrossRepoInput[] = [];
     const keys: string[] = [];
     for (const r of this.deps.registry.list()) {
@@ -100,15 +100,15 @@ export class RoomService {
   // ── Bots ───────────────────────────────────────────────────────────────
 
   /**
-   * The room block in every bot's instructions: the repos and their folders, how they connect,
+   * The workspace block in every bot's instructions: the repos and their folders, how they connect,
    * and a short map of the other repos (the primary repo's map is already there). Stable across
    * runs so it stays in the prompt cache.
    */
   promptBlock(): string {
-    if (!this.isRoom) return '';
+    if (!this.isWorkspace) return '';
     const reg = this.deps.registry;
     const lines = [
-      `## Room "${reg.roomName}": ${reg.list().length} repos worked on together`,
+      `## Workspace "${reg.workspaceName}": ${reg.list().length} repos worked on together`,
       `One team and one board span these repos. Paths are absolute.`,
       ...reg.list().map((r) => `- \`${r.id}\`${r.primary ? ' (primary: team, board, settings)' : ''}: ${r.root}`),
       `Every goal task names the repo it changes (\`repo\` on the task; unset = \`${reg.primaryId}\`). Change only that repo; read the others when you need to.`,

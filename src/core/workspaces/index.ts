@@ -1,22 +1,22 @@
 export {
   addRepos,
   agentroomHome,
-  createRoom,
-  deleteRoom,
-  listRooms,
-  loadRoom,
+  createWorkspace,
+  deleteWorkspace,
+  listWorkspaces,
+  loadWorkspace,
   prepareMember,
   primaryOf,
   removeRepo,
   resolveRepo,
-  roomFile,
-  roomsDir,
+  workspaceFile,
+  workspacesDir,
   setPrimary,
-  MAX_ROOM_REPOS,
-  ROOM_NAME,
-  type RoomConfig,
-  type RoomRepoConfig,
-} from './rooms.js';
+  MAX_WORKSPACE_REPOS,
+  WORKSPACE_NAME,
+  type WorkspaceConfig,
+  type WorkspaceRepoConfig,
+} from './workspaces.js';
 export { ProjectRegistry, type RepoRef } from './registry.js';
 export {
   clientSegments,

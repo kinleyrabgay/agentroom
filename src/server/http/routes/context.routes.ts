@@ -10,7 +10,7 @@ const num = (v: string | undefined) => (v && /^\d+$/.test(v) ? Number(v) : undef
 
 /** Repo context: status, the module graph, cards and the human's feedback on them. */
 export function contextRoutes(app: Hono, source: ContextService | ((repo: string | undefined) => ContextService), audit: HumanAudit) {
-  // Multi-repo rooms: the repo comes from a header (or ?repo= for links); unset = the primary repo.
+  // Multi-repo workspaces: the repo comes from a header (or ?repo= for links); unset = the primary repo.
   const at = (c: Context): ContextService => (typeof source === 'function' ? source(c.req.header(REPO_HEADER) || c.req.query('repo') || undefined) : source);
   app.get('/context/status', (c) => respond(c, () => at(c).status()));
   app.get('/context/graph', (c) => respond(c, () => at(c).graph()));

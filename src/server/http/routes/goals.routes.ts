@@ -57,7 +57,7 @@ export function goalRoutes(app: Hono, goals: GoalRunner, audit: HumanAudit, temp
   app.get('/budgets', (c) => respond(c, () => goals.budgetSummary()));
 
   // Changes (diff review), review comments, per-task revert
-  // Multi-repo rooms: ?repo=<id> picks one of the goal's repos (unset = primary).
+  // Multi-repo workspaces: ?repo=<id> picks one of the goal's repos (unset = primary).
   const repoOf = (c: { req: { query: (k: string) => string | undefined } }) => c.req.query('repo') || undefined;
   app.get('/goals/:id/changes', (c) => respond(c, () => goals.changes(c.req.param('id'), repoOf(c))));
   app.post('/goals/:id/comments', async (c) => {
