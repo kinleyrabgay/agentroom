@@ -11,6 +11,12 @@ export interface LedgerEntry {
   taskId?: string;
   phase?: WorkPhase;
   model: string;
+  /** Provider that ran it (absent on rows from before 0.0.3: claude). */
+  provider?: string;
+  /** Providers tried first that couldn't run (rate limit, outage…). */
+  fellBackFrom?: string[];
+  /** Experiment variants this run was part of: experiment id → variant id. */
+  variants?: Record<string, string>;
   ok: boolean;
   aborted?: boolean;
   costUsd: number;

@@ -76,6 +76,29 @@ export class SecretsStore {
     this.write({ ...this.read(), roomSecret: value });
   }
 
+  /** API key stored for a provider (codex, gemini, openai-compat), or undefined. */
+  providerKey(id: string): string | undefined {
+    return this.read().providers?.[id];
+  }
+
+  /** Providers that have a key stored (never the values). */
+  providerKeys(): string[] {
+    return Object.keys(this.read().providers ?? {});
+  }
+
+  /** Set (or with '' clear) a provider's API key. */
+  setProviderKey(id: string, value: string) {
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(id)) throw new Error(`Invalid provider "${id}"`);
+    if (typeof value !== 'string') throw new Error('key must be a string');
+    const next = { ...this.read() };
+    const providers = { ...(next.providers ?? {}) };
+    if (value.trim() === '') delete providers[id];
+    else providers[id] = value.trim();
+    if (Object.keys(providers).length) next.providers = providers;
+    else delete next.providers;
+    this.write(next);
+  }
+
   private write(value: IntegrationSecrets) {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(value, null, 2) + '\n', { mode: FILE_MODE });

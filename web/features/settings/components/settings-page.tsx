@@ -21,6 +21,7 @@ import { ContextSection } from "./context-section"
 import { AutopilotSettingsSection, ProofSection, QualitySection } from "./proof-section"
 import { PacksSection } from "@/features/packs/components/packs-section"
 import { TeamRoomSection } from "@/features/room/components/team-room-section"
+import { ProvidersSection } from "@/features/engine/components/providers-section"
 
 /** Settings: sticky section nav and one document column. Follows `#/settings/<section>`. */
 export function SettingsPage() {
@@ -85,6 +86,7 @@ export function SettingsPage() {
           {loaded ? (
             <>
               <GeneralSection />
+              <ProvidersSection />
               <BudgetsSection />
               <SecuritySection />
               <ContextSection />

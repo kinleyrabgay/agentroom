@@ -3,6 +3,8 @@ import type { Command } from 'commander';
 import { PROJECT_DIR } from '../../shared/constants.js';
 import { currentProject } from '../context.js';
 import { proofAvailability } from '../../server/proof/browser.js';
+import { providerStatuses } from '../../server/providers/status.js';
+import { SecretsStore } from '../../server/services/secrets.store.js';
 
 const MIN_NODE = 20;
 
@@ -39,6 +41,16 @@ export function registerDoctor(program: Command) {
             ? `• Private: ${PROJECT_DIR}/ is excluded for you only (run agentroom share to share it)`
             : `✔ Shared: ${PROJECT_DIR}/ is meant to be committed; ${PROJECT_DIR}/runs/ is ignored`,
         );
+      }
+      // Other providers (experimental): installed, signed in?
+      const engine = exists ? project.settings.get().engine : undefined;
+      if (engine) {
+        const keys = new Set(new SecretsStore(project.paths.secretsFile).providerKeys());
+        for (const p of await providerStatuses({ engine, hasKey: (id) => keys.has(id) })) {
+          if (p.id === 'claude') continue;
+          const state = !p.available ? 'not available' : p.auth === 'missing' ? 'installed, not signed in' : `ready${p.version ? ` (${p.version})` : ''}`;
+          console.log(`${p.available && p.auth !== 'missing' ? '✔' : '•'} ${p.name} (experimental): ${state}${p.hint ? `. ${p.hint}` : ''}`);
+        }
       }
     });
 }

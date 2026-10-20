@@ -14,8 +14,19 @@ import { Segmented } from "@/components/kit/segmented"
 import { EmptyState, ErrorState } from "@/components/kit/state-view"
 import { duration, pct, usd } from "../lib/format"
 import { SpendChart } from "./spend-chart"
+import { ExperimentsPanel } from "@/features/engine/components/experiments-panel"
 
 const PERIOD_KEY = "agentroom.insights.period"
+const TAB_KEY = "agentroom.insights.tab"
+type InsightsTab = "overview" | "experiments"
+
+function savedTab(): InsightsTab {
+  try {
+    return localStorage.getItem(TAB_KEY) === "experiments" ? "experiments" : "overview"
+  } catch {
+    return "overview"
+  }
+}
 const PERIODS: InsightsPeriod[] = ["7d", "30d", "90d"]
 
 function savedPeriod(): InsightsPeriod {
@@ -31,6 +42,7 @@ function savedPeriod(): InsightsPeriod {
 /** How the team is doing over a period: results, spend, per-bot success and why runs fail. */
 export function InsightsPage() {
   const [period, setPeriod] = useState<InsightsPeriod>(savedPeriod)
+  const [tab, setTab] = useState<InsightsTab>(savedTab)
   const [data, setData] = useState<Insights | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,19 +71,42 @@ export function InsightsPage() {
     }
   }
 
+  const chooseTab = (t: InsightsTab) => {
+    setTab(t)
+    try {
+      localStorage.setItem(TAB_KEY, t)
+    } catch {
+      // storage blocked
+    }
+  }
+
   return (
     <div className="absolute inset-0 overflow-y-auto">
       <PageActions>
-        <Segmented<InsightsPeriod>
-          aria-label="Period"
+        <Segmented<InsightsTab>
+          aria-label="Insights view"
           size="sm"
-          value={period}
-          onChange={choose}
-          options={PERIODS.map((p) => ({ value: p, label: p }))}
+          value={tab}
+          onChange={chooseTab}
+          options={[
+            { value: "overview", label: "Overview" },
+            { value: "experiments", label: "Experiments" },
+          ]}
         />
+        {tab === "overview" && (
+          <Segmented<InsightsPeriod>
+            aria-label="Period"
+            size="sm"
+            value={period}
+            onChange={choose}
+            options={PERIODS.map((p) => ({ value: p, label: p }))}
+          />
+        )}
       </PageActions>
       <div className="mx-auto max-w-6xl space-y-5 px-6 py-5 pb-16">
-        {error && !data ? (
+        {tab === "experiments" ? (
+          <ExperimentsPanel />
+        ) : error && !data ? (
           <ErrorState error={error} onRetry={() => void load(period)} />
         ) : !data ? (
           <LoadingSkeleton />
@@ -225,7 +260,7 @@ function PerBot({ rows }: { rows: Insights["perBot"] }) {
                 <td className="px-4 py-2.5">
                   <span className="flex items-center gap-2">
                     {bot ? <BotAvatar bot={bot} className="size-6 rounded-md text-xs" /> : null}
-                    <span className="truncate">{bot?.name ?? (r.botId === "context" ? "Repo context" : r.botId)}</span>
+                    <span className="truncate">{bot?.name ?? (r.botId === "context" ? "Repo context" : r.botId === "eval" ? "Replay evals" : r.botId)}</span>
                   </span>
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.runs}</td>

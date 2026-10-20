@@ -25,3 +25,4 @@ export type * from './packs.js';
 export type * from './intake.js';
 export type * from './room.js';
 export type * from './autopilot.js';
+export type * from './engine.js';

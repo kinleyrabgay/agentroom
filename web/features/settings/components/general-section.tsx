@@ -41,9 +41,9 @@ export function GeneralSection() {
                 <ModelEffortPicker
                   value={current}
                   inherit={INHERIT}
-                  // Send the whole section so clearing a phase's model/effort takes effect.
+                  // Send the whole section so clearing a phase's model/effort takes effect; keep its provider route.
                   onChange={(next: { model?: string; effort?: EffortLevel }) =>
-                    value && update({ ...value, [phase.id]: { model: next.model, effort: next.effort } })
+                    value && update({ ...value, [phase.id]: { ...current, model: next.model, effort: next.effort } })
                   }
                 />
               </div>

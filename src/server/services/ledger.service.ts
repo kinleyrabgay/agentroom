@@ -113,7 +113,15 @@ export class RunTally {
     }
   }
 
-  finish(outcome: { ok: boolean; aborted: boolean; error?: string }, now = new Date()): Omit<LedgerEntry, 'id'> {
+  /** Tool calls seen so far (a run that did something is never retried on another provider). */
+  get toolCalls(): number {
+    return Object.values(this.tools).reduce((t, n) => t + n, 0);
+  }
+
+  finish(
+    outcome: { ok: boolean; aborted: boolean; error?: string; provider?: string; fellBackFrom?: string[]; variants?: Record<string, string> },
+    now = new Date(),
+  ): Omit<LedgerEntry, 'id'> {
     return {
       ts: now.toISOString(),
       startedAt: this.startedAt.toISOString(),
@@ -122,6 +130,9 @@ export class RunTally {
       ...(this.ctx.taskId ? { taskId: this.ctx.taskId } : {}),
       ...(this.ctx.phase ? { phase: this.ctx.phase } : {}),
       model: this.mainModel ?? this.model,
+      ...(outcome.provider ? { provider: outcome.provider } : {}),
+      ...(outcome.fellBackFrom?.length ? { fellBackFrom: outcome.fellBackFrom } : {}),
+      ...(outcome.variants && Object.keys(outcome.variants).length ? { variants: outcome.variants } : {}),
       ok: outcome.ok,
       ...(outcome.aborted ? { aborted: true } : {}),
       costUsd: round(this.cost),

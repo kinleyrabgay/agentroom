@@ -9,6 +9,9 @@ import type { ClientMessageRouter } from '../realtime/ws.handler.js';
 import type { ModelCatalog } from '../services/model-catalog.js';
 import type { GoalRunner } from '../workflow/goal-runner.js';
 import { devCors, requireToken, tokenMatches } from './auth.js';
+import { engineRoutes, hostBridgeRoutes } from './routes/engine.routes.js';
+import type { EngineService } from '../engine/engine.service.js';
+import type { HostToolBridge } from '../providers/host-bridge.js';
 import { botRoutes } from './routes/bots.routes.js';
 import { infoRoutes } from './routes/info.routes.js';
 import { skillRoutes } from './routes/skills.routes.js';
@@ -99,6 +102,10 @@ export interface AppDeps {
   room?: RoomService;
   /** Incident autopilot (Sentry → reproduce → failing test → fix → verify). */
   autopilot?: AutopilotService;
+  /** Providers, routing, experiments, suggestions, replay evals. */
+  engine?: EngineService;
+  /** Host tools over MCP for out-of-process providers (Codex, Gemini). */
+  hostBridge?: HostToolBridge;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -127,6 +134,8 @@ export function createApp(deps: AppDeps) {
     }
     await next();
   });
+
+  if (deps.hostBridge) hostBridgeRoutes(app, deps.hostBridge);
 
   const api = new Hono();
   const cors = devCors(process.env.AGENTROOM_DEV_ORIGIN);
@@ -158,6 +167,7 @@ export function createApp(deps: AppDeps) {
   if (deps.teams) teamsRoutes(api, deps.teams, deps.humanName);
   if (deps.reviews) reviewRoutes(api, deps.reviews, deps.humanName);
   if (deps.room) roomRoutes(api, deps.room);
+  if (deps.engine) engineRoutes(api, deps.engine, deps.humanAudit);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
   api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));
   app.route(API_PREFIX, api);

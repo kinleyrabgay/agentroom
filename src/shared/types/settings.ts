@@ -21,6 +21,8 @@ export interface IntegrationSecrets {
   teamsOutgoingSecret?: string;
   /** HMAC key that signs team room member links. Rotating it invalidates every link. */
   roomSecret?: string;
+  /** API keys for providers besides Claude (e.g. `openai-compat`). Never returned over the API. */
+  providers?: Record<string, string>;
 }
 
 /** What GET /api/integrations returns: which secrets are set, never their values. */

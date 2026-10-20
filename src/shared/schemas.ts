@@ -251,7 +251,16 @@ export const ConfigSchema = z.object({
   alwaysAsk: z.array(z.string()).default([]),
 });
 
-const PhaseModel = z.object({ model: z.string().optional(), effort: z.enum(values(EffortLevel)).optional() });
+/** One step of a fallback chain: another provider (and model) to try when the first can't run. */
+const RouteStep = z.object({ provider: z.enum(values(ProviderId)), model: z.string().optional() });
+const PhaseModel = z.object({
+  model: z.string().optional(),
+  effort: z.enum(values(EffortLevel)).optional(),
+  /** Provider for this phase; unset = the project's provider (config.json). */
+  provider: z.enum(values(ProviderId)).optional(),
+  /** Tried in order when the run fails before doing anything (rate limit, outage, not installed). */
+  fallbacks: z.array(RouteStep).max(4).optional(),
+});
 
 /** Registries Browse skills searches out of the box. The AgentRoom index is off until it's published. */
 export const DEFAULT_REGISTRIES = [
@@ -390,6 +399,64 @@ export const SettingsSchema = z.object({
           }),
         )
         .default(DEFAULT_REGISTRIES),
+    })
+    .prefault({}),
+  /** Providers besides Claude, fallback rules and the learning loop. */
+  engine: z
+    .object({
+      codex: z
+        .object({
+          /** Codex's own sandbox for shell and file writes (AgentRoom can't approve single commands). */
+          sandbox: z.enum(['read-only', 'workspace-write']).default('workspace-write'),
+          network: z.boolean().default(false),
+          /** USD per million tokens, to estimate spend (0 = sign-in plan, tokens only). */
+          priceInPerMtok: z.number().min(0).default(0),
+          priceOutPerMtok: z.number().min(0).default(0),
+        })
+        .prefault({}),
+      gemini: z
+        .object({
+          /** default = tools that need approval are refused (headless); auto_edit = edits allowed; yolo = everything. */
+          approvalMode: z.enum(['default', 'auto_edit', 'yolo']).default('auto_edit'),
+          /** Run tools in Gemini's sandbox (seatbelt on macOS, Docker elsewhere). */
+          sandbox: z.boolean().default(true),
+          /** USD per million tokens, to estimate spend (0 = sign-in plan, tokens only). */
+          priceInPerMtok: z.number().min(0).default(0),
+          priceOutPerMtok: z.number().min(0).default(0),
+        })
+        .prefault({}),
+      openaiCompat: z
+        .object({
+          /** e.g. http://localhost:11434/v1 (Ollama) or http://localhost:1234/v1 (LM Studio). */
+          baseUrl: z.string().default('http://localhost:11434/v1'),
+          /** Default model when a phase doesn't name one. */
+          model: z.string().default(''),
+          /** USD per million tokens (0 for local models). */
+          priceInPerMtok: z.number().min(0).default(0),
+          priceOutPerMtok: z.number().min(0).default(0),
+          /** Tool-loop turns per run at most. */
+          maxTurns: z.number().int().min(1).max(200).default(40),
+        })
+        .prefault({}),
+      fallback: z
+        .object({
+          enabled: z.boolean().default(true),
+          onRateLimit: z.boolean().default(true),
+          onOutage: z.boolean().default(true),
+          /** Also fall back on other errors (only ever before the run did anything). */
+          onError: z.boolean().default(false),
+        })
+        .prefault({}),
+      learning: z
+        .object({
+          /** Runs per variant before an experiment shows a result. */
+          minSamples: z.number().int().min(2).max(1000).default(10),
+          /** Check PR state (merged / reverted) with gh, read-only. */
+          trackOutcomes: z.boolean().default(true),
+          /** Budget cap per replay eval run (USD). */
+          evalBudgetUsd: z.number().positive().max(20).default(0.5),
+        })
+        .prefault({}),
     })
     .prefault({}),
 });

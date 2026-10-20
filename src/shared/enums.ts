@@ -215,6 +215,12 @@ export type PermissionMode = ValueOf<typeof PermissionMode>;
 
 export const ProviderId = {
   Claude: 'claude',
+  /** OpenAI Codex via @openai/codex-sdk (optional dependency). Experimental. */
+  Codex: 'codex',
+  /** Google Gemini CLI in headless stream-json mode. Experimental. */
+  Gemini: 'gemini',
+  /** Any OpenAI-compatible chat endpoint (Ollama, LM Studio, vLLM…), with AgentRoom's own tool loop. Experimental. */
+  OpenAICompat: 'openai-compat',
 } as const;
 export type ProviderId = ValueOf<typeof ProviderId>;
 
