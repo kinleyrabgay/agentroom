@@ -20,3 +20,4 @@ export type * from './automation-extras.js';
 export type * from './changes.js';
 export type * from './automation.js';
 export type * from './context.js';
+export type * from './packs.js';

@@ -1,0 +1,15 @@
+{
+  "security": {
+    "sensitivePaths": [
+      "**/middleware.ts",
+      "**/middleware.js",
+      "**/app/api/webhooks/**",
+      "**/app/api/auth/**",
+      "**/lib/auth*",
+      "**/prisma/schema.prisma",
+      "**/prisma/migrations/**",
+      "**/drizzle/**",
+      "**/next.config.*"
+    ]
+  }
+}

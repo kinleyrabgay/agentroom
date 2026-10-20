@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { WhenPicker } from "@/features/automation/components/when-picker"
 import { formatAt } from "@/features/automation/lib/format"
-import { BugIcon, CalendarClockIcon, FilePenLineIcon, PackageIcon, PlugIcon, RocketIcon, ShuffleIcon, SparklesIcon, type LucideIcon } from "lucide-react"
+import { BugIcon, CalendarClockIcon, FilePenLineIcon, FilePlusIcon, LayersIcon, PackageIcon, PlugIcon, RocketIcon, ShuffleIcon, SmartphoneIcon, SparklesIcon, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { SecurityReviewMode, type GoalTemplate, type GoalTemplateList, type ScheduleWhen } from "@shared"
 import { cn } from "@/lib/utils"
@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
 /** Template icon names (frontmatter `icon`) to icons; unknown ones get a generic mark. */
-const ICONS: Record<string, LucideIcon> = { bug: BugIcon, plug: PlugIcon, shuffle: ShuffleIcon, package: PackageIcon }
+const ICONS: Record<string, LucideIcon> = { bug: BugIcon, plug: PlugIcon, shuffle: ShuffleIcon, package: PackageIcon, layers: LayersIcon, "file-plus": FilePlusIcon, smartphone: SmartphoneIcon }
 const BLANK = "__blank__"
 
 /**

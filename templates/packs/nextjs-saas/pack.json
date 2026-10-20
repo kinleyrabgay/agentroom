@@ -1,0 +1,11 @@
+{
+  "name": "nextjs-saas",
+  "title": "Next.js SaaS",
+  "description": "Frontend and backend developers, an E2E tester, and skills for the App Router, server actions, auth, billing, database migrations and accessibility.",
+  "version": "1.0.0",
+  "stacks": ["Next.js", "React", "TypeScript", "Stripe", "Prisma / Drizzle", "Playwright"],
+  "detect": {
+    "files": ["next.config.js", "next.config.mjs", "next.config.ts"],
+    "packageDeps": ["next"]
+  }
+}

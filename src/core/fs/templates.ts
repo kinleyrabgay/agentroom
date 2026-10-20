@@ -13,10 +13,11 @@ export function templatesDir(): string {
   throw new Error('agentroom templates not found');
 }
 
-/** Copy a tree, skipping files that already exist. Returns the paths created. */
-export function copyTreeIfMissing(src: string, dest: string, created: string[] = []): string[] {
+/** Copy a tree, skipping files that already exist. Returns the paths created. `skip`: top-level names to leave out. */
+export function copyTreeIfMissing(src: string, dest: string, created: string[] = [], skip: string[] = []): string[] {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (skip.includes(entry.name)) continue;
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
     if (entry.isDirectory()) copyTreeIfMissing(s, d, created);

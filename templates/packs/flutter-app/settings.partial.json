@@ -1,0 +1,16 @@
+{
+  "security": {
+    "sensitivePaths": [
+      "**/android/app/build.gradle*",
+      "**/android/key.properties",
+      "**/*.keystore",
+      "**/*.jks",
+      "**/android/app/google-services.json",
+      "**/ios/Runner/GoogleService-Info.plist",
+      "**/ios/Runner/Info.plist",
+      "**/ios/Runner/*.entitlements",
+      "**/android/app/src/main/AndroidManifest.xml",
+      "**/firebase_options.dart"
+    ]
+  }
+}

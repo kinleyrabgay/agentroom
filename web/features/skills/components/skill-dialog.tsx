@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { SkillScope, type SkillInput } from "@shared"
+import { SkillScope, type SkillInput, type SkillPreview } from "@shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ConfirmDelete } from "@/components/shared/confirm-delete"
 import { skillStoreFor, type SkillTarget } from "../lib/skill-store"
+import { BrowseSkillsDialog } from "./browse-skills-dialog"
+import { SkillOrigin } from "./skill-origin"
 
 /** Create or edit a skill, in the shared library or in one bot's own folder. */
 export function SkillDialog({ skill, target, onClose }: { skill: SkillInput; target: SkillTarget; onClose: () => void }) {
@@ -17,6 +19,7 @@ export function SkillDialog({ skill, target, onClose }: { skill: SkillInput; tar
   const [draft, setDraft] = useState(skill)
   const store = useMemo(() => skillStoreFor(target), [target])
   const owner = target.scope === SkillScope.Bot ? target.bot.name : null
+  const [update, setUpdate] = useState<SkillPreview | null>(null)
 
   const save = async () => {
     try {
@@ -41,6 +44,7 @@ export function SkillDialog({ skill, target, onClose }: { skill: SkillInput; tar
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
+          {!isNew && !owner && <SkillOrigin name={skill.name} onUpdateAvailable={setUpdate} />}
           {isNew && (
             <div className="grid gap-2">
               <Label htmlFor="skill-name">Name</Label>
@@ -78,6 +82,18 @@ export function SkillDialog({ skill, target, onClose }: { skill: SkillInput; tar
           </div>
         </DialogFooter>
       </DialogContent>
+      {update && (
+        <BrowseSkillsDialog
+          open
+          initialPreview={update}
+          onOpenChange={(v) => {
+            if (!v) {
+              setUpdate(null)
+              onClose()
+            }
+          }}
+        />
+      )}
     </Dialog>
   )
 }

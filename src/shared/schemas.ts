@@ -181,6 +181,12 @@ export const ConfigSchema = z.object({
 
 const PhaseModel = z.object({ model: z.string().optional(), effort: z.enum(values(EffortLevel)).optional() });
 
+/** Registries Browse skills searches out of the box. The AgentRoom index is off until it's published. */
+export const DEFAULT_REGISTRIES = [
+  { id: 'agentroom', name: 'AgentRoom', kind: 'index' as const, url: 'https://raw.githubusercontent.com/kinleyrabgay/agentroom-registry/main/index.json', enabled: false },
+  { id: 'skills-sh', name: 'skills.sh', kind: 'skills-sh' as const, url: 'https://skills.sh', enabled: true },
+];
+
 /** `.agentroom/settings.json` — team-wide, committed. Every field has a default so older files keep working. */
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
@@ -239,6 +245,22 @@ export const SettingsSchema = z.object({
       cardModel: z.string().min(1).default('claude-haiku-4-5-20251001'),
       /** Cards written per sync at most (cost control). */
       maxCardsPerSync: z.number().int().min(1).max(500).default(12),
+    })
+    .prefault({}),
+  /** Where Browse skills searches. A private registry is just another `index` URL. */
+  registries: z
+    .object({
+      sources: z
+        .array(
+          z.object({
+            id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+            name: z.string().min(1).max(60),
+            kind: z.enum(['index', 'skills-sh']),
+            url: z.string().url(),
+            enabled: z.boolean().default(true),
+          }),
+        )
+        .default(DEFAULT_REGISTRIES),
     })
     .prefault({}),
 });

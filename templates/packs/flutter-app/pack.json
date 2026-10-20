@@ -1,0 +1,11 @@
+{
+  "name": "flutter-app",
+  "title": "Flutter app",
+  "description": "A Flutter developer and a mobile QA bot, with skills for widgets and layout, state management, testing (unit, widget, golden, integration) and platform configuration.",
+  "version": "1.0.0",
+  "stacks": ["Flutter", "Dart", "iOS", "Android"],
+  "detect": {
+    "files": [],
+    "pubspecDeps": ["flutter"]
+  }
+}

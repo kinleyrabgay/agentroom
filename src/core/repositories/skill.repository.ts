@@ -39,12 +39,25 @@ export class FsSkillRepository implements SkillRepository {
   save(input: SkillInput): Skill {
     const name = assertSlug(slugify(input.name, ''), 'skill');
     fs.mkdirSync(path.join(this.dir, name), { recursive: true });
-    fs.writeFileSync(path.join(this.dir, name, SKILL_FILE), stringifyFrontmatter({ name, description: input.description }, input.body));
+    fs.writeFileSync(path.join(this.dir, name, SKILL_FILE), stringifyFrontmatter({ name, description: input.description, ...this.provenance(name) }, input.body));
     return this.skill(name, input.description, input.body.trim());
   }
 
   delete(name: string): void {
     fs.rmSync(path.join(this.dir, assertSlug(name, 'skill')), { recursive: true, force: true });
+  }
+
+  /** Where an installed skill came from (`source`, `version`, `sha256`); kept when you edit it. */
+  private provenance(name: string): Record<string, string> {
+    const file = path.join(this.dir, name, SKILL_FILE);
+    if (!fs.existsSync(file)) return {};
+    const { data } = parseFrontmatter(fs.readFileSync(file, 'utf8'));
+    const out: Record<string, string> = {};
+    for (const key of ['source', 'version', 'sha256'] as const) {
+      const v = data[key];
+      if (typeof v === 'string' || typeof v === 'number') out[key] = String(v);
+    }
+    return out;
   }
 
   private read(name: string): Skill | undefined {

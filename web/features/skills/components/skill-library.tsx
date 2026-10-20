@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { PlusIcon, SearchIcon, SparklesIcon } from "lucide-react"
+import { CompassIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react"
 import { SkillScope, type SkillInput } from "@shared"
 import { useAppStore } from "@/lib/store/app-store"
 import { CollapsibleSidebarGroup } from "@/components/shared/collapsible-sidebar-group"
@@ -16,6 +16,7 @@ import {
 import { endSkillDrag, startSkillDrag } from "../lib/drag"
 import { NEW_SKILL } from "../lib/skill-store"
 import { SkillDialog } from "./skill-dialog"
+import { BrowseSkillsDialog } from "./browse-skills-dialog"
 
 const LIBRARY = { scope: SkillScope.Library } as const
 
@@ -25,6 +26,7 @@ export function SkillLibrary() {
   const bots = useAppStore((s) => s.bots)
   const [q, setQ] = useState("")
   const [editing, setEditing] = useState<SkillInput | null>(null)
+  const [browsing, setBrowsing] = useState(false)
   // Safety net: a drag cancelled outside any target still ends the drag state.
   useEffect(() => {
     window.addEventListener("dragend", endSkillDrag)
@@ -66,6 +68,14 @@ export function SkillLibrary() {
           <p className="px-2 text-xs text-muted-foreground">
             Drag onto a bot, or manage in a bot&apos;s Skills tab.
           </p>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => setBrowsing(true)} className="text-muted-foreground">
+                <CompassIcon className="size-3.5" />
+                <span className="text-xs">Browse skills…</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
           <SidebarMenu>
             {shown.map((s) => {
               const users = bots.filter((b) => b.skills.includes(s.name))
@@ -110,6 +120,7 @@ export function SkillLibrary() {
           </SidebarMenu>
         </SidebarGroupContent>
       </CollapsibleSidebarGroup>
+      {browsing && <BrowseSkillsDialog open onOpenChange={setBrowsing} />}
       {editing && (
         <SkillDialog
           skill={editing}
