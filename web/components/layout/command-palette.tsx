@@ -1,19 +1,23 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import {
   MoonIcon,
   OctagonXIcon,
   PlugIcon,
   SquareKanbanIcon,
-  SunIcon, CalendarClockIcon, ZapIcon } from "lucide-react"
-import { ClientMessageType, GoalStatus } from "@shared"
+  SunIcon, CalendarClockIcon, ZapIcon, BoxIcon, EyeIcon, FileCodeIcon, MessageSquareIcon, RefreshCwIcon, SquareFunctionIcon } from "lucide-react"
+import { ClientMessageType, GoalStatus, type ContextHit } from "@shared"
 import { BotTab, View } from "@/lib/constants"
 import { VIEW_META } from "@/lib/views"
 import { send } from "@/lib/realtime/socket"
 import { useAppStore } from "@/lib/store/app-store"
 import { openSchedule, openTrigger } from "@/features/automation/lib/ui-store"
+import { contextApi } from "@/lib/api/endpoints"
+import { loadGraph, openModule, setContext, useContextStore } from "@/features/context/lib/context-store"
+import { openHit } from "@/features/context/components/context-search"
+import { startSync } from "@/features/context/lib/actions"
 import { BotAvatar } from "@/components/shared/bot-avatar"
 import { ToneDot } from "@/components/kit/badge"
 import {
@@ -33,6 +37,7 @@ const PAGES: View[] = [
   View.Team,
   View.Inbox,
   View.Work,
+  View.Context,
   View.Automation,
   View.Github,
   View.Sentry,
@@ -59,6 +64,35 @@ export function CommandPalette() {
   const bots = useAppStore((s) => s.bots)
   const goals = useAppStore((s) => s.goals)
   const { resolvedTheme, setTheme } = useTheme()
+  const ctx = useContextStore((s) => s.status)
+  const modules = useContextStore((s) => s.graph?.modules)
+  const openModuleId = useContextStore((s) => s.openModuleId)
+  const [q, setQ] = useState("")
+  const [hits, setHits] = useState<{ q: string; list: ContextHit[] }>({ q: "", list: [] })
+  const codeReady = !!ctx?.enabled && !!ctx.built
+
+  // Modules come from the map; load it the first time the palette opens.
+  useEffect(() => {
+    if (open && codeReady && !useContextStore.getState().graph) void loadGraph()
+  }, [open, codeReady])
+  // Symbols and files: the same search bots use, once the query is specific enough.
+  useEffect(() => {
+    const query = q.trim()
+    if (!open || !codeReady || query.length < 3) return
+    let live = true
+    const t = setTimeout(() => {
+      contextApi
+        .find(query, 8)
+        .then((list) => live && setHits({ q: query, list: list.filter((h) => h.kind !== "module") }))
+        .catch(() => {})
+    }, 150)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [q, open, codeReady])
+  const codeHits = hits.q === q.trim() ? hits.list : []
+  const openMod = openModuleId ? modules?.find((m) => m.id === openModuleId) : undefined
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -73,7 +107,12 @@ export function CommandPalette() {
 
   const run = (fn: () => void) => {
     setOpen(false)
+    setQ("")
     fn()
+  }
+  const showModule = (id: string) => {
+    app().setView(View.Context)
+    openModule(id)
   }
   const app = useAppStore.getState
 
@@ -86,7 +125,7 @@ export function CommandPalette() {
       className="sm:max-w-xl"
     >
       <Command>
-        <CommandInput placeholder="Search pages, bots, goals, commands…" />
+        <CommandInput value={q} onValueChange={setQ} placeholder="Search pages, bots, goals, modules, code…" />
         <CommandList className="max-h-[min(60vh,440px)]">
           <CommandEmpty>Nothing matches.</CommandEmpty>
 
@@ -171,6 +210,62 @@ export function CommandPalette() {
             </>
           )}
 
+          {codeHits.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Code">
+                {codeHits.map((h) => (
+                  <CommandItem
+                    key={`${h.path}:${h.line ?? ""}:${h.name ?? ""}`}
+                    value={`code ${q} ${h.path} ${h.name ?? ""} ${h.line ?? ""}`}
+                    onSelect={() =>
+                      run(() => {
+                        app().setView(View.Context)
+                        openHit(h)
+                      })
+                    }
+                  >
+                    {h.kind === "symbol" ? <SquareFunctionIcon className="size-4 text-muted-foreground" /> : <FileCodeIcon className="size-4 text-muted-foreground" />}
+                    <span className="truncate">{h.kind === "symbol" ? h.name : h.path}</span>
+                    <span className="ml-2 truncate font-mono text-xs text-muted-foreground">{h.kind === "symbol" ? `${h.path}:${h.line}` : h.detail}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+
+          {modules && modules.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Modules">
+                {modules.map((m) => (
+                  <CommandItem key={m.id} value={`module ${m.id} ${m.dir} ${m.purpose}`} onSelect={() => run(() => showModule(m.id))}>
+                    <BoxIcon className="size-4 text-muted-foreground" />
+                    <span className="font-mono text-xs">{m.id}</span>
+                    <span className="ml-2 truncate text-xs text-muted-foreground">{m.purpose}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+
+          {openMod && bots.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading={`Ask about ${openMod.id}`}>
+                {bots.slice(0, 8).map((b) => (
+                  <CommandItem
+                    key={b.id}
+                    value={`ask bot about this module ${openMod.id} ${b.name}`}
+                    onSelect={() => run(() => app().draftToBot(b.id, `Using context module ${openMod.id}: `))}
+                  >
+                    <MessageSquareIcon className="size-4 text-muted-foreground" /> Ask {b.name} about this module
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+
           <CommandSeparator />
           <CommandGroup heading="Commands">
             <CommandItem
@@ -202,6 +297,24 @@ export function CommandPalette() {
             >
               <ZapIcon className="size-4 text-muted-foreground" /> New trigger
             </CommandItem>
+            {codeReady && (
+              <CommandItem value="sync repo context map cards" onSelect={() => run(() => startSync({}))}>
+                <RefreshCwIcon className="size-4 text-muted-foreground" /> Sync repo context
+              </CommandItem>
+            )}
+            {codeReady && (
+              <CommandItem
+                value="what bots see repo map index context"
+                onSelect={() =>
+                  run(() => {
+                    app().setView(View.Context)
+                    setContext({ indexOpen: true })
+                  })
+                }
+              >
+                <EyeIcon className="size-4 text-muted-foreground" /> What bots see
+              </CommandItem>
+            )}
             <CommandItem
               value="integrations connections mcp github sentry"
               onSelect={() => run(() => app().showSettings("integrations"))}

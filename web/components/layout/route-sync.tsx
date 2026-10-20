@@ -5,6 +5,7 @@ import { BotTab, View } from "@/lib/constants"
 import { useAppStore } from "@/lib/store/app-store"
 import { useGithubStore } from "@/features/github/lib/github-store"
 import { setSentry, useSentryStore } from "@/features/sentry/lib/sentry-store"
+import { openModule, useContextStore } from "@/features/context/lib/context-store"
 
 /**
  * Hash routes for a static export (the session token stays in the query string):
@@ -12,6 +13,7 @@ import { setSentry, useSentryStore } from "@/features/sentry/lib/sentry-store"
  *   #/team                      #/inbox
  *   #/work/G-3/T-2              #/github/<itemId>
  *   #/sentry/<issueId>          #/browser
+ *   #/context/<moduleId>
  *   #/security?goal=G-1         #/audit
  *   #/settings/integrations
  *
@@ -53,6 +55,9 @@ export function currentHash(): string {
   } else if (a.view === View.Sentry) {
     const id = useSentryStore.getState().openIssueId
     if (id) parts.push(id)
+  } else if (a.view === View.Context) {
+    const id = useContextStore.getState().openModuleId
+    if (id) parts.push(id)
   } else if (a.view === View.Settings && a.settingsSection) {
     parts.push(a.settingsSection)
   }
@@ -79,6 +84,7 @@ function apply(route: Route) {
   }))
   if (route.view === View.Github) useGithubStore.setState({ openItemId: a ?? null })
   if (route.view === View.Sentry) setSentry({ openIssueId: a ?? null })
+  if (route.view === View.Context && (a ?? null) !== useContextStore.getState().openModuleId) openModule(a ?? null)
 }
 
 /** Mount once: reads the hash on load and on back/forward, writes it when navigation state changes. */
@@ -111,7 +117,7 @@ export function RouteSync() {
     }
     window.addEventListener("hashchange", onPop)
     window.addEventListener("popstate", onPop)
-    const unsubs = [useAppStore.subscribe(write), useGithubStore.subscribe(write), useSentryStore.subscribe(write)]
+    const unsubs = [useAppStore.subscribe(write), useGithubStore.subscribe(write), useSentryStore.subscribe(write), useContextStore.subscribe(write)]
     return () => {
       window.removeEventListener("hashchange", onPop)
       window.removeEventListener("popstate", onPop)

@@ -80,6 +80,8 @@ export interface AppState {
   settingsSection: string | null
   /** The ⌘K command palette is open. */
   paletteOpen: boolean
+  /** Text to put in a bot's chat box (e.g. "Ask a bot about this module"); `at` makes each request distinct. */
+  chatDraft: { botId: string; text: string; at: number } | null
 }
 
 /** Shared empty list so selectors and fallbacks never mint new arrays. */
@@ -121,6 +123,8 @@ export interface AppActions {
   /** Open Settings at a section (e.g. "integrations"). */
   showSettings: (section?: string | null) => void
   setPaletteOpen: (open: boolean) => void
+  /** Open a bot's chat with this text in the box, ready to finish and send. */
+  draftToBot: (botId: string, text: string) => void
 }
 
 const initialState: AppState = {
@@ -160,6 +164,7 @@ const initialState: AppState = {
   securityGoalId: null,
   settingsSection: null,
   paletteOpen: false,
+  chatDraft: null,
 }
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
@@ -182,4 +187,5 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   showSecurity: (goalId) => set({ view: View.Security, securityGoalId: goalId ?? null }),
   showSettings: (section) => set({ view: View.Settings, settingsSection: section ?? null }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  draftToBot: (botId, text) => set({ selectedBot: botId, botTab: BotTab.Chat, chatDraft: { botId, text, at: Date.now() } }),
 }))

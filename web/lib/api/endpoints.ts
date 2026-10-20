@@ -2,6 +2,7 @@ import type { AutomationRun, AutomationSnapshot, Brief, NextRun, RunnerStatus, S
 import { request } from "./client"
 import type { BotMemory, GoalTemplateList, MemoryNote, RemoteStatus } from "@shared"
 import type { GoalTimeline, Insights, InsightsPeriod } from "@shared"
+import type { ContextClaimSection, ContextFilePeek, ContextGraphView, ContextHit, ContextImpact, ContextIndexView, ContextModuleDetail, ContextStatus } from "@shared"
 
 const seg = encodeURIComponent
 
@@ -265,3 +266,21 @@ export const runnerApi = {
 
 export type ScheduleInput = Pick<Schedule, "name" | "when" | "action"> & Partial<Pick<Schedule, "enabled" | "runner" | "scope">> & { owner?: "me" }
 export type TriggerInput = Pick<Trigger, "name" | "when" | "then"> & Partial<Pick<Trigger, "enabled" | "runner" | "limits" | "scope">> & { owner?: "me" }
+
+/** Repo context: the module map bots read, its cards, and the human's feedback on them. */
+export const contextApi = {
+  status: () => request<ContextStatus>("GET", "/context/status"),
+  graph: () => request<ContextGraphView>("GET", "/context/graph"),
+  index: () => request<ContextIndexView>("GET", "/context/index"),
+  files: () => request<string[]>("GET", "/context/files"),
+  module: (id: string) => request<ContextModuleDetail>("GET", `/context/module/${seg(id)}`),
+  peek: (path: string, line?: number) => request<ContextFilePeek>("GET", `/context/file${qs({ path, line })}`),
+  peekRange: (path: string, start: number, end: number) => request<ContextFilePeek>("GET", `/context/file${qs({ path, start, end })}`),
+  find: (q: string, limit = 20) => request<ContextHit[]>("GET", `/context/find${qs({ q, limit })}`),
+  impact: (files: string[]) => request<ContextImpact>("POST", "/context/impact", { files }),
+  sync: (input: { full?: boolean; only?: string[]; cards?: boolean } = {}) => request<ContextStatus>("POST", "/context/sync", input),
+  setNotes: (id: string, text: string) => request<ContextModuleDetail>("PUT", `/context/module/${seg(id)}/notes`, { text }),
+  reject: (id: string, section: ContextClaimSection, index: number, reason: string) =>
+    request<ContextModuleDetail>("POST", `/context/module/${seg(id)}/claims/${section}/${index}/reject`, { reason }),
+  setDecisions: (id: string, decisions: string[]) => request<ContextModuleDetail>("PATCH", `/context/module/${seg(id)}/decisions`, { decisions }),
+}

@@ -43,6 +43,7 @@ import { AutomationService } from './automation/automation.service.js';
 import { backgroundStatus, clearSession, installBackground, uninstallBackground, writeSession } from './runner/background.js';
 import { composeBrief } from '../core/repositories/goal-template.repository.js';
 import { ActorType, AuditKind, StateType } from '../shared/enums.js';
+import { ContextService } from './context/context.service.js';
 
 export interface StartOptions {
   root: string;
@@ -108,8 +109,30 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   const boardChanged = () => pushBoard(project, hub);
   const uploads = new UploadStore(project.paths.uploads, project.root);
   uploads.prune();
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp });
-  const goals = new GoalRunner({ project, team, hub, notifications, boardChanged, security, uploads, ledger, audit: (e) => audit.record(e), humanName });
+  const context = new ContextService({
+    root: project.root,
+    hub,
+    settings: () => project.settings.get(),
+    record: (row) => ledger.record(row),
+    dayRemaining: () => {
+      const cap = project.settings.get().budgets.perDayUsd;
+      return cap === null ? undefined : cap - ledger.spentToday();
+    },
+  });
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context });
+  const goals = new GoalRunner({
+    project,
+    team,
+    hub,
+    notifications,
+    boardChanged,
+    security,
+    uploads,
+    ledger,
+    audit: (e) => audit.record(e),
+    humanName,
+    onDone: (goal, files) => void context.onGoalDone(goal, files),
+  });
   goals.recoverOnStartup();
   const github = new GithubProjectService(new GhCliClient(), {
     projectFile: project.paths.githubProjectFile,
@@ -257,6 +280,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     runner,
     security,
     uploads,
+    context,
     humanName,
     boardChanged,
     router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),
@@ -265,9 +289,10 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       findings.push();
       mcp.push();
       automation.push();
+      context.push();
     },
   });
-  const stopWatching = watchProject(project, hub, () => void mcp.refresh());
+  const stopWatching = watchProject(project, hub, () => void mcp.refresh(), () => context.changed());
 
   const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, port: opts.port, hostname: BIND_HOST }, () => resolve(s));
@@ -278,6 +303,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   account.start();
   mcp.start();
   automation.start();
+  context.start();
   writeSession(project.paths.sessionFile, { port: opts.port, token, url, pid: process.pid, startedAt: new Date().toISOString() });
 
   return {
@@ -287,6 +313,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
       account.stop();
       mcp.stop();
       automation.stop();
+      context.stop();
       clearSession(project.paths.sessionFile);
       remote.close();
       previews.closeAll();

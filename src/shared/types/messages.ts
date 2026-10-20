@@ -10,6 +10,7 @@ import type { Settings } from './settings.js';
 import type { SecurityFinding } from './security.js';
 import type { McpSnapshot } from './mcp.js';
 import type { AutomationSnapshot } from './automation.js';
+import type { ContextStatus } from './context.js';
 import type { AccountUsage, UsageSummary } from './usage.js';
 
 export type StatusMap = Record<string, { status: BotStatus; activity?: string }>;
@@ -24,7 +25,8 @@ export type StateEvent =
   | { type: typeof StateType.Findings; findings: SecurityFinding[] }
   | { type: typeof StateType.Config; config: Config }
   | { type: typeof StateType.Mcp; mcp: McpSnapshot }
-  | { type: typeof StateType.Automation; automation: AutomationSnapshot };
+  | { type: typeof StateType.Automation; automation: AutomationSnapshot }
+  | { type: typeof StateType.Context; context: ContextStatus };
 
 export interface HelloMessage {
   kind: typeof ServerMessageKind.Hello;

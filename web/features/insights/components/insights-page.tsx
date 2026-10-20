@@ -225,7 +225,7 @@ function PerBot({ rows }: { rows: Insights["perBot"] }) {
                 <td className="px-4 py-2.5">
                   <span className="flex items-center gap-2">
                     {bot ? <BotAvatar bot={bot} className="size-6 rounded-md text-xs" /> : null}
-                    <span className="truncate">{bot?.name ?? r.botId}</span>
+                    <span className="truncate">{bot?.name ?? (r.botId === "context" ? "Repo context" : r.botId)}</span>
                   </span>
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.runs}</td>

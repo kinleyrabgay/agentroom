@@ -17,6 +17,7 @@ import { GeneralSection } from "./general-section"
 import { BudgetsSection } from "./budgets-section"
 import { IntegrationsSection } from "./integrations-section"
 import { SecuritySection } from "./security-section"
+import { ContextSection } from "./context-section"
 
 /** Settings: sticky section nav and one document column. Follows `#/settings/<section>`. */
 export function SettingsPage() {
@@ -83,6 +84,7 @@ export function SettingsPage() {
               <GeneralSection />
               <BudgetsSection />
               <SecuritySection />
+              <ContextSection />
               <AlertsSection />
               <RemoteSection />
               <RunnerSection />

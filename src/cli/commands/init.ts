@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { PROJECT_DIR } from '../../shared/constants.js';
 import { currentProject } from '../context.js';
+import { buildContextGraph } from './context.js';
 
 export function registerInit(program: Command) {
   program
@@ -22,6 +23,13 @@ export function registerInit(program: Command) {
           ? '\nPrivate: nothing here is committed. Run `agentroom share` to share bots, skills and settings with your team.'
           : `\nShared: commit ${PROJECT_DIR}/ so your team gets the same bots, skills and settings (runs/ stays local).`,
       );
+      try {
+        const r = buildContextGraph(project);
+        console.log(`\n✔ Repo map: ${r.files} files in ${r.modules} modules (INDEX.md ≈ ${r.tokens} tokens)`);
+        console.log('  Module cards make bots faster and cheaper: agentroom context build (about two cents per module)');
+      } catch (err) {
+        console.log(`\n• Couldn't index the repo yet: ${(err as Error).message}`);
+      }
       console.log('\nNext: agentroom start');
     });
 

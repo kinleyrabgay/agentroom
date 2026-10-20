@@ -13,6 +13,8 @@ import { browserTools } from './browser.tools.js';
 import { delegateTool, type Delegate } from './delegate.tool.js';
 import { humanTools } from './human.tools.js';
 import { memoryTools } from './memory.tools.js';
+import { contextTools } from './context.tools.js';
+import type { ContextReader } from '../../../core/context/index.js';
 import type { MemoryRepository } from '../../../core/repositories/memory.repository.js';
 import { planningTools, taskTools } from './task.tools.js';
 
@@ -31,6 +33,8 @@ export interface HostToolDeps {
   security?: SecurityService;
   /** Bot memory: lets the bot suggest notes (`memory_note`). */
   memory?: MemoryRepository;
+  /** Repo context (read-only map); absent when context is off. */
+  context?: ContextReader;
 }
 
 /**
@@ -47,6 +51,7 @@ export function buildHostTools(bot: Bot, team: Bot[], deps: HostToolDeps, signal
   };
   const tools = [...taskTools(board, bot.id), ...humanTools(bot, deps, signal)];
   if (deps.memory) tools.push(...memoryTools(bot, deps.memory, deps.notifications));
+  if (deps.context) tools.push(...contextTools(deps.context));
   if (isPlannerRole(bot)) tools.push(...planningTools(board, bot.id));
   if (bot.tools.includes(ToolName.Browser)) {
     const guard = deps.security

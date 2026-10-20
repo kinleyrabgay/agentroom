@@ -9,7 +9,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.0.3] - 2026-10-20
 
-A clear sharing model: the team shares the setup, everyone keeps their own work.
+A repo context map that bots read first, and a clear sharing model: the team shares the setup, everyone keeps their own work.
+
+### Added — Repo context map
+
+- Fact graph built by code (no AI) for TS/JS, Python, Go, Rust, Java/Kotlin, Dart, Ruby, PHP, Swift and C#: files, exports and signatures, resolved imports (incl. tsconfig paths and workspaces), routes and tests. Grouped into modules with stable ids. Full build well under a second; incremental after that.
+- Module cards written by Haiku (~2¢ each): purpose, entry points, invariants, gotchas, how to change. Every claim cites `file:line`; claims citing missing code are dropped.
+- `INDEX.md` (~1.5k tokens) goes early in every bot's prompt so it stays cached, plus read-only tools `context_overview`, `context_module`, `context_find`, `context_deps` and `context_impact`.
+- Stale cards are served with a warning naming the changed files. After a goal finishes, touched modules get a decision line and a debounced sync runs; only cards whose public surface or much of their code changed are rewritten.
+- Context page: module map with fresh / stale / no-card status, card inspector with citations and code peek, **Wrong?** to reject a claim (the next rewrite won't repeat it), **Rules bots must follow here** notes, editable decisions, **Impact** mode, **What bots see**, code search, ⌘K entries and "Ask a bot about this module".
+- `agentroom context build|sync|status|export`; `init` builds the facts. `export` writes a marked block into CLAUDE.md / AGENTS.md.
+- Settings → Context (on/off, auto-sync, card model, max cards per sync). Card costs appear in the ledger as "Repo context" and respect the daily budget.
+- `.agentroom/context/` is committed and shared; the fact graph is a local cache in `runs/`. `.env`, keys and credential files are never indexed.
 
 ### Changed
 
@@ -17,7 +28,7 @@ A clear sharing model: the team shares the setup, everyone keeps their own work.
 - New schedules and triggers are personal (`.agentroom/runs/`) by default. **Team** items are committed with an owner and only run on the owner's machine, so they never run once per teammate. 0.0.2 team items without an owner are adopted by the first person who opens them; teammates can **Run it here instead** to take one over.
 - Settings and config changes can be saved for **Team** or **Just me**. Personal overrides go to `runs/settings.local.json` / `runs/config.local.json` and show a **Just for you · Reset** badge. Port and permission-mode changes from the UI are personal by default.
 
-### Added
+### Added — Sharing
 
 - `agentroom init --private` (and `start --private`) keeps `.agentroom/` out of git for just you via `.git/info/exclude`; `agentroom share` switches back. `doctor` and Settings → Data show the mode.
 - Unknown `/api/*` routes now return a JSON 404 instead of the web page.

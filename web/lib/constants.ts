@@ -10,6 +10,8 @@ export const View = {
   Inbox: "inbox",
   /** Goals and their tasks (was "Tasks"). */
   Work: "work",
+  /** The repo map bots read: modules, cards and dependencies. */
+  Context: "context",
   /** Schedules and triggers that run the team without the human. */
   Automation: "automation",
   /** The GitHub Project board (was "Board"). */

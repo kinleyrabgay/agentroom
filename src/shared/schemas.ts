@@ -229,6 +229,18 @@ export const SettingsSchema = z.object({
       channels: z.array(z.enum(['slack', 'teams'])).default(['slack']),
     })
     .prefault({}),
+  /** Repo context: the module map and cards bots read instead of exploring. */
+  context: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Update the map and rewrite out-of-date cards after a goal finishes. */
+      autoSync: z.boolean().default(true),
+      /** Model that writes module cards. */
+      cardModel: z.string().min(1).default('claude-haiku-4-5-20251001'),
+      /** Cards written per sync at most (cost control). */
+      maxCardsPerSync: z.number().int().min(1).max(500).default(12),
+    })
+    .prefault({}),
 });
 
 /** MCP server names become tool prefixes (`mcp__<name>__…`), so keep them simple. */

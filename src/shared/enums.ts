@@ -261,6 +261,12 @@ export const HostTool = {
   Delegate: 'delegate',
   /** Suggest a note for the bot's memory (the human keeps or ignores it). */
   MemoryNote: 'memory_note',
+  /** Repo context (read-only map of modules, cards and dependencies). */
+  ContextOverview: 'context_overview',
+  ContextModule: 'context_module',
+  ContextFind: 'context_find',
+  ContextDeps: 'context_deps',
+  ContextImpact: 'context_impact',
   BrowserOpen: 'browser_open',
   BrowserSnapshot: 'browser_snapshot',
   BrowserClick: 'browser_click',
@@ -350,6 +356,8 @@ export const StateType = {
   Config: 'config',
   Mcp: 'mcp',
   Automation: 'automation',
+  /** Repo context status (sync progress, card counts). */
+  Context: 'context',
 } as const;
 export type StateType = ValueOf<typeof StateType>;
 

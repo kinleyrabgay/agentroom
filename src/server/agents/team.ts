@@ -14,6 +14,7 @@ import { expandSkillCommands } from './skill-commands.js';
 import type { SecurityService } from '../security/security.service.js';
 import { toAttachment, type ResolvedAttachment, type UploadStore } from '../services/upload.store.js';
 import type { McpService } from '../services/mcp/mcp.service.js';
+import type { ContextService } from '../context/context.service.js';
 
 export interface TeamDeps {
   project: Project;
@@ -33,6 +34,8 @@ export interface TeamDeps {
   uploads?: UploadStore;
   /** External MCP servers (Sentry, …) added in AgentRoom. */
   mcp?: McpService;
+  /** Repo context: the map in every bot's instructions and the context_* tools. */
+  context?: ContextService;
 }
 
 /**
@@ -104,6 +107,7 @@ export class Team {
 
   private async run(bot: Bot, text: string, from: string, opts: DispatchOptions, attachments: ResolvedAttachment[]): Promise<RunOutcome> {
     const { project, hub, provider, permissions, sessions, previews } = this.deps;
+    const repoMap = this.deps.context?.promptBlock() ?? '';
     const team = project.bots.list();
     // Chats outside goals obey the daily cap (goal runs are checked by the goal engine).
     const dayLeft = opts.goalId ? undefined : this.dayRemaining();
@@ -148,7 +152,7 @@ export class Team {
         model,
         effort,
         skills: { libraryPluginDir: project.paths.dir, botPluginDir: project.paths.botDir(bot.dir) },
-        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot)),
+        context: buildContext(bot, team, project.paths.claudeMd, this.deps.mcp?.describeFor(bot), project.memory.contextBlock(bot), repoMap),
         mcpServers: this.deps.mcp?.forBot(bot),
         resumeSessionId: sessions.get(bot.id),
         hostTools: buildHostTools(bot, team, {
@@ -161,6 +165,7 @@ export class Team {
           goalId: opts.goalId,
           security: this.deps.security,
           memory: project.memory,
+          ...(repoMap && this.deps.context ? { context: this.deps.context.reader } : {}),
           delegate: (to, instruction) => {
             hub.emit({ type: AgentEventType.Delegation, from: bot.id, to, instruction });
             // The delegate works for the same goal, but its own phase/task isn't implied.

@@ -22,6 +22,13 @@ const DEFAULT_FILES_PROMPT = "(see attachments)"
 
 export function Composer({ bot }: { bot: Bot }) {
   const [text, setText] = useState("")
+  // A draft handed over from elsewhere ("Ask a bot about this module") fills the box once.
+  const draft = useAppStore((s) => (s.chatDraft?.botId === bot.id ? s.chatDraft : null))
+  const [draftSeen, setDraftSeen] = useState(0)
+  if (draft && draft.at !== draftSeen) {
+    setDraftSeen(draft.at)
+    setText(draft.text)
+  }
   const picked = useAppStore((s) => s.attachments[bot.id]) ?? []
   const library = useAppStore((s) => s.skills)
   const files = useAttachments()

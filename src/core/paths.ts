@@ -72,6 +72,8 @@ export class ProjectPaths {
   get sessionFile() { return path.join(this.runs, 'session.json'); }
   /** Background-mode server output. */
   get daemonLog() { return path.join(this.runs, 'daemon.log'); }
+  /** Repo context: INDEX.md and module cards (committed). The fact graph lives in runs/context/. */
+  get contextDir() { return path.join(this.dir, 'context'); }
   get gitignore() { return path.join(this.root, '.gitignore'); }
   get claudeMd() { return path.join(this.root, 'CLAUDE.md'); }
 

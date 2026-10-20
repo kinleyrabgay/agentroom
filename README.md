@@ -46,6 +46,7 @@ and schedule work for later: wake up to a reviewed branch and a PR, not surprise
   - [Team of bots](#team-of-bots)
   - [Goals: plan → review → build → security → test → report](#goals-plan--review--build--security--test--report)
   - [Task board](#task-board)
+  - [Repo context map](#repo-context-map)
   - [Security review and scanning](#security-review-and-scanning)
   - [Prompt-injection guard](#prompt-injection-guard)
   - [Attachments](#attachments)
@@ -216,6 +217,23 @@ stateDiagram-v2
 | `done` / `failed` / `cancelled` | Final states. |
 
 After **2 fix rounds** with QA still failing, the runner stops and asks you to review the bug tasks.
+
+### Repo context map
+
+Bots stop re-exploring your repo on every task. AgentRoom keeps a map of the codebase that bots read first, and keeps it in sync after each goal.
+
+| Layer | Made by | What it holds |
+|---|---|---|
+| **Facts** | Code, no AI (TS/JS, Python, Go, Rust, Java/Kotlin, Dart, Ruby, PHP, Swift, C#) | Files, exports and signatures, imports, routes, tests per source file |
+| **Modules** | Folder and package boundaries, stable ids | Groups of files and who imports whom |
+| **Cards** | Haiku, once per module (~2¢) | Purpose, entry points, invariants, gotchas, how to change it; every claim cites `file:line` and is checked |
+
+- **What bots get:** `INDEX.md` (about 1.5k tokens, one line per module) in their prompt, plus read-only tools `context_overview`, `context_module`, `context_find`, `context_deps` and `context_impact`. They read the real file before editing.
+- **Always honest:** a card whose files changed is served with `⚠ stale since <sha>: changed …`, never silently. Claims citing code that doesn't exist are dropped.
+- **Stays fresh:** after a goal finishes, the touched modules get a decision line and a sync runs. Only changed files are re-read, and a card is rewritten only when the module's public surface changed or much of its code did.
+- **Context page:** the module map with fresh / stale / no-card status, card inspector with clickable citations and a code peek, **Wrong?** on any claim (the rewrite won't repeat it), **Rules bots must follow here** notes that are never overwritten, an editable decision log, **Impact** mode (pick files → affected modules and tests to run), **What bots see** and code search (`/`).
+- **Shared with the team:** `.agentroom/context/INDEX.md` and `modules/*.md` are committed, so one person pays for the cards and everyone's bots use them. The fact graph is a local cache in `runs/` rebuilt in under a second.
+- **Settings → Context:** on/off, auto-sync after goals, card model, max cards per sync. Card costs show in the ledger as "Repo context" and count against the daily budget. `.env`, keys and credential files are never indexed.
 
 ### Task board
 
@@ -548,6 +566,20 @@ Names must match `^[a-z0-9][a-z0-9-]*$`.
 </details>
 
 <details>
+<summary><b><code>agentroom context</code></b>: the repo context map</summary>
+
+```bash
+agentroom context build            # facts + module cards (--no-cards: facts only, --only <id>: one module)
+agentroom context sync             # update since the last sync; rewrite only cards that need it
+agentroom context status           # modules, fresh / stale / missing cards, index size
+agentroom context export           # copy INDEX.md into a marked block in CLAUDE.md / AGENTS.md
+```
+
+`init` builds the facts automatically; cards are opt-in because they cost a little (about 2¢ each).
+
+</details>
+
+<details open>
 <summary><b><code>agentroom doctor</code></b>: check the environment</summary>
 
 Checks Node version (≥ 20), `git`, `git config user.email`, that you're in a git repo, `gh auth status`, the `claude` CLI, `ANTHROPIC_API_KEY`, and whether `.agentroom/` exists.
@@ -590,11 +622,15 @@ your-project/
     ├── schedules.json                # team schedules (each runs on its owner's machine)
     ├── triggers.json                 # team "when … then …" automation
     ├── goal-templates/*.md           # New goal templates (fields + planner guidance)
+    ├── context/
+    │   ├── INDEX.md                  # repo map bots read first (~1.5k tokens)
+    │   └── modules/<id>.md           # module cards, your notes and decisions
     └── runs/                         # gitignored, yours only:
         ├── board.json                #   goals + tasks
         ├── schedules.json, triggers.json  # personal automation
         ├── settings.local.json       #   your settings overrides
         ├── config.local.json         #   your port / model / permission mode
+        ├── context/graph.json        #   fact graph cache
         └── …                         #   events, sessions, ledger, audit, findings, uploads, secrets
 ```
 
@@ -602,7 +638,7 @@ your-project/
 
 | Shared (committed) | Yours (`runs/`, never committed) |
 |---|---|
-| Bots, skills, goal templates, bot memory | Goals and tasks |
+| Bots, skills, goal templates, bot memory, context map and cards | Goals and tasks |
 | `settings.json`, `config.json` (team defaults) | Personal overrides: `settings.local.json`, `config.local.json` |
 | `mcp.json`, `sentry.json`, `github/project.json` | Your own MCP servers, secrets and tokens |
 | Team schedules and triggers (run on the owner's machine) | Personal schedules and triggers |
@@ -771,6 +807,7 @@ The `description` tells the model when to use the skill. Keep it specific. Extra
 | `security_finding` | Security reviewers | No | Record a security finding on the goal under review |
 | `delegate` | Bots with reports | No | Send work to a report and wait for the result |
 | `ask_human` | All bots | No | Ask you a question and wait for the answer |
+| `context_overview`, `context_module`, `context_find`, `context_deps`, `context_impact` | All bots | No | Read the repo context map: modules, cards, code search, what uses what, impact of a change |
 | `notify_human` | All bots | No | Send you an inbox notification |
 | `browser_open` | `Browser` | No | Open a URL in the preview |
 | `browser_snapshot` | `Browser` | No | The page as text with `[ref=…]` handles |
@@ -1078,6 +1115,7 @@ Goal: people can comfortably let their bots work unattended. Security comes firs
 - [x] **P2 Review & isolation:** PR-style diffs with inline comments, worktrees, open PR
 - [x] **P3 Control:** budgets, replay, goal templates, bot memory
 - [x] **P4 Automation:** schedules, triggers, background mode, morning brief and digest, insights, remote approvals
+- [x] **Context:** repo context map, module cards, impact analysis
 - [ ] Cloud runner for schedules and triggers
 - [ ] PR review from a link
 

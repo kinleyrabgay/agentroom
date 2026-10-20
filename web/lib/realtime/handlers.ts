@@ -15,6 +15,7 @@ import { getBridgeDispatcher } from "./bridge-dispatch"
 import { emitNotification } from "./notification-bus"
 import { send } from "./socket"
 import { normalizeGoals, normalizeTasks } from "./normalize"
+import { applyContextStatus } from "@/features/context/lib/context-store"
 
 const set = useAppStore.setState
 
@@ -113,6 +114,8 @@ function applyState(ev: StateEvent) {
       return setFindings(ev.findings)
     case StateType.Automation:
       return set({ automation: ev.automation })
+    case StateType.Context:
+      return applyContextStatus(ev.context)
     case StateType.Mcp:
       return set({ mcp: ev.mcp })
     case StateType.Config:

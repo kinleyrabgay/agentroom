@@ -22,12 +22,14 @@ import { SecurityPage } from "@/features/security/components/security-page"
 import { InboxPage } from "@/features/inbox/components/inbox-page"
 import { ConnectionsPage } from "@/features/connections/components/connections-page"
 import { SettingsPage } from "@/features/settings/components/settings-page"
+import { ContextPage } from "@/features/context/components/context-page"
 import { useInspectorDetail } from "./inspector-details"
 
 const VIEWS: Record<View, React.ComponentType> = {
   [View.Team]: TeamCanvas,
   [View.Inbox]: InboxPage,
   [View.Work]: TaskBoard,
+  [View.Context]: ContextPage,
   [View.Automation]: AutomationPage,
   [View.Github]: GithubBoard,
   [View.Sentry]: SentryPage,

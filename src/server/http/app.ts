@@ -40,6 +40,8 @@ import type { RemoteService } from '../remote/remote.service.js';
 import type { AutomationService } from '../automation/automation.service.js';
 import { automationRoutes, type RunnerControls } from './routes/automation.routes.js';
 import { goalTemplateRoutes } from './routes/goal-templates.routes.js';
+import { contextRoutes } from './routes/context.routes.js';
+import type { ContextService } from '../context/context.service.js';
 import type { SentryService } from '../integrations/sentry/sentry.service.js';
 import type { HandoffResult, SentryHandoffInput } from '../../shared/types/index.js';
 
@@ -68,6 +70,8 @@ export interface AppDeps {
   runner?: RunnerControls;
   security: SecurityService;
   uploads: UploadStore;
+  /** Repo context (module map, cards). */
+  context?: ContextService;
   /** "Name <email>" of the human using the UI. */
   humanName: () => string;
   /** Push the board to the UI right after a REST write. */
@@ -117,6 +121,7 @@ export function createApp(deps: AppDeps) {
   githubRoutes(api, deps.github, deps.handoff, deps.project.root, deps.humanAudit);
   securityRoutes(api, deps.security, deps.goals, deps.humanName);
   uploadRoutes(api, deps.uploads);
+  if (deps.context) contextRoutes(api, deps.context, deps.humanAudit);
   // Unknown API paths get a JSON 404 (never the web page), so clients can tell "not supported" apart.
   api.all('*', (c) => c.json({ error: `Unknown API route: ${c.req.method} ${new URL(c.req.url).pathname}` }, 404));
   app.route(API_PREFIX, api);

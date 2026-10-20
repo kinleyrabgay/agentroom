@@ -10,8 +10,14 @@ const BROWSER_GUIDE =
   'Use browser_snapshot to read the page; act on elements by their [ref=…]. Refs go stale after the page changes, so re-snapshot. ' +
   'Use browser_console to check errors and failed requests. Never enter passwords or payment details; ask the human to do that in the browser view.';
 
+const REPO_MAP_RULES = [
+  `Use ${HostTool.ContextFind}, ${HostTool.ContextModule}, ${HostTool.ContextDeps} and ${HostTool.ContextImpact} before broad grep/ls exploration.`,
+  'Cards are a map, not the territory: Read the real file before you edit it.',
+  'If a card says ⚠ stale, verify it against the code.',
+].join(' ');
+
 /** The system-prompt addendum every bot gets: who it is on the team, what AgentRoom tools mean, project instructions. */
-export function buildContext(bot: Bot, team: Bot[], claudeMdPath: string, mcpServers: string[] = [], memory = ''): string {
+export function buildContext(bot: Bot, team: Bot[], claudeMdPath: string, mcpServers: string[] = [], memory = '', repoMap = ''): string {
   const roster = team.map((b) => `- ${b.id}: ${b.name} (${b.role})${b.id === bot.id ? ' ← you' : ''}`).join('\n');
   const reports = team.filter((b) => b.reportsTo === bot.id);
   const parts = [
@@ -20,6 +26,8 @@ export function buildContext(bot: Bot, team: Bot[], claudeMdPath: string, mcpSer
     `Task board tools: ${HostTool.TaskList}, ${HostTool.TaskGet}, ${HostTool.TaskCreate}, ${HostTool.TaskUpdate}. Keep task status accurate (todo → doing → review → done), log progress with appendLog and tick acceptance criteria as you meet them.`,
     `Reach the human with ${HostTool.NotifyHuman} (no reply needed) or ${HostTool.AskHuman} (waits for their answer — use it when blocked instead of guessing).`,
     UNTRUSTED_RULE,
+    // Stable across runs (changes only when the map does), so it stays in the cached prompt prefix.
+    repoMap ? `## Repository map\n${REPO_MAP_RULES}\n\n${repoMap}` : '',
     bot.tools.includes(ToolName.Browser) ? BROWSER_GUIDE : '',
     reports.length ? `You can hand work to your reports with the \`${HostTool.Delegate}\` tool: ${reports.map((b) => b.id).join(', ')}.` : '',
     mcpServers.length

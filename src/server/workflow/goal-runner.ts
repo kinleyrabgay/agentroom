@@ -39,6 +39,8 @@ export interface GoalRunnerDeps {
   uploads?: UploadStore;
   /** Run ledger: spend per goal and per day (budgets). */
   ledger?: LedgerService;
+  /** A goal finished, with the files it changed (repo context notes and re-syncs). */
+  onDone?: (goal: Goal, files: string[]) => void;
 }
 
 /** Pause reasons set by the budget gate start with this, so the UI can offer "Add budget and resume". */
@@ -393,6 +395,12 @@ export class GoalRunner {
       botId: roles.lead.id,
     });
     this.leadStatus(BotStatus.Idle);
+    if (this.deps.onDone) {
+      const done = this.require(goal.id);
+      void this.changes(goal.id)
+        .then((c) => this.deps.onDone!(done, c.files.map((f) => f.path)))
+        .catch(() => this.deps.onDone!(done, []));
+    }
   }
 
   // ---------- security ----------

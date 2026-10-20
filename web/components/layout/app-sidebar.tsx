@@ -1,6 +1,7 @@
 "use client"
 
 import { useTheme } from "next-themes"
+import { useContextStore } from "@/features/context/lib/context-store"
 import { useSentryStore } from "@/features/sentry/lib/sentry-store"
 import { GitBranchIcon, GlobeIcon, MoonIcon, SearchIcon, SunIcon } from "lucide-react"
 import { APP_NAME, BotStatus, TaskStatus } from "@shared"
@@ -114,10 +115,12 @@ function PrimaryNav() {
   const needs = useNeedsYou()
   const openTasks = useAppStore((s) => s.tasks.filter((t) => t.status !== TaskStatus.Done).length)
   const failedRuns = useAppStore((s) => s.automation?.failedSinceSeen ?? 0)
+  const staleCards = useContextStore((s) => (s.status?.enabled ? s.status.cards.stale : 0))
   const items: NavItem[] = [
     { view: View.Team, badge: 0 },
     { view: View.Inbox, badge: needs.total, tone: "warning", badgeLabel: `${needs.total} waiting on you` },
     { view: View.Work, badge: openTasks, badgeLabel: `${openTasks} open tasks`, alert: needs.plans > 0 && "a plan needs your review" },
+    { view: View.Context, badge: 0, alert: staleCards > 0 && `${staleCards} module ${staleCards === 1 ? "card is" : "cards are"} out of date` },
     { view: View.Automation, badge: failedRuns, tone: "danger", badgeLabel: `${failedRuns} automation ${failedRuns === 1 ? "run" : "runs"} failed` },
   ]
   return (

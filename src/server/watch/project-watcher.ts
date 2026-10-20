@@ -24,11 +24,19 @@ export function pushBoard(project: Project, hub: Hub) {
 }
 
 /** Re-push state whenever anything under `.agentroom/` (except runs/) changes: UI edits, hand edits, git checkouts. */
-export function watchProject(project: Project, hub: Hub, onMcpChange?: () => void): () => Promise<void> {
+export function watchProject(project: Project, hub: Hub, onMcpChange?: () => void, onContextChange?: () => void): () => Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const runs = project.paths.runs;
+  const contextDir = project.paths.contextDir;
   let mcpTimer: NodeJS.Timeout | undefined;
+  let contextTimer: NodeJS.Timeout | undefined;
   const watcher = watch(project.paths.dir, { ignoreInitial: true, ignored: (p) => p.startsWith(runs) }).on('all', (_event, file) => {
+    // Repo context (INDEX.md, cards) only changes the context status, not the rest of the project.
+    if (file.startsWith(contextDir)) {
+      clearTimeout(contextTimer);
+      if (onContextChange) contextTimer = setTimeout(onContextChange, WATCH_DEBOUNCE_MS);
+      return;
+    }
     if (onMcpChange && file === project.paths.mcpFile) {
       clearTimeout(mcpTimer);
       mcpTimer = setTimeout(onMcpChange, WATCH_DEBOUNCE_MS);
@@ -38,6 +46,7 @@ export function watchProject(project: Project, hub: Hub, onMcpChange?: () => voi
   });
   return async () => {
     clearTimeout(timer);
+    clearTimeout(contextTimer);
     await watcher.close();
   };
 }
