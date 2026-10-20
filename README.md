@@ -1119,7 +1119,7 @@ Goal: people can comfortably let their bots work unattended. Security comes firs
 - [ ] Cloud runner for schedules and triggers
 - [ ] PR review from a link
 
-Details: [docs/roadmap.md](docs/roadmap.md).
+Details: [docs/roadmap.md](docs/roadmap.md). Next: [docs/platform-plan.md](docs/platform-plan.md) — Slack/Linear intake, proof of work in PRs, team packs and a skill registry, multi-provider, cloud runner.
 
 ---
 

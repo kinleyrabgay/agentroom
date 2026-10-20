@@ -1,5 +1,7 @@
 # AgentRoom roadmap: trust, control and daily use
 
+> What comes after P4: see the [platform plan](platform-plan.md) (intake, proof, knowledge, team, engine, cloud).
+
 Goal: people can comfortably let their bots work unattended. Security comes first.
 
 ## Where things live (information architecture)
