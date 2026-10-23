@@ -44,15 +44,36 @@ and schedule work for later: wake up to a reviewed branch and a PR, not surprise
   - [First run](#first-run)
 - [Features](#-features)
   - [Team of bots](#team-of-bots)
-  - [Goals: plan → review → build → security → test → report](#goals-plan--review--build--security--test--report)
-  - [Task board](#task-board)
+  - [Queue, steering and usage limits](#queue-steering-and-usage-limits)
+  - [Goals: plan → review → build → security → test → verify → report](#goals-plan--review--build--security--test--verify--report)
   - [Repo context map](#repo-context-map)
+  - [Ask the codebase, docs and tour](#ask-the-codebase-docs-and-tour)
+  - [Task board](#task-board)
   - [Security review and scanning](#security-review-and-scanning)
   - [Prompt-injection guard](#prompt-injection-guard)
   - [Attachments](#attachments)
   - [Skills](#skills)
   - [In-app browser](#in-app-browser)
   - [GitHub board](#github-board)
+  - [Sentry](#sentry)
+  - [MCP servers (Connections)](#mcp-servers-connections)
+  - [Proof of work and quality gates](#proof-of-work-and-quality-gates)
+  - [Intake: Teams, Linear, Jira and PR review](#intake-teams-linear-jira-and-pr-review)
+  - [Team packs and skill registry](#team-packs-and-skill-registry)
+  - [Parallel builders](#parallel-builders)
+  - [Appearance](#appearance)
+  - [Branches, diff review and PRs](#branches-diff-review-and-prs)
+  - [Budgets](#budgets)
+  - [Automation: schedules and triggers](#automation-schedules-and-triggers)
+  - [Morning brief and digest](#morning-brief-and-digest)
+  - [Bot memory](#bot-memory)
+  - [Goal templates](#goal-templates)
+  - [Shared team room](#shared-team-room)
+  - [Sentry autopilot and design match](#sentry-autopilot-and-design-match)
+  - [Providers and the learning loop](#providers-and-the-learning-loop)
+  - [Multi-repo workspaces](#multi-repo-workspaces)
+  - [Approve from your phone](#approve-from-your-phone)
+  - [Replay and Insights](#replay-and-insights)
   - [Approvals and permission modes](#approvals-and-permission-modes)
   - [Inbox and desktop alerts](#inbox-and-desktop-alerts)
   - [Usage, ledger and audit log](#usage-ledger-and-audit-log)
@@ -178,9 +199,17 @@ The URL printed on start contains the session token (`?t=…`). If the browser d
 
 </details>
 
-### Goals: plan → review → build → security → test → report
+### Queue, steering and usage limits
 
-A **goal** is a piece of work you hand to the team. The goal runner drives it through a fixed lifecycle: **plan → review → build → security → test → report**.
+- **Queue:** send while a bot is busy and the message waits above the composer, then goes out when the run ends cleanly. Edit, reorder, remove or **Send now**. After a failed or stopped run, a usage limit or a restart the queue pauses and says why; **Resume** continues. Kept in `runs/queue.json`.
+- **Steer:** <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Enter</kbd> while a bot works writes the message into its running turn without stopping it (Claude). A steer the run never takes goes back to the front of the queue.
+- **Usage limit:** when the plan limit is hit, the queue holds until the reset time. Turn on **Resume at reset** to continue automatically, or **Continue now**.
+- **Approval bar** above the composer, with **Approve all** when several requests wait.
+- **Find in thread:** <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>F</kbd>. Each turn's work folds behind "Worked for …"; files a run changed are listed under its reply with diffs. Type `@` to mention a repo file.
+
+### Goals: plan → review → build → security → test → verify → report
+
+A **goal** is a piece of work you hand to the team. The goal runner drives it through a fixed lifecycle: **plan → review → build → security → test → verify → report**.
 
 ```mermaid
 stateDiagram-v2
@@ -193,7 +222,11 @@ stateDiagram-v2
     securing --> building: must-fix findings become bug tasks
     securing --> testing: clean, or high risk approved by you
     testing --> building: QA files bug tasks (max 2 fix rounds)
-    testing --> reporting: QA passes
+    testing --> verifying: QA passes, proof on and a web app found
+    testing --> reporting: QA passes (no app to record)
+    verifying --> building: a scenario fails (bug task)
+    verifying --> paused: quality gate
+    verifying --> reporting: recorded and checked
     reporting --> done: Team Lead writes summary
     building --> paused: blocked / question / you pause
     testing --> paused
@@ -209,9 +242,10 @@ stateDiagram-v2
 |---|---|
 | `planning` | The Planner explores the repo and writes a plan plus ordered tasks with acceptance criteria. |
 | `awaiting_approval` | Nothing runs until you **approve**, or **replan** with feedback. |
-| `building` | The Developer works through `dev` and `bug` tasks in order, committing on the goal's branch (`agentroom/<goal-id>`). Bots never push. |
+| `building` | The Developer works through `dev` and `bug` tasks in order (side by side with [parallel builders](#parallel-builders)), committing on the goal's branch (`agentroom/<goal-id>`). Bots never push. |
 | `securing` | The Security Auditor reviews the diff and the automated findings, records real issues with `security_finding`, and turns must-fix ones into `bug` tasks. |
 | `testing` | QA verifies acceptance criteria. Failures become `bug` tasks and go back to the Developer. |
+| `verifying` | The app is started from the goal's folder and QA's scenario is recorded in headless Chrome, with quality checks. See [Proof of work](#proof-of-work-and-quality-gates). |
 | `reporting` | The Team Lead writes a summary of what changed and how it was verified. |
 | `paused` | A bot is blocked or asked a question, or you paused it. |
 | `done` / `failed` / `cancelled` | Final states. |
@@ -234,6 +268,14 @@ Bots stop re-exploring your repo on every task. AgentRoom keeps a map of the cod
 - **Context page:** the module map with fresh / stale / no-card status, card inspector with clickable citations and a code peek, **Wrong?** on any claim (the rewrite won't repeat it), **Rules bots must follow here** notes that are never overwritten, an editable decision log, **Impact** mode (pick files → affected modules and tests to run), **What bots see** and code search (`/`).
 - **Shared with the team:** `.agentroom/context/INDEX.md` and `modules/*.md` are committed, so one person pays for the cards and everyone's bots use them. The fact graph is a local cache in `runs/` rebuilt in under a second.
 - **Settings → Context:** on/off, auto-sync after goals, card model, max cards per sync. Card costs show in the ledger as "Repo context" and count against the daily budget. `.env`, keys and credential files are never indexed.
+
+### Ask the codebase, docs and tour
+
+Built on the context map ([spec](docs/specs/knowledge.md)):
+
+- **Ask:** a read-only bot answers questions about the code from the map, with citations checked against the code. It says when it's unsure, records the cost in the ledger, and an answer can be pinned to a module or turned into a goal. Context page → Ask, or ⌘K.
+- **Docs:** generates `docs/architecture.md` (overview, Mermaid diagram, modules, key flows) and `docs/decisions.md`. You see a diff first; sections are written only when you click.
+- **Tour:** an onboarding walk from entry points to core to features, with key files, questions to try, and progress per person.
 
 ### Task board
 
@@ -400,6 +442,38 @@ Full spec: [docs/specs/github-board.md](docs/specs/github-board.md).
 - **Bots** can be all bots or specific ones. **Team** servers live in `.agentroom/mcp.json` (committed, with `${secret:NAME}` references only); **Personal** servers live in `runs/mcp.local.json`.
 - **Approvals:** tools the server marks read-only run without asking under `ask-writes`. Everything else asks first, and "Always allow" covers that whole server. Every call is written to the audit log (kind `mcp`), and results are checked for prompt injection.
 
+### Proof of work and quality gates
+
+After QA passes, the **Verify** phase records the feature working ([spec](docs/specs/proof.md)):
+
+- QA writes a short browser scenario once (`goto`, `click`, `fill`, `expect`, `screenshot`…). AgentRoom starts the app from the goal's folder on a free port, runs the scenario in headless Chrome (your installed Chrome via `playwright-core`) and encodes a GIF. With **before** on, it also screenshots the starting commit.
+- Quality checks: accessibility (new issues vs the base), performance (warn only), visual diff, and opt-in coverage and bundle size. A failing check raises the risk score; with the quality gate on, the goal pauses until you **Resume** or **Accept and continue** (audited).
+- A failing scenario becomes a Bug task and another fix round. Infrastructure problems (no browser, the app won't start) never fail a goal.
+- The **Proof** tab shows the recording, steps, before/after and checks; the PR gets a Proof section with images on the orphan `agentroom/proof` branch, or kept local. Settings → Proof and Quality.
+
+### Intake: Teams, Linear, Jira and PR review
+
+Work arrives where your team already is ([spec](docs/specs/intake.md)):
+
+- **Microsoft Teams** without an Azure bot: an outgoing webhook brings messages in (HMAC-verified, allow-listed people, replay-protected, rate-limited, checked for prompt injection); a Workflows webhook posts Adaptive Cards for plan ready, progress, PR and done/failed. Approvals are typed commands, audited with the approver's name. Setup wizard in Settings.
+- **Linear** and **Jira Cloud** pages list issues with filters; hand them to a bot like GitHub cards. Status sync is opt-in, "issue moved to state" can trigger automation, and PRs say `Fixes KEY`.
+- **PR review from a link:** paste a PR URL. It's checked out in its own worktree, the Reviewer drafts comments that you edit in a diff viewer, and they're posted with `gh` only when you click. Fork PRs make every shell command ask.
+
+### Team packs and skill registry
+
+Start from a team made for your stack, and share skills ([spec](docs/specs/packs.md)):
+
+- **Packs:** built-in **Next.js SaaS** and **Flutter app** packs bring bots, skills, goal templates and sensitive paths. `agentroom init --pack <name>` or `agentroom pack add`. `pack update` merges with your edits; on a conflict your file stays and the pack's version is written next to it as `<file>.pack-incoming`.
+- **Skill registry:** install from an AgentRoom index (sha256-verified), skills.sh, GitHub or a `.zip`/`.tgz`. You see the full `SKILL.md`, every file and any injection warnings first; nothing is ever run. `agentroom skill publish` packs a skill and its index entry for your own registry (nothing is uploaded). Skills → **Browse skills…** in the UI.
+
+### Parallel builders
+
+Add a second developer (`agentroom bot add "Developer 2" --role developer`) and ready tasks whose `files` don't overlap build side by side in the goal's folder. Each task is committed with the files its own run wrote; shell commands' writes go in one commit shared by the batch, and the remaining budget is split between the builders. Tasks without `files`, and multi-repo workspace goals, build one at a time.
+
+### Appearance
+
+**Settings → Appearance** sets an accent colour, a wallpaper behind frosted-glass panels (built-in scenes, a **Time of day** scene, or your own image) and the text size. It's personal to your browser and painted before the page renders.
+
 ### Branches, diff review and PRs
 
 Each goal works on its own branch (`agentroom/g-4`) in its own folder outside your repo (`~/.agentroom/worktrees/<repo>-<hash>/G-4`), so bots never touch your working copy and several goals can run at once. `node_modules` is linked in, not copied.
@@ -440,6 +514,43 @@ Each bot keeps `bots/<dir>/memory.md` (committed): conventions it learned about 
 ### Goal templates
 
 **New goal** offers Bug fix, New endpoint, Refactor and Dependency upgrade, each with its own fields and guidance for the Planner. Templates live in `.agentroom/goal-templates/*.md` and can be edited or added.
+
+### Shared team room
+
+Teammates join your AgentRoom from their own browser to watch, approve, comment and start goals. Your machine still runs everything: bots, git, tokens and secrets never leave it ([spec](docs/specs/multiplayer.md)).
+
+| Role | Can |
+|---|---|
+| **Owner** | Everything (the person who ran `agentroom start`; only from this machine) |
+| **Approver** | Approve or deny, answer questions, approve plans, start goals, message bots, Stop, comment |
+| **Viewer** | Read goals, changes, proof, the map, insights and comments |
+
+- **Settings → Team room** creates per-person links that are signed, expire and can be revoked at once. Access over the **local network** or a **Cloudflare tunnel** are separate switches, off by default and off again after every restart. Your own start link never works remotely.
+- Roles are enforced on the server for every request and message. Members never see secrets, integrations, MCP, automation or the in-app browser.
+- Presence avatars, a goal **Discussion** tab with @mentions, and per-person notifications (Inbox → **For you**). Audit entries name who acted.
+
+### Sentry autopilot and design match
+
+- **Incident autopilot** ([spec](docs/specs/autopilot.md)): a Sentry trigger (new issue, or a spike) or **Run autopilot** on an issue starts a reproduce-first goal. AgentRoom checks the test itself: it must fail on the starting commit and pass on the fix. A confidence score comes from that evidence, the blast radius on the map and the risk score. A PR opens on its own only when the trigger, Settings → Autopilot (off by default), the score and the check all allow it.
+- **Implement a design:** a goal template with a Figma frame link or an uploaded image. Verify renders the page at the frame size and scores it against the design, with a diff image, side by side on the Proof tab.
+
+### Providers and the learning loop
+
+- **Providers** (experimental, [spec](docs/specs/engine.md)): run phases on **Codex**, **Gemini CLI** or any **OpenAI-compatible** endpoint, each with a fallback chain and Claude as the last resort. A run moves to the next provider only if it failed before any tool call (not installed, signed out, rate limit, outage). Settings → Providers shows status, guarantees and a cost-per-goal preview.
+- **Learning loop:** goal outcomes, A/B experiments on a bot's skills or instructions, suggestions you apply with a click (add a skill, try a cheaper model), and read-only replay evals of a goal's planning. Insights → Experiments.
+
+### Multi-repo workspaces
+
+Work on several repos as one: one team, one board, one map ([spec](docs/specs/workspaces.md)).
+
+```bash
+agentroom workspace create shop ./web ./api ./mobile   # the first repo hosts the team
+agentroom start --workspace shop
+```
+
+- The Planner plans per repo; each repo a goal touches gets its own folder, branch, checkpoints, changes and linked PR (Part i of n).
+- The map links repos through HTTP routes, OpenAPI, GraphQL, tRPC and shared packages; confirm, hide or add links.
+- Security scans, the dependency guard, risk, publish gates and autopilot cover every repo a goal touched. Other repos' Sentry projects and MCP servers are offered too.
 
 ### Approve from your phone
 
@@ -516,6 +627,8 @@ Removes the private exclude line and adds `.agentroom/runs/` to `.gitignore`, so
 | `-m, --model <id>` | from config | Default model for bots |
 | `--port <n>` | `4317` (from config) | Server port |
 | `--no-open` | — | Don't open the browser |
+| `--private` | — | When setting up, keep `.agentroom/` out of git for just you |
+| `--workspace <name>` | — | Open a [multi-repo workspace](#multi-repo-workspaces) instead of this folder |
 
 If AgentRoom is already running for the repo (for example in background mode), `start` opens that instance instead of starting a second one.
 
@@ -562,6 +675,42 @@ agentroom skill add release-notes --bot reviewer
 ```
 
 Names must match `^[a-z0-9][a-z0-9-]*$`.
+
+Install and share skills ([registry](#team-packs-and-skill-registry)); every skill is shown in full before it's written, and nothing is run:
+
+```bash
+agentroom skill install skills-sh:<owner>/<repo>/<skill>   # also github:<owner>/<repo>[/<skill>], index:<registry>/<name>, an https .tgz/.zip, or a local folder
+agentroom skill update <name>       # fetch the latest copy, show it, replace yours if you agree
+agentroom skill validate <name>     # check it against the SKILL.md format
+agentroom skill publish <name>      # write <name>-<version>.tgz and its index entry (nothing is uploaded)
+```
+
+</details>
+
+<details>
+<summary><b><code>agentroom pack</code></b>: team packs for your stack</summary>
+
+```bash
+agentroom pack list                 # built-in packs (nextjs-saas, flutter-app), which fit this repo, what's installed
+agentroom pack add nextjs-saas      # or a pack folder; also: agentroom init --pack nextjs-saas
+agentroom pack update [name]        # merges with your edits; conflicts keep your file and write <file>.pack-incoming
+agentroom pack remove <name>        # files you edited stay
+```
+
+</details>
+
+<details>
+<summary><b><code>agentroom workspace</code></b>: several repos as one</summary>
+
+```bash
+agentroom workspace create <name> <paths...>   # the first repo is primary unless --primary
+agentroom workspace add|remove <name> <path-or-repo>
+agentroom workspace primary <name> <repo>      # which repo hosts the team, board and settings
+agentroom workspace list | show <name> | map <name> | delete <name>
+agentroom start --workspace <name>
+```
+
+Workspaces live in `~/.agentroom/workspaces/`. Deleting one never touches the repos.
 
 </details>
 
@@ -1116,10 +1265,12 @@ Goal: people can comfortably let their bots work unattended. Security comes firs
 - [x] **P3 Control:** budgets, replay, goal templates, bot memory
 - [x] **P4 Automation:** schedules, triggers, background mode, morning brief and digest, insights, remote approvals
 - [x] **Context:** repo context map, module cards, impact analysis
-- [ ] Cloud runner for schedules and triggers
-- [ ] PR review from a link
+- [x] **0.0.4:** proof of work and quality gates; Teams, Linear, Jira and PR review from a link; team packs and a skill registry; ask the codebase, docs and tour; shared team room; Sentry autopilot and design match; multiple providers and a learning loop; multi-repo workspaces; message queue, steering and usage-limit resume; parallel builders; appearance
+- [ ] Run it on your own server: headless start, Linux background service, Tailscale access
+- [ ] Hosted relay with end-to-end encryption (stable URL, sign-in, replaces per-feature tunnels)
+- [ ] Sandboxes per task (parallel builders, untrusted PR review) and a cloud runner for schedules and triggers
 
-Details: [docs/roadmap.md](docs/roadmap.md). Next: [docs/platform-plan.md](docs/platform-plan.md) — Slack/Linear intake, proof of work in PRs, team packs and a skill registry, multi-provider, cloud runner.
+Details: [docs/roadmap.md](docs/roadmap.md) and [docs/platform-plan.md](docs/platform-plan.md). Cloud plan: [docs/specs/cloud-runner.md](docs/specs/cloud-runner.md).
 
 ---
 

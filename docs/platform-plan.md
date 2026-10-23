@@ -15,6 +15,8 @@ This plan builds on what shipped up to 0.0.3: bots and skills, the goal runner, 
 
 ## Milestones
 
+> **Status at 0.0.4 (2026-10-23):** 0.1 Proof, 0.2 Intake (Teams, Linear, Jira, PR review; Slack still to come), 0.3 Packs, 0.4 Knowledge (with multi-repo workspaces), 0.5 Autopilot and 0.6 Engine have shipped, and the shared team room from 1.0. Still open for 1.0: the cloud runner, hosted relay and billing; the revised order is in [specs/cloud-runner.md](specs/cloud-runner.md#revisions-2026-10-23).
+
 | Version | Theme | Ships | Why this order |
 |---|---|---|---|
 | **0.1** | Proof | Proof of work in PRs, quality gates | Best demo, builds trust, reuses browser + worktrees |

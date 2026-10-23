@@ -7,6 +7,77 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-23
+
+Six platform milestones since 0.0.3 (proof, intake, packs, knowledge, autopilot, engine), the shared team room, multi-repo workspaces, and a chat and appearance pass. The chat, parallel-build and appearance work takes ideas from [PandaCode](https://github.com/aicodeking/pandacode), reimplemented for AgentRoom (no code copied; notes in `docs/research/pandacode.md`).
+
+### Added — Proof of work and quality gates
+
+- New goal phase **Verify** (Plan → Review → Build → Security → Test → Verify → Report). QA writes a browser scenario once; the engine starts the app from the goal's folder, records it in headless Chrome and encodes a GIF, optionally with before/after screenshots from the starting commit.
+- Quality checks: accessibility (new issues vs the base), performance (warn only), visual diff, and opt-in coverage and bundle size. Failing checks raise the risk score and pause at the quality gate; **Accept and continue** is audited.
+- A broken scenario becomes a Bug task and another fix round. The PR body gets a Proof section; images go to the orphan `agentroom/proof` branch or stay local.
+- Proof tab, Settings → Proof and Quality, a doctor check. Spec: `docs/specs/proof.md`.
+
+### Added — Intake
+
+- **Microsoft Teams** without an Azure bot: an HMAC-verified outgoing webhook in, Adaptive Cards out (plan ready, progress, PR, done/failed). Approvals are typed commands from allow-listed approvers, audited by name.
+- **Linear** and **Jira Cloud** tracker pages with filters and hand-off, opt-in status sync, "issue moved to state" triggers and `Fixes KEY` in PRs.
+- **PR review from a link:** the PR is checked out in its own worktree, the Reviewer drafts comments you edit in a diff viewer, and they're posted with `gh` only when you click. Fork PRs force approval for every shell command. Spec: `docs/specs/intake.md`.
+
+### Added — Team packs and skill registry
+
+- Built-in **Next.js SaaS** and **Flutter** packs (bots, skills, goal templates, sensitive paths) with stack detection; `agentroom init --pack` and `agentroom pack list|add|update|remove`. Updates three-way merge with your edits; conflicts keep your file.
+- Skill registry: index registries (sha256-verified), skills.sh search, GitHub and file imports. Every skill is shown in full before install and nothing is ever executed; `agentroom skill install|update|validate|publish`. Spec: `docs/specs/packs.md`.
+
+### Added — Knowledge
+
+- **Ask the codebase:** a read-only bot answers from the context map with citations checked against the code, flags when it's unsure, and can turn an answer into a goal.
+- Generated `docs/architecture.md` and `docs/decisions.md`, written section by section only on click, and an **onboarding tour** with progress per person. Spec: `docs/specs/knowledge.md`.
+
+### Added — Shared team room
+
+- Teammates join from their own browser to watch, approve and comment; this machine still runs everything. Roles owner / approver / viewer are enforced on the server for every request and message.
+- Per-person signed, expiring links; local-network and Cloudflare-tunnel access are separate switches, off by default and after every restart. Presence, goal Discussion with @mentions, per-person notifications. Spec: `docs/specs/multiplayer.md`.
+
+### Added — Autopilot and design match
+
+- **Sentry incident autopilot:** a reproduce-first goal on new issues or spikes. AgentRoom checks the test itself (fails on the starting commit, passes on the fix) and scores confidence; a PR opens on its own only when every switch, the score and the check allow it. Off by default. Spec: `docs/specs/autopilot.md`.
+- **Implement a design:** a goal template with a Figma frame or an uploaded image; Verify renders the page at the frame size and scores it against the design, with a diff image and a design gate.
+
+### Added — Engine
+
+- **Multiple providers** (experimental): Codex, Gemini CLI and any OpenAI-compatible endpoint, per phase with a fallback chain and Claude as the last resort. A run falls back only if it failed before any tool call.
+- **Learning loop:** goal outcomes, A/B experiments on a bot's skills or instructions, suggestions applied only on click, and read-only replay evals under a budget cap. Insights → Experiments. Spec: `docs/specs/engine.md`.
+
+### Added — Multi-repo workspaces
+
+- One team, one board and one map across several repos: `agentroom workspace create|add|remove|primary|list|show|map|delete` and `agentroom start --workspace`. Goals plan and build per repo with their own folders, branches, checkpoints and linked PRs.
+- Security scans, the dependency guard, risk, publish gates and autopilot cover every repo a goal touched. Settings → Workspace, cross-repo links on the map, Sentry and MCP across repos. Spec: `docs/specs/workspaces.md`.
+
+### Added — Chat
+
+- **Message queue.** Messages sent while a bot is busy wait above the composer and go out in order when its run ends cleanly. Edit, reorder, remove or **Send now** each one. The queue is kept in `runs/queue.json`; after a failed or stopped run, a usage limit or a restart it pauses with the reason until you **Resume**.
+- **Steering.** ⌘/Ctrl Enter while a bot works writes the message into the running turn without stopping it (Claude, through the SDK's streaming input). It shows in the thread where the run took it; one the run never took goes back to the front of the queue. Other providers queue it first in line.
+- **Usage limit, then resume at reset.** A rejected plan limit holds the bot's queue with the reset time; **Resume at reset** continues on its own ("Continue where you left off."), **Continue now** goes right away. Reset times are never guessed.
+- **Approval bar** above the composer: one line per request, **Approve all / Deny all** when several wait. Security-gated requests are left to their cards.
+- **Folded turns.** Each turn's narration and tool calls fold behind "Worked for 2m 10s"; the answer, errors and the done line stay visible. While running it reads "Working · 12s" or "Waiting for approval · 12s".
+- **Readable tool groups**: "Read 3 files · Ran 2 commands", "Running npm test"; each call opens to its raw input and output.
+- **Changed files per run** under the reply, with a diff per file. Tracked from the bot's own write tools (before/after snapshots, never `git status`); a file changed by something else between the run's edits is left out rather than misattributed. Shell commands' writes aren't listed.
+- **`@` file mentions** in the composer.
+- **Find in thread** (⌘/Ctrl F), painted with the CSS Custom Highlight API; folded turns open while you search.
+
+### Added — Parallel builders
+
+- **Parallel builders.** With two or more developer bots, ready tasks whose `files` don't overlap build side by side in the goal's folder, each committed with the files its own run wrote (shell writes go in one shared batch commit). The remaining budget is split between them. Tasks without `files` and multi-repo workspace goals still build one at a time.
+
+### Added — Appearance
+
+- **Settings → Appearance** (personal, this browser): accent colour (presets or taken from the wallpaper, in OKLCH with clamped chroma), built-in gradient wallpapers or your own image with frosted-glass panels, a **Time of day** wallpaper that changes at 06:00, 12:00 and 18:00, and text size. The look is painted before first render, so nothing flashes. Reduced-transparency settings keep panels solid.
+
+### Fixed
+
+- Projects that aren't a multi-repo workspace no longer crash the UI on load (`GET /api/workspace` returned `{ ok: true }` instead of `null`).
+
 ## [0.0.3] - 2026-10-20
 
 A repo context map that bots read first, and a clear sharing model: the team shares the setup, everyone keeps their own work.
@@ -129,7 +200,8 @@ First public release on npm as `@kinleyrabgay/agentroom`.
 - Run ledger, append-only audit log, usage tracking and alerts.
 - Server bound to `127.0.0.1` with a per-run access token.
 
-[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/kinleyrabgay/agentroom/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/kinleyrabgay/agentroom/releases/tag/v0.0.1

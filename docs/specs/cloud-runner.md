@@ -1,6 +1,6 @@
 # Cloud runner and relay (E3): design
 
-Status: **design only**. Nothing here is built or deployed; no external services are called by AgentRoom today. Schedules and triggers already carry `runner: 'local' | 'cloud'` (`RunnerSchema` in `src/shared/schemas.ts`); only `local` runs.
+Status: **design only** (see Revisions below). Nothing here is built or deployed; no external services are called by AgentRoom today. Schedules and triggers already carry `runner: 'local' | 'cloud'` (`RunnerSchema` in `src/shared/schemas.ts`); only `local` runs.
 
 ## Goals
 
@@ -108,6 +108,21 @@ Model usage is always billed by Anthropic on the customer's own key; we bill sea
 | Supply-chain attack via packages installed in the sandbox | Dependency guard already flags typosquats; sandbox is disposable; volume snapshots for rollback |
 | Abuse of free relay (crypto mining, proxying) | Relay forwards only AgentRoom protocol frames; rate limits; runner is paid-only |
 | Data residency | Region-pinned projects (Enterprise); audit/ledger mirrors stored in the project's region |
+
+## Revisions (2026-10-23)
+
+Changes to the plan above, after 0.0.4 and a study of PandaCode's remote access (`docs/research/pandacode.md`):
+
+1. **Phase 0, before any hosting: run it on your own server.** `agentroom start` headless on a VPS or always-on dev box, reachable over Tailscale (bind to the tailnet address, or behind `tailscale serve`, with the same member links and roles as the local-network listener). Needs a headless start mode and a Linux background service (`daemon` is macOS only today). Proves demand for "always on" without running infrastructure.
+2. **The relay is end-to-end encrypted.** Each device has an X25519 key; each pair derives a key with HKDF and sends XChaCha20-Poly1305 frames, so the relay sees device ids and ciphertext only. Devices are pinned after comparing a short fingerprint; a changed key makes the device untrusted again. Requests carry a timestamp and nonce against replay, checked after the trust check. Caveat: if the relay also serves the web UI it could change that code, so full E2E holds only for a UI served from elsewhere (the installed PWA or a desktop shell).
+3. **Two kinds of cloud compute behind one `SandboxProvider`** (`create, start, stop, exec, attachVolume, destroy, logs`):
+   - a long-lived machine per project (this spec's runner), for schedules, triggers and hosted rooms;
+   - short-lived sandboxes per task: parallel builders get a sandbox and a branch each (replacing the non-overlapping `files` rule with a merge), untrusted PR review, and proof recordings.
+4. **Re-check providers at decision time.** Add Cloudflare Sandbox, AWS and Vercel Sandbox to the comparison alongside Fly Machines, E2B, Modal and Daytona; run the two-week spike on two of them.
+5. **Continue in cloud / bring it back.** Push a goal's branch and state to the runner and continue there; the goal stays one row in the local UI, mirroring the remote run. The reverse brings it home.
+6. **Model access in the cloud is an API key only.** A Claude subscription login can't be used on cloud machines, so cloud runs are billed at API rates; caps and the local-first default matter for that reason, and the UI should say so before a run moves to the cloud.
+
+Revised order: phase 0 (own server + Tailscale) → relay alpha with E2E → `SandboxProvider` and per-task sandboxes → per-project cloud runner → hosted rooms, billing and Continue in cloud.
 
 ## Open questions
 

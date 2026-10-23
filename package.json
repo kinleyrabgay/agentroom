@@ -1,6 +1,6 @@
 {
   "name": "@kinleyrabgay/agentroom",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Local control room for AI coding agents: a team of Claude bots in your repo, live tool calls, approvals, GitHub and Sentry hand-offs, schedules and one-click PRs.",
   "type": "module",
   "keywords": [
