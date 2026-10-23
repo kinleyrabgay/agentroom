@@ -13,6 +13,7 @@ import type { AutomationSnapshot } from './automation.js';
 import type { ContextStatus } from './context.js';
 import type { AccountUsage, UsageSummary } from './usage.js';
 import type { RoomPush } from './room.js';
+import type { BotQueue, QueueMap } from './queue.js';
 
 export type StatusMap = Record<string, { status: BotStatus; activity?: string }>;
 
@@ -39,6 +40,8 @@ export interface HelloMessage {
   previews: Record<string, PreviewState>;
   consoles: Record<string, ConsoleLine[]>;
   notifications: Notification[];
+  /** Bots with queued messages, a hold or steers in flight. */
+  queues?: QueueMap;
 }
 
 /** Server → UI. */
@@ -53,7 +56,8 @@ export type ServerMessage =
   | { kind: typeof ServerMessageKind.Account; account: AccountUsage | null }
   /** New or updated notification (e.g. answered). */
   | { kind: typeof ServerMessageKind.Notification; notification: Notification }
-  | { kind: typeof ServerMessageKind.Room; room: RoomPush };
+  | { kind: typeof ServerMessageKind.Room; room: RoomPush }
+  | { kind: typeof ServerMessageKind.Queue; botId: string; queue: BotQueue };
 
 /** UI → server. */
 export type ClientMessage =
@@ -70,4 +74,11 @@ export type ClientMessage =
   | { type: typeof ClientMessageType.BridgeResult; id: string; ok: boolean; result?: string; error?: string }
   | { type: typeof ClientMessageType.Answer; notificationId: string; answer: string }
   | { type: typeof ClientMessageType.NotificationsRead; ids: string[] }
-  | { type: typeof ClientMessageType.Presence; active: boolean };
+  | { type: typeof ClientMessageType.Presence; active: boolean }
+  | { type: typeof ClientMessageType.Steer; botId: string; text: string; attachments?: string[] }
+  | { type: typeof ClientMessageType.QueueEdit; botId: string; id: string; text: string }
+  | { type: typeof ClientMessageType.QueueMove; botId: string; id: string; index: number }
+  | { type: typeof ClientMessageType.QueueRemove; botId: string; id: string }
+  | { type: typeof ClientMessageType.QueueSendNow; botId: string; id: string }
+  | { type: typeof ClientMessageType.QueueResume; botId: string }
+  | { type: typeof ClientMessageType.ResumeAtReset; botId: string; on: boolean };

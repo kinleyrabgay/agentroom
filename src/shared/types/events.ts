@@ -2,6 +2,7 @@ import type { AgentEventType, BotStatus, StreamDeltaType } from '../enums.js';
 import type { RateLimit, UsageReport } from './usage.js';
 import type { Attachment } from './attachment.js';
 import type { SecurityFinding } from './security.js';
+import type { TurnChanges } from './changes-turn.js';
 
 /** Things that happen during runs. Broadcast to the UI and appended to `.agentroom/runs/*.jsonl`. */
 export type AgentEvent =
@@ -25,7 +26,8 @@ export type AgentEvent =
   | { type: typeof AgentEventType.Delegation; from: string; to: string; instruction: string }
   | { type: typeof AgentEventType.RunDone; botId: string; ok: boolean; costUsd: number; durationMs: number; turns: number; result: string }
   | ({ type: typeof AgentEventType.Usage } & UsageReport)
-  | ({ type: typeof AgentEventType.RateLimit } & RateLimit)
+  | ({ type: typeof AgentEventType.RateLimit } & RateLimit & { /** The bot whose run reported it. */ botId?: string })
+  | ({ type: typeof AgentEventType.TurnChanges; botId: string } & TurnChanges)
   | { type: typeof AgentEventType.Error; botId?: string; message: string };
 
 /** Server stamp: arrival order, time, and the goal the event belongs to (if any). */

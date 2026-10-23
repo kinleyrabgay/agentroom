@@ -29,6 +29,7 @@ import { parseScenarios } from '../proof/scenario.js';
 import type { GoalRepos } from '../workspaces/goal-repos.js';
 import { linkedPrSection, withLinkedSection } from '../workspaces/goal-repos-links.js';
 import { workspacePlanSection, workspaceTaskSection } from '../workspaces/prompts.js';
+import { pickBatch } from './scopes.js';
 
 export interface GoalRunnerDeps {
   project: Project;
@@ -89,6 +90,8 @@ interface Control {
   pause: boolean;
   cancel: boolean;
   currentBot?: string;
+  /** Every bot running for the goal right now (several while builders work side by side). */
+  activeBots: Set<string>;
   /** QA tasks already attempted, keyed by round, so a failing QA task isn't retried in a loop. */
   attempted: Set<string>;
   /** The last run stopped at a budget cap (the goal is already paused with the reason). */
@@ -112,8 +115,14 @@ const ENGINE = 'agentroom';
 export class GoalRunner {
   private controls = new Map<string, Control>();
   private warned = new WarnOnce();
+  /** Files each bot's latest run in a goal wrote (from its tracked changes), keyed `goalId:botId`. */
+  private writes = new Map<string, string[]>();
 
-  constructor(private readonly deps: GoalRunnerDeps) {}
+  constructor(private readonly deps: GoalRunnerDeps) {
+    deps.hub.onEvent((e) => {
+      if (e.type === AgentEventType.TurnChanges && e.goalId) this.writes.set(`${e.goalId}:${e.botId}`, e.files.map((f) => f.path));
+    });
+  }
 
   // ---------- commands ----------
 
@@ -196,6 +205,7 @@ export class GoalRunner {
     const ctl = this.control(id);
     ctl.cancel = true;
     if (ctl.currentBot) this.deps.team.stop(ctl.currentBot);
+    for (const bot of ctl.activeBots) if (bot !== ctl.currentBot) this.deps.team.stop(bot);
     this.deps.proof?.stop(id);
     const next = this.set(id, { status: GoalStatus.Cancelled, reason: 'Cancelled by you.' });
     this.leadStatus(BotStatus.Idle);
@@ -360,6 +370,13 @@ export class GoalRunner {
     const task = work.find(depsMet);
     if (!task) return { blocked: `Remaining tasks wait on dependencies that can't finish: ${work.map((t) => `${t.id} → ${t.dependsOn.join(', ')}`).join('; ')}.` };
 
+    // Several developers: build ready tasks whose files don't overlap side by side.
+    const builders = this.builders(roles);
+    if (builders.length > 1 && !this.deps.repos?.isWorkspace && goal.worktree) {
+      const batch = pickBatch(work.filter(depsMet), builders.length);
+      if (batch.length > 1) return this.buildBatch(goal, roles, batch, builders);
+    }
+
     const { tasks: repo } = this.deps.project;
     const previousBlock = task.blockedReason;
     repo.update(task.id, { status: TaskStatus.Doing, blockedReason: null, assignee: task.assignee ?? roles.developer.id });
@@ -386,6 +403,94 @@ export class GoalRunner {
       repo.appendLog(after.id, roles.lead.id, 'Marked ready for QA.');
       this.changed();
     }
+    return 'progress';
+  }
+
+  /** Every developer on the team, the main one first. */
+  private builders(roles: TeamRoles): Bot[] {
+    const others = this.deps.project.bots.list().filter((b) => b.id !== roles.developer.id && b.role.toLowerCase() === roles.developer.role.toLowerCase());
+    return [roles.developer, ...others];
+  }
+
+  /**
+   * Build tasks side by side, one developer each, in the goal's folder. Their file scopes don't
+   * overlap, so afterwards each task is committed with the files its own run wrote; anything left
+   * (shell commands' writes) goes in one commit shared by the batch.
+   */
+  private async buildBatch(goal: Goal, roles: TeamRoles, batch: Task[], builders: Bot[]): Promise<StepResult> {
+    const { tasks: repo } = this.deps.project;
+    const free = [...builders];
+    const pairs = batch.map((task) => {
+      // A task assigned to one of the developers keeps them; the rest take whoever is free.
+      const own = free.findIndex((b) => b.id === task.assignee);
+      const bot = free.splice(own >= 0 ? own : 0, 1)[0]!;
+      return { task, bot };
+    });
+    for (const { task, bot } of pairs) {
+      const previous = task.blockedReason;
+      repo.update(task.id, { status: TaskStatus.Doing, blockedReason: null, assignee: bot.id });
+      repo.appendLog(task.id, roles.lead.id, previous ? `Resumed after block: ${previous}` : `Started by ${bot.name}, alongside ${pairs.filter((p) => p.task !== task).map((p) => p.task.id).join(', ')}.`);
+    }
+    this.changed();
+    this.leadStatus(BotStatus.Working, `${goal.id} · Building ${pairs.map((p) => `${p.task.id} (${p.bot.name})`).join(', ')}`);
+
+    const cwd = goal.worktree!.path;
+    const before = await this.headOf(this.require(goal.id));
+    const results = await Promise.allSettled(
+      pairs.map(({ task, bot }) =>
+        this.run(goal, roles, bot, buildPrompt(this.require(goal.id), repo.get(task.id)!, task.blockedReason), `Build ${task.id}: ${task.title}`, {
+          phase: WorkPhase.Build,
+          taskId: task.id,
+          share: pairs.length,
+        }),
+      ),
+    );
+
+    // Checkpoints: each task's own files, then whatever is left for the whole batch.
+    if (before) {
+      for (const { task, bot } of pairs) {
+        const files = this.writes.get(`${goal.id}:${bot.id}`) ?? [];
+        try {
+          await gg.commitPaths(cwd, files, `${task.id}: ${task.title}`);
+        } catch (err) {
+          repo.appendLog(task.id, ENGINE, `Couldn't commit its files: ${(err as Error).message}`);
+        }
+      }
+      try {
+        await gg.commitAll(cwd, `${pairs.map((p) => p.task.id).join(', ')}: other changes made while building together`);
+      } catch {
+        // Nothing left, or a git problem already logged above.
+      }
+      const commits = await gg.commitsSince(cwd, before);
+      for (const { task } of pairs) {
+        const mine: string[] = [];
+        for (const c of commits) {
+          const subject = (await gg.run('git', ['log', '-1', '--format=%s', c], cwd)).stdout.trim();
+          if (subject.startsWith(`${task.id}:`) || subject.split(':')[0]!.split(', ').includes(task.id)) mine.push(c);
+        }
+        if (!mine.length) continue;
+        const t = repo.get(task.id)!;
+        repo.update(task.id, { commits: [...t.commits, ...mine.filter((c) => !t.commits.includes(c))] });
+        repo.appendLog(task.id, ENGINE, `Checkpoint ${mine[mine.length - 1]!.slice(0, 8)} on ${goal.worktree!.branch}.`);
+      }
+      this.changed();
+    }
+
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
+    if (results.some((r) => r.status === 'fulfilled' && r.value.aborted)) return 'aborted';
+
+    await this.updateRisk(goal.id);
+    for (const { task } of pairs) {
+      const after = repo.get(task.id);
+      if (!after) continue;
+      if (after.blockedReason) return { blocked: `${after.id} is blocked: ${after.blockedReason}` };
+      if (OPEN.includes(after.status)) {
+        repo.update(after.id, { status: TaskStatus.Review });
+        repo.appendLog(after.id, roles.lead.id, 'Marked ready for QA.');
+      }
+    }
+    this.changed();
     return 'progress';
   }
 
@@ -1121,7 +1226,7 @@ export class GoalRunner {
     bot: Bot,
     prompt: string,
     label: string,
-    ctx: { phase: WorkPhase; taskId?: string; repo?: string },
+    ctx: { phase: WorkPhase; taskId?: string; repo?: string; /** Runs sharing the remaining budget (builders side by side). */ share?: number },
   ): Promise<RunOutcome> {
     const ctl = this.control(goal.id);
     const budget = this.budgetFor(this.require(goal.id));
@@ -1132,13 +1237,15 @@ export class GoalRunner {
     }
     this.budgetWarn(goal, budget);
     ctl.currentBot = bot.id;
+    ctl.activeBots.add(bot.id);
+    this.writes.delete(`${goal.id}:${bot.id}`);
     const fromLead = bot.id !== roles.lead.id;
     if (fromLead) this.deps.hub.emit({ type: AgentEventType.Delegation, from: roles.lead.id, to: bot.id, instruction: label }, { goalId: goal.id });
     try {
       // Files attached to the brief: the Planner gets them as content (images, PDFs…); every bot gets their paths.
       const files = this.attachmentsOf(goal);
       const fullPrompt = files.length ? `${prompt}\n\n## Files the human attached to this goal\n${attachmentLines(files)}` : prompt;
-      const { repo, ...runCtx } = ctx;
+      const { repo, share, ...runCtx } = ctx;
       const current = this.require(goal.id);
       const extra = this.deps.repos?.extraDirs(current, repo, ctx.phase === WorkPhase.Planning ? 'plan' : 'work') ?? [];
       const out = await this.deps.team.dispatch(bot.id, fullPrompt, fromLead ? roles.lead.id : ENGINE, {
@@ -1146,7 +1253,7 @@ export class GoalRunner {
         ...runCtx,
         cwd: this.cwdOf(current, repo),
         ...(extra.length ? { additionalDirectories: extra } : {}),
-        ...(Number.isFinite(budget.remaining) ? { maxBudgetUsd: budget.remaining } : {}),
+        ...(Number.isFinite(budget.remaining) ? { maxBudgetUsd: budget.remaining / Math.max(1, share ?? 1) } : {}),
         ...(ctx.phase === WorkPhase.Planning && files.length ? { attachments: files.map((a) => a.id) } : {}),
       });
       if (!out.ok && !out.aborted) {
@@ -1161,7 +1268,8 @@ export class GoalRunner {
       }
       return out;
     } finally {
-      ctl.currentBot = undefined;
+      ctl.activeBots.delete(bot.id);
+      ctl.currentBot = [...ctl.activeBots].at(-1);
       this.changed();
     }
   }
@@ -1260,7 +1368,7 @@ export class GoalRunner {
   private control(id: string): Control {
     let c = this.controls.get(id);
     if (!c) {
-      c = { running: false, pause: false, cancel: false, attempted: new Set() };
+      c = { running: false, pause: false, cancel: false, attempted: new Set(), activeBots: new Set() };
       this.controls.set(id, c);
     }
     return c;

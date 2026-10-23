@@ -30,13 +30,13 @@ export interface MentionTrigger {
 
 type Active = { char: string; start: number; query: string }
 
-interface Props extends Omit<React.ComponentProps<typeof Textarea>, "value" | "onChange"> {
+interface Props extends Omit<React.ComponentProps<typeof Textarea>, "value" | "onChange" | "onSubmit"> {
   value: string
   onChange: (value: string) => void
   /** Keyed by trigger character, e.g. { "/": skills, "@": files }. */
   triggers: Record<string, MentionTrigger>
-  /** Called on Enter (without Shift) when no suggestion list is open. */
-  onSubmit?: () => void
+  /** Called on Enter (without Shift) when no suggestion list is open; `mod` is true with ⌘/Ctrl held. */
+  onSubmit?: (opts: { mod: boolean }) => void
   /** Called after a suggestion is inserted. */
   onPick?: (char: string, s: Suggestion) => void
   /** Extra classes for the suggestion popover. */
@@ -164,7 +164,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, Props>(function
           }
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && onSubmit) {
             e.preventDefault()
-            onSubmit()
+            onSubmit({ mod: e.metaKey || e.ctrlKey })
             return
           }
           onKeyDown?.(e)

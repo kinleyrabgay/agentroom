@@ -6,7 +6,8 @@ import { body, respond } from '../respond.js';
 
 /** Multi-repo workspaces: the workspace (null in single-project mode), its merged map, and syncing every repo. */
 export function workspaceRoutes(app: Hono, workspace: WorkspaceService, audit: HumanAudit, humanName: () => string = () => 'human') {
-  app.get('/workspace', (c) => respond(c, () => workspace.view()));
+  // `null` outside a workspace (respond() would turn it into `{ ok: true }`, which the UI reads as a workspace).
+  app.get('/workspace', (c) => c.json(workspace.view() ?? null));
   app.get('/workspace/graph', (c) => respond(c, () => workspace.graph({ hidden: c.req.query('hidden') === '1' })));
   app.get('/workspace/edges', (c) => respond(c, () => workspace.crossEdges({ hidden: c.req.query('hidden') === '1' })));
 

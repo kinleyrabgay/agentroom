@@ -192,7 +192,7 @@ describe('content blocks', () => {
   });
 });
 
-// --- the provider sends a structured message only when there are attachments ---
+// --- the prompt is a stream (so the run can be steered); attachments become content blocks ---
 const captured: { prompt: unknown }[] = [];
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (args: { prompt: unknown }) => {
@@ -204,7 +204,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 }));
 
 describe('ClaudeProvider prompt', () => {
-  it('uses a plain string without attachments and a user message with them', async () => {
+  it('sends plain text as the first streamed message and attachments as content blocks', async () => {
     const { ClaudeProvider } = await import('../src/server/providers/claude/claude.provider.js');
     const bot = { id: 'qa', name: 'QA', role: 'qa', tools: [], skills: [], localSkills: [], prompt: '' } as never;
     const base = {
@@ -221,7 +221,9 @@ describe('ClaudeProvider prompt', () => {
     };
     const p = new ClaudeProvider();
     await p.run({ ...base, prompt: 'hello' });
-    expect(captured.at(-1)!.prompt).toBe('hello');
+    const plain: { message: { content: unknown } }[] = [];
+    for await (const m of captured.at(-1)!.prompt as AsyncIterable<{ message: { content: unknown } }>) plain.push(m);
+    expect(plain.map((m) => m.message.content)).toEqual(['hello']);
 
     const root = tmp();
     const store = new UploadStore(path.join(root, 'u'), root);

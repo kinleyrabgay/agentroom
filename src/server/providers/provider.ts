@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { EffortLevel } from '../../shared/enums.js';
+import type { EffortLevel, SteerStatus } from '../../shared/enums.js';
 import type { AccountUsage, AgentEvent, Bot, ModelOption, StreamDelta } from '../../shared/types/index.js';
 import type { ResolvedAttachment } from '../services/upload.store.js';
 import type { Settings } from '../../shared/types/index.js';
@@ -56,6 +56,20 @@ export interface RunRequest {
    * show the model next to the output (e.g. possible prompt injection), or null.
    */
   inspectToolOutput?: (tool: string, output: string) => string | null;
+  /** Lets the human write into this run while it works (providers that can take input mid-run). */
+  steering?: SteerLink;
+}
+
+/** A running turn that takes more input. `steer` returns false once the run can't take it any more. */
+export interface SteerHandle {
+  steer(id: string, text: string): boolean;
+}
+
+/** How a provider tells the Team it can be steered, and what became of each steer. */
+export interface SteerLink {
+  /** Called with a handle when the run starts taking input, and with null when it stops. */
+  attach(handle: SteerHandle | null): void;
+  status(id: string, status: SteerStatus): void;
 }
 
 export interface RunResult {

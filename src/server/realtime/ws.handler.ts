@@ -2,6 +2,7 @@ import { AgentEventType, ClientMessageType } from '../../shared/enums.js';
 import type { ClientMessage } from '../../shared/types/index.js';
 import type { PermissionGate } from '../agents/permission-gate.js';
 import type { Team } from '../agents/team.js';
+import type { BotQueues } from '../agents/bot-queue.js';
 import type { PreviewService } from '../preview/preview.service.js';
 import type { NotificationService } from '../services/notification.service.js';
 import type { Client, Hub } from './hub.js';
@@ -14,11 +15,21 @@ export interface RouterDeps {
   permissions: PermissionGate;
   previews: PreviewService;
   notifications: NotificationService;
+  queue?: BotQueues;
 }
 
+const attachmentsOf = (a: unknown) => (Array.isArray(a) && a.length ? a.map(String) : undefined);
+
 /** Dispatch UI → server WebSocket messages. Malformed messages are ignored. */
-export function createClientMessageRouter({ hub, team, permissions, previews, notifications }: RouterDeps): ClientMessageRouter {
+export function createClientMessageRouter({ hub, team, permissions, previews, notifications, queue }: RouterDeps): ClientMessageRouter {
   const fail = (botId: string) => (err: Error) => hub.emit({ type: AgentEventType.Error, botId, message: err.message });
+  const guard = (botId: string, fn: () => void) => {
+    try {
+      fn();
+    } catch (err) {
+      fail(botId)(err as Error);
+    }
+  };
 
   return (client, raw) => {
     let msg: ClientMessage;
@@ -29,9 +40,28 @@ export function createClientMessageRouter({ hub, team, permissions, previews, no
     }
     switch (msg.type) {
       case ClientMessageType.Send:
-        team
-          .send(msg.botId, String(msg.text ?? ''), undefined, Array.isArray(msg.attachments) ? { attachments: msg.attachments.map(String) } : {})
-          .catch(fail(msg.botId));
+        guard(msg.botId, () => team.submit(msg.botId, String(msg.text ?? ''), attachmentsOf(msg.attachments)));
+        break;
+      case ClientMessageType.Steer:
+        guard(msg.botId, () => team.steer(msg.botId, String(msg.text ?? ''), attachmentsOf(msg.attachments)));
+        break;
+      case ClientMessageType.QueueEdit:
+        guard(msg.botId, () => queue?.edit(msg.botId, String(msg.id), String(msg.text ?? '')));
+        break;
+      case ClientMessageType.QueueMove:
+        queue?.move(msg.botId, String(msg.id), Number(msg.index) || 0);
+        break;
+      case ClientMessageType.QueueRemove:
+        queue?.remove(msg.botId, String(msg.id));
+        break;
+      case ClientMessageType.QueueSendNow:
+        team.sendNow(msg.botId, String(msg.id));
+        break;
+      case ClientMessageType.QueueResume:
+        team.resume(msg.botId);
+        break;
+      case ClientMessageType.ResumeAtReset:
+        team.setResumeAtReset(msg.botId, !!msg.on);
         break;
       case ClientMessageType.Stop:
         team.stop(msg.botId);

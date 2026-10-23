@@ -10,5 +10,7 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  // Tests of the web app's pure libs import through its aliases; vitest resolves them (vitest.config.ts).
+  "exclude": ["test/web"]
 }

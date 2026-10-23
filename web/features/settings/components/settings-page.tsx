@@ -23,6 +23,7 @@ import { PacksSection } from "@/features/packs/components/packs-section"
 import { TeamRoomSection } from "@/features/room/components/team-room-section"
 import { ProvidersSection } from "@/features/engine/components/providers-section"
 import { WorkspaceSection } from "@/features/workspaces/components/workspace-section"
+import { AppearanceSection } from "@/features/appearance/components/appearance-section"
 
 /** Settings: sticky section nav and one document column. Follows `#/settings/<section>`. */
 export function SettingsPage() {
@@ -87,6 +88,7 @@ export function SettingsPage() {
           {loaded ? (
             <>
               <GeneralSection />
+              <AppearanceSection />
               <ProvidersSection />
               <BudgetsSection />
               <SecuritySection />

@@ -129,6 +129,16 @@ export async function commitAll(cwd: string, message: string): Promise<string | 
   return head(cwd);
 }
 
+/** Commit only these paths (added, changed or deleted), if any of them changed. Returns the new commit, or null. */
+export async function commitPaths(cwd: string, paths: string[], message: string): Promise<string | null> {
+  if (!paths.length) return null;
+  await git(cwd, ['add', '-A', '--', ...paths]);
+  const staged = await run('git', ['diff', '--cached', '--quiet'], cwd);
+  if (staged.code === 0) return null;
+  await git(cwd, ['commit', '--no-verify', '-q', '-m', message]);
+  return head(cwd);
+}
+
 /** Commits on the branch after `from` (oldest first). */
 export async function commitsSince(cwd: string, from: string): Promise<string[]> {
   const out = await tryGit(cwd, ['rev-list', '--reverse', `${from}..HEAD`]);

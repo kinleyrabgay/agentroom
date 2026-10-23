@@ -235,3 +235,68 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Find in thread: painted with the CSS Custom Highlight API, never by rewriting the DOM. */
+::highlight(thread-find) {
+  background-color: color-mix(in oklch, var(--brand) 30%, transparent);
+}
+::highlight(thread-find-current) {
+  background-color: var(--brand);
+  color: var(--brand-foreground);
+}
+
+/* A bar that needs you (approvals, usage limit): a quiet wash of the current tone. */
+@utility tone-bar {
+  background-color: color-mix(in oklch, var(--tone) 8%, var(--surface));
+  border-color: color-mix(in oklch, var(--tone) 32%, transparent);
+}
+
+/* ---------- Appearance (features/appearance): text size, wallpaper behind glass ---------- */
+html {
+  font-size: calc(100% * var(--ui-scale, 1));
+}
+
+/* A wallpaper sits behind the whole app; surfaces turn to frosted glass so it shows through. */
+html[data-wallpaper] body {
+  background: var(--wallpaper) fixed;
+  background-color: var(--background);
+}
+html[data-wallpaper]:root:not(.dark) {
+  --background: oklch(0.99 0.002 220 / 0.5);
+  --sidebar: oklch(0.985 0.003 220 / 0.55);
+  --surface: oklch(1 0 0 / 0.78);
+  --card: oklch(1 0 0 / 0.74);
+  --sunken: oklch(0.97 0.004 220 / 0.6);
+  --muted: oklch(0.96 0.005 220 / 0.7);
+  --accent: oklch(0.955 0.006 210 / 0.75);
+}
+html[data-wallpaper].dark {
+  --background: oklch(0.165 0.008 230 / 0.55);
+  --sidebar: oklch(0.19 0.009 230 / 0.6);
+  --surface: oklch(0.2 0.009 230 / 0.72);
+  --card: oklch(0.2 0.009 230 / 0.68);
+  --sunken: oklch(0.145 0.008 230 / 0.55);
+  --muted: oklch(0.25 0.01 230 / 0.7);
+  --accent: oklch(0.27 0.012 220 / 0.75);
+}
+html[data-wallpaper] [data-slot="sidebar-inner"],
+html[data-wallpaper] [data-slot="sidebar-inset"] {
+  backdrop-filter: blur(28px) saturate(1.15);
+}
+/* Asked for less transparency: keep the wallpaper only at the edges, panels solid. */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-wallpaper]:root:not(.dark) {
+    --background: oklch(0.99 0.002 220);
+    --sidebar: oklch(0.985 0.003 220);
+    --surface: oklch(1 0 0);
+    --card: oklch(1 0 0);
+    --sunken: oklch(0.97 0.004 220);
+  }
+  html[data-wallpaper].dark {
+    --background: oklch(0.165 0.008 230);
+    --sidebar: oklch(0.19 0.009 230);
+    --surface: oklch(0.2 0.009 230);
+    --card: oklch(0.2 0.009 230);
+    --sunken: oklch(0.145 0.008 230);
+  }
+}

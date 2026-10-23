@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
+import { BOOT_SCRIPT } from "@/features/appearance/lib/appearance"
 
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -31,6 +32,10 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", outfit.variable)}
     >
+      <head>
+        {/* Paint the saved accent and wallpaper before React runs, so the page doesn't flash the default. */}
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+      </head>
       <body>
         <ThemeProvider defaultTheme="dark">
           <TooltipProvider delayDuration={300}>{children}</TooltipProvider>

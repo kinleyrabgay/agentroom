@@ -1,8 +1,9 @@
-import { AgentEventType, BotStatus } from '../../shared/enums.js';
+import { randomUUID } from 'node:crypto';
+import { AgentEventType, BotStatus, QueueHoldReason, RateLimitStatus, SteerStatus } from '../../shared/enums.js';
 import type { Bot } from '../../shared/types/index.js';
 import type { Project } from '../../core/project.js';
 import type { PreviewService } from '../preview/preview.service.js';
-import type { Provider, RunRequest } from '../providers/provider.js';
+import type { Provider, RunRequest, SteerHandle } from '../providers/provider.js';
 import type { ProviderPool } from '../providers/registry.js';
 import { fallbackNote, fallbackReason, planRoute, type RouteAttempt } from '../providers/router.js';
 import type { Hub, RunContext } from '../realtime/hub.js';
@@ -19,6 +20,7 @@ import { toAttachment, type ResolvedAttachment, type UploadStore } from '../serv
 import type { McpService } from '../services/mcp/mcp.service.js';
 import type { ContextService } from '../context/context.service.js';
 import type { WorkspaceService } from '../workspaces/workspace.service.js';
+import type { BotQueues } from './bot-queue.js';
 
 export interface TeamDeps {
   project: Project;
@@ -48,6 +50,8 @@ export interface TeamDeps {
   experiments?: RunExperiments;
   /** Multi-repo workspaces: the workspace block in bots' instructions, other repos' folders, task repo ids. */
   workspace?: WorkspaceService;
+  /** Messages you send while a bot is busy, and steers into its running turn. */
+  queue?: BotQueues;
 }
 
 /** What the learning loop does to a run: the bot as this run sees it, and the variants it's part of. */
@@ -79,12 +83,28 @@ export interface RunOutcome {
 
 const HUMAN = 'human';
 
+/** Sent first when a chat continues after its usage limit reset. */
+export const CONTINUE_PROMPT = 'Continue where you left off.';
+/** Resume a little after the reset time, so the first request isn't refused again. */
+const RESET_SLACK_MS = 5000;
+
 /** Runs bots: one queue per bot, delegation between them, stop/abort. */
 export class Team {
   private queues = new Map<string, Promise<unknown>>();
   private controllers = new Map<string, AbortController>();
+  /** Runs dispatched and not finished yet, per bot (running or waiting their turn). */
+  private pending = new Map<string, number>();
+  /** The running turn of a bot that can take steers. */
+  private steerHandles = new Map<string, SteerHandle>();
+  /** The bot's current run hit its usage limit: when it resets (epoch ms, 0 = unknown), and whether it was a chat. */
+  private limits = new Map<string, { until: number; chat: boolean }>();
+  private resumeTimers = new Map<string, NodeJS.Timeout>();
+  /** Bots whose limited run was a chat, so resuming says "continue" (goal runs are resumed by the goal). */
+  private chatLimited = new Set<string>();
 
-  constructor(private readonly deps: TeamDeps) {}
+  constructor(private readonly deps: TeamDeps) {
+    for (const botId of Object.keys(deps.queue?.all() ?? {})) this.scheduleResume(botId);
+  }
 
   /** Queue a message for a bot. Resolves with the bot's final answer. Runs are serialized per bot. */
   async send(botId: string, text: string, from = HUMAN, opts: DispatchOptions = {}): Promise<string> {
@@ -105,13 +125,151 @@ export class Team {
       }
     }
     const prev = this.queues.get(botId) ?? Promise.resolve();
+    this.pending.set(botId, (this.pending.get(botId) ?? 0) + 1);
     const run = prev.catch(() => {}).then(() => this.run(bot, text, from, opts, attachments));
     this.queues.set(botId, run);
+    run.then(
+      (out) => this.afterRun(botId, out),
+      () => this.afterRun(botId, { ok: false, text: '', aborted: false }),
+    );
     return run;
   }
 
   isRunning(botId: string): boolean {
     return this.controllers.has(botId);
+  }
+
+  /** Running, or with runs waiting their turn. */
+  isBusy(botId: string): boolean {
+    return (this.pending.get(botId) ?? 0) > 0;
+  }
+
+  // ---------- your messages: queue and steering ----------
+
+  /**
+   * A message you typed. It goes now when the bot is free and nothing is waiting; otherwise it joins
+   * the bot's queue and goes when the current run ends cleanly. Sending into an empty, held queue
+   * counts as "carry on" and lifts the hold.
+   */
+  submit(botId: string, text: string, attachments?: string[]) {
+    const queue = this.deps.queue;
+    if (!queue) {
+      void this.send(botId, text, HUMAN, attachments?.length ? { attachments } : {}).catch(this.fail(botId));
+      return;
+    }
+    if (!this.deps.project.bots.get(botId)) throw new Error(`unknown bot "${botId}"`);
+    const q = queue.get(botId);
+    if (q.hold && !q.items.length) this.releaseHold(botId);
+    if (this.isBusy(botId) || q.items.length || queue.get(botId).hold) {
+      queue.add(botId, text, attachments);
+      this.drain(botId);
+      return;
+    }
+    this.start(botId, text, attachments);
+  }
+
+  /**
+   * Write a message into the bot's running turn without stopping it. When the run can't take it
+   * (not running, another provider, attachments), it goes first in the queue instead.
+   */
+  steer(botId: string, text: string, attachments?: string[]) {
+    const queue = this.deps.queue;
+    const bot = this.deps.project.bots.get(botId);
+    if (!queue || !bot) return this.submit(botId, text, attachments);
+    const handle = this.steerHandles.get(botId);
+    if (handle && !attachments?.length) {
+      const id = randomUUID();
+      queue.steer(botId, { id, text, status: SteerStatus.Pending });
+      if (handle.steer(id, expandSkillCommands(bot, text, this.deps.project.library.list()))) return;
+      queue.steerStatus(botId, id, SteerStatus.Failed);
+    }
+    queue.add(botId, text, attachments, true);
+    this.releaseHold(botId);
+    this.drain(botId);
+  }
+
+  /** Send a queued message now: into the running turn if it can take it, else next in line. */
+  sendNow(botId: string, id: string) {
+    const item = this.deps.queue?.remove(botId, id);
+    if (item) this.steer(botId, item.text, item.attachments);
+  }
+
+  /** Lift the hold and send the next queued message. */
+  resume(botId: string) {
+    this.releaseHold(botId);
+    this.drain(botId);
+  }
+
+  setResumeAtReset(botId: string, on: boolean) {
+    this.deps.queue?.setResumeAtReset(botId, on);
+    this.scheduleResume(botId);
+  }
+
+  /** Send the next queued message if the bot is free and the queue isn't held. */
+  private drain(botId: string) {
+    const queue = this.deps.queue;
+    if (!queue || this.isBusy(botId) || queue.get(botId).hold) return;
+    const next = queue.shift(botId);
+    if (next) this.start(botId, next.text, next.attachments);
+  }
+
+  private start(botId: string, text: string, attachments?: string[]) {
+    this.dispatch(botId, text, HUMAN, attachments?.length ? { attachments } : {}).catch(this.fail(botId));
+  }
+
+  private fail = (botId: string) => (err: Error) => this.deps.hub.emit({ type: AgentEventType.Error, botId, message: err.message });
+
+  /** A run ended: hold the queue after a failure, a stop or a usage limit; otherwise send the next message. */
+  private afterRun(botId: string, out: RunOutcome) {
+    const left = (this.pending.get(botId) ?? 1) - 1;
+    if (left > 0) this.pending.set(botId, left);
+    else this.pending.delete(botId);
+    const queue = this.deps.queue;
+    const limit = this.limits.get(botId);
+    this.limits.delete(botId);
+    if (!queue) return;
+    if (limit && !out.ok && !out.aborted) {
+      if (limit.chat) this.chatLimited.add(botId);
+      else this.chatLimited.delete(botId);
+      queue.hold(botId, QueueHoldReason.Limited, limit.until || undefined);
+      this.scheduleResume(botId);
+    } else if (out.aborted) queue.hold(botId, QueueHoldReason.Stopped);
+    else if (!out.ok) queue.hold(botId, QueueHoldReason.Failed);
+    this.drain(botId);
+  }
+
+  private releaseHold(botId: string) {
+    clearTimeout(this.resumeTimers.get(botId));
+    this.resumeTimers.delete(botId);
+    this.chatLimited.delete(botId);
+    this.deps.queue?.release(botId);
+  }
+
+  /** With "Resume at reset" on, continue on our own once a usage limit with a known reset time passes. */
+  private scheduleResume(botId: string) {
+    clearTimeout(this.resumeTimers.get(botId));
+    this.resumeTimers.delete(botId);
+    const q = this.deps.queue?.get(botId);
+    if (!q?.resumeAtReset || q.hold?.reason !== QueueHoldReason.Limited || !q.hold.until) return;
+    const delay = Math.max(0, q.hold.until - Date.now() + RESET_SLACK_MS);
+    // Timers can't wait longer than ~24 days; limits reset far sooner.
+    const timer = setTimeout(() => {
+      this.resumeTimers.delete(botId);
+      const chat = this.chatLimited.has(botId);
+      this.releaseHold(botId);
+      if (chat) this.deps.queue?.add(botId, CONTINUE_PROMPT, undefined, true);
+      this.drain(botId);
+    }, Math.min(delay, 2 ** 31 - 1));
+    timer.unref?.();
+    this.resumeTimers.set(botId, timer);
+  }
+
+  private onSteerStatus(botId: string, id: string, status: SteerStatus) {
+    const steer = this.deps.queue?.steerStatus(botId, id, status);
+    if (!steer) return;
+    // Shown in the thread where the run took it; one it never took goes back to the front of the queue.
+    if (status === SteerStatus.Delivered) this.deps.hub.emit({ type: AgentEventType.UserMessage, botId, text: steer.text, from: HUMAN });
+    else if (status === SteerStatus.Failed) this.deps.queue?.add(botId, steer.text, undefined, true);
   }
 
   stop(botId?: string) {
@@ -208,8 +366,19 @@ export class Team {
         signal: controller.signal,
         emit: (e) => {
           tally.observe(e);
+          if (e.type === AgentEventType.RateLimit && e.status === RateLimitStatus.Rejected) {
+            this.limits.set(bot.id, { until: e.resetsAt ? e.resetsAt * 1000 : 0, chat: !opts.goalId });
+          }
           hub.emit(e);
         },
+        ...(this.deps.queue
+          ? {
+              steering: {
+                attach: (h: SteerHandle | null) => (h ? this.steerHandles.set(bot.id, h) : this.steerHandles.delete(bot.id)),
+                status: (id: string, st: SteerStatus) => this.onSteerStatus(bot.id, id, st),
+              },
+            }
+          : {}),
         stream: (d) => hub.stream(bot.id, d),
         askPermission: (tool, input, signal) => permissions.ask(bot.id, tool, input, signal),
         inspectToolOutput: this.deps.security

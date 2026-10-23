@@ -33,7 +33,12 @@ export function handleServerMessage(msg: ServerMessage) {
         previews: msg.previews,
         consoles: msg.consoles,
         notifications: msg.notifications ?? [],
+        queues: msg.queues ?? {},
       })
+      return
+
+    case ServerMessageKind.Queue:
+      set((s) => ({ queues: { ...s.queues, [msg.botId]: msg.queue } }))
       return
 
     case ServerMessageKind.Event: {

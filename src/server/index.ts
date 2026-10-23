@@ -7,6 +7,7 @@ import { Project } from '../core/project.js';
 import { PermissionGate } from './agents/permission-gate.js';
 import { SessionStore } from './agents/session-store.js';
 import { Team } from './agents/team.js';
+import { BotQueues } from './agents/bot-queue.js';
 import { createApp } from './http/app.js';
 import { createSessionToken } from './http/auth.js';
 import { PreviewService } from './preview/preview.service.js';
@@ -238,7 +239,10 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     scratchDir: path.join(worktreeHome(project.root), '.autopilot'),
   });
   const engine = new EngineService({ project, ledger, secrets, providers, scratchDir: path.join(worktreeHome(project.root), '.evals') });
-  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, autopilot, providers, experiments: engine.experiments, workspace });
+  const queue = new BotQueues(path.join(project.paths.runs, 'queue.json'));
+  queue.onChange((botId, q) => hub.queue(botId, q));
+  hub.useQueues(() => queue.all());
+  const team = new Team({ project, hub, provider, previews, permissions, sessions, notifications, boardChanged, ledger, security, uploads, mcp, context, autopilot, providers, experiments: engine.experiments, workspace, queue });
   const goals = new GoalRunner({
     project,
     team,
@@ -522,7 +526,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     autopilot,
     humanName,
     boardChanged,
-    router: createClientMessageRouter({ hub, team, permissions, previews, notifications }),
+    router: createClientMessageRouter({ hub, team, permissions, previews, notifications, queue }),
     onConnect: () => {
       pushProjectState(project, hub);
       findings.push();

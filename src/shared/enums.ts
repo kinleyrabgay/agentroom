@@ -333,6 +333,8 @@ export const AgentEventType = {
   RunDone: 'run_done',
   Usage: 'usage',
   RateLimit: 'rate_limit',
+  /** Files a chat run wrote, with before/after diffs (Claude runs outside goals). */
+  TurnChanges: 'turn_changes',
   Error: 'error',
 } as const;
 export type AgentEventType = ValueOf<typeof AgentEventType>;
@@ -358,6 +360,8 @@ export const ServerMessageKind = {
   Notification: 'notification',
   /** Shared team room: presence, comments, per-person notifications. */
   Room: 'room',
+  /** A bot's message queue, hold and steers changed. */
+  Queue: 'queue',
 } as const;
 export type ServerMessageKind = ValueOf<typeof ServerMessageKind>;
 
@@ -395,6 +399,16 @@ export const ClientMessageType = {
   NotificationsRead: 'notifications_read',
   /** Whether this UI tab is visible and focused (drives "only when I'm away" alerts). */
   Presence: 'presence',
+  /** Send into the bot's running turn instead of queueing (falls back to the head of the queue). */
+  Steer: 'steer',
+  /** Edit, reorder, remove or send now a queued message; resume a held queue. */
+  QueueEdit: 'queue_edit',
+  QueueMove: 'queue_move',
+  QueueRemove: 'queue_remove',
+  QueueSendNow: 'queue_send_now',
+  QueueResume: 'queue_resume',
+  /** Continue automatically when the bot's usage limit resets. */
+  ResumeAtReset: 'resume_at_reset',
 } as const;
 export type ClientMessageType = ValueOf<typeof ClientMessageType>;
 
@@ -421,3 +435,24 @@ export const McpScope = {
   Personal: 'personal',
 } as const;
 export type McpScope = ValueOf<typeof McpScope>;
+
+/** Why a bot's message queue waits instead of sending the next message. */
+export const QueueHoldReason = {
+  /** The last run failed. */
+  Failed: 'failed',
+  /** You stopped the last run. */
+  Stopped: 'stopped',
+  /** The provider's usage limit was reached. */
+  Limited: 'limited',
+  /** AgentRoom restarted with messages still queued. */
+  Restart: 'restart',
+} as const;
+export type QueueHoldReason = ValueOf<typeof QueueHoldReason>;
+
+/** Where a steer is: written into the running turn, taken by it, or not (then it goes back to the queue). */
+export const SteerStatus = {
+  Pending: 'pending',
+  Delivered: 'delivered',
+  Failed: 'failed',
+} as const;
+export type SteerStatus = ValueOf<typeof SteerStatus>;

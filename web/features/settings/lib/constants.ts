@@ -1,4 +1,4 @@
-import { ClapperboardIcon, CpuIcon, FolderGit2Icon, GaugeIcon, SirenIcon } from "lucide-react"
+import { ClapperboardIcon, CpuIcon, FolderGit2Icon, GaugeIcon, PaletteIcon, SirenIcon } from "lucide-react"
 import { PackageIcon, UsersIcon, WaypointsIcon, ServerIcon, WalletIcon, BellRingIcon, DatabaseIcon, PlugIcon, ShieldIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { WorkPhase } from "@shared"
 
@@ -8,6 +8,7 @@ export const SAVED_VISIBLE_MS = 2000
 /** Settings sections, in page order. */
 export const SettingsSection = {
   General: "general",
+  Appearance: "appearance",
   Providers: "providers",
   Budgets: "budgets",
   Security: "security",
@@ -28,6 +29,7 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: typeof SlidersHorizontalIcon; description: string }[] = [
   { id: SettingsSection.General, label: "General", icon: SlidersHorizontalIcon, description: "Which model each workflow phase uses." },
+  { id: SettingsSection.Appearance, label: "Appearance", icon: PaletteIcon, description: "Accent colour, wallpaper and text size. Just for you, in this browser." },
   { id: SettingsSection.Providers, label: "Providers", icon: CpuIcon, description: "Run phases on Codex, Gemini or a local model, with fallbacks when one is down." },
   { id: SettingsSection.Budgets, label: "Budgets", icon: WalletIcon, description: "Spend caps per goal and per day. Goals pause at a cap instead of overspending." },
   { id: SettingsSection.Security, label: "Security", icon: ShieldIcon, description: "Security review, what blocks commits and PRs, and which paths count as sensitive." },

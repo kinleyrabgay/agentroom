@@ -27,3 +27,5 @@ export type * from './room.js';
 export type * from './autopilot.js';
 export type * from './engine.js';
 export type * from './workspaces.js';
+export type * from './queue.js';
+export type * from './changes-turn.js';

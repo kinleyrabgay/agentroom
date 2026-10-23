@@ -75,8 +75,23 @@ export function memberMaySend(role: RoomRole, type: unknown): boolean {
   if (role === 'owner') return true;
   if (type === ClientMessageType.Presence) return true;
   if (role !== 'approver') return false;
-  return type === ClientMessageType.Send || type === ClientMessageType.Permission || type === ClientMessageType.Answer || type === ClientMessageType.Stop;
+  return APPROVER_SEND.has(type as ClientMessageType);
 }
+
+/** What an approver may do over the socket: talk to bots, approve, answer, stop, and steer or edit the queue. */
+const APPROVER_SEND = new Set<ClientMessageType>([
+  ClientMessageType.Send,
+  ClientMessageType.Permission,
+  ClientMessageType.Answer,
+  ClientMessageType.Stop,
+  ClientMessageType.Steer,
+  ClientMessageType.QueueEdit,
+  ClientMessageType.QueueMove,
+  ClientMessageType.QueueRemove,
+  ClientMessageType.QueueSendNow,
+  ClientMessageType.QueueResume,
+  ClientMessageType.ResumeAtReset,
+]);
 
 const HIDDEN_STATE = new Set<string>([StateType.Mcp, StateType.Automation]);
 

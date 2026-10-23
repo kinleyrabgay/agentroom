@@ -6,6 +6,8 @@ import { BotAvatar } from "@/components/shared/bot-avatar"
 import { Markdown } from "@/components/shared/markdown"
 import type { TranscriptItem } from "../lib/transcript"
 import { ToolGroup } from "./tool-group"
+import { ActivityFold } from "./activity-fold"
+import { TurnChangesCard } from "./turn-changes-card"
 import { Callout } from "@/components/kit/callout"
 import { MessageAttachments } from "@/features/attachments/components/message-attachments"
 
@@ -40,6 +42,8 @@ export function ChatRow({ item, bot, nameOf, showAvatar }: {
           </div>
         )}
         {item.kind === "tools" && <ToolGroup steps={item.steps} live={item.live} />}
+        {item.kind === "activity" && <ActivityFold item={item} />}
+        {item.kind === "changes" && <TurnChangesCard files={item.files} skipped={item.skipped} />}
         {item.kind === "done" && (
           <div className={cn("flex items-center gap-1.5 text-xs tabular-nums", item.ok ? "text-muted-foreground" : "tone-danger tone-text")}>
             {item.ok ? <CheckIcon className="size-3" /> : <CircleAlertIcon className="size-3" />}

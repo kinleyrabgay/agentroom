@@ -36,12 +36,3 @@ export function buildUserContent(text: string, attachments: readonly ResolvedAtt
   }
   return blocks;
 }
-
-/** A one-message prompt stream for the SDK (used only when a message has attachments). */
-export async function* singleUserMessage(content: UserContentBlock[]) {
-  yield {
-    type: 'user' as const,
-    message: { role: 'user' as const, content },
-    parent_tool_use_id: null,
-  };
-}

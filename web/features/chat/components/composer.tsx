@@ -1,9 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowUpIcon, CrosshairIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import { ArrowUpIcon, CornerDownRightIcon, CrosshairIcon, FileIcon, RotateCcwIcon, XIcon } from "lucide-react"
 import { ClientMessageType, type Bot } from "@shared"
-import { botApi } from "@/lib/api/endpoints"
+import { botApi, filesApi } from "@/lib/api/endpoints"
 import { send } from "@/lib/realtime/socket"
 import { useAppStore } from "@/lib/store/app-store"
 import { removeAttachment, takeAttachments } from "@/lib/store/attachments"
@@ -16,11 +16,13 @@ import { AttachButton } from "@/features/attachments/components/attach-button"
 import { AttachmentTray } from "@/features/attachments/components/attachment-tray"
 import { DropOverlay } from "@/features/attachments/components/drop-overlay"
 import { skillSuggestions } from "../lib/skill-suggestions"
+import { fileSuggestions } from "../lib/file-suggestions"
 
 const DEFAULT_ELEMENT_PROMPT = "Look at this element."
 const DEFAULT_FILES_PROMPT = "(see attachments)"
 
-export function Composer({ bot }: { bot: Bot }) {
+/** `running`: Enter queues the message and ⌘/Ctrl Enter steers it into the running turn. */
+export function Composer({ bot, running }: { bot: Bot; running: boolean }) {
   const [text, setText] = useState("")
   // A draft handed over from elsewhere ("Ask a bot about this module") fills the box once.
   const draft = useAppStore((s) => (s.chatDraft?.botId === bot.id ? s.chatDraft : null))
@@ -40,17 +42,22 @@ export function Composer({ bot }: { bot: Bot }) {
         empty: "No skills match",
         suggest: (q) => skillSuggestions(bot, library, q),
       },
+      "@": {
+        title: "Files — the bot reads the one you mention",
+        empty: "No files match",
+        suggest: (q) => filesApi.search(q, 12).then((files) => fileSuggestions(files, <FileIcon className="size-3.5" />)),
+      },
     }),
     [bot, library]
   )
   const hasContent = !!text.trim() || picked.length > 0 || files.readyIds.length > 0
   const canSend = hasContent && !files.uploading
 
-  const submit = () => {
+  const submit = (opts?: { mod: boolean }) => {
     if (!canSend) return
     const body = text.trim() || (picked.length ? DEFAULT_ELEMENT_PROMPT : DEFAULT_FILES_PROMPT)
     send({
-      type: ClientMessageType.Send,
+      type: running && opts?.mod ? ClientMessageType.Steer : ClientMessageType.Send,
       botId: bot.id,
       text: body + takeAttachments(bot.id),
       attachments: files.readyIds.length ? files.readyIds : undefined,
@@ -90,7 +97,7 @@ export function Composer({ bot }: { bot: Bot }) {
           triggers={triggers}
           onSubmit={submit}
           rows={2}
-          placeholder={`Message ${bot.name}… (type / for skills, paste or drop files)`}
+          placeholder={running ? `Queue a message for ${bot.name}, or ⌘↵ to steer it now…` : `Message ${bot.name}… (/ for skills, @ for files, paste or drop files)`}
           className="min-h-0 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
         <div className="flex items-center gap-1 pt-1">
@@ -99,9 +106,14 @@ export function Composer({ bot }: { bot: Bot }) {
             <RotateCcwIcon data-icon="inline-start" /> New session
           </Button>
           <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">
-            {files.uploading ? "Uploading…" : <><Kbd>Enter</Kbd> send · <Kbd>⇧ Enter</Kbd> newline</>}
+            {files.uploading ? "Uploading…" : running ? <><Kbd>Enter</Kbd> queue · <Kbd>⌘ Enter</Kbd> steer</> : <><Kbd>Enter</Kbd> send · <Kbd>⇧ Enter</Kbd> newline</>}
           </span>
-          <Button size="icon-sm" className="ml-auto sm:ml-0" onClick={submit} disabled={!canSend} aria-label={files.uploading ? "Wait for uploads to finish" : "Send"}>
+          {running && (
+            <Button size="icon-sm" variant="outline" className="ml-auto sm:ml-0" onClick={() => submit({ mod: true })} disabled={!canSend} aria-label="Steer: send into the running turn" title="Steer (⌘ Enter): send into the running turn">
+              <CornerDownRightIcon />
+            </Button>
+          )}
+          <Button size="icon-sm" className={running ? undefined : "ml-auto sm:ml-0"} onClick={() => submit()} disabled={!canSend} aria-label={files.uploading ? "Wait for uploads to finish" : running ? "Queue" : "Send"}>
             <ArrowUpIcon />
           </Button>
         </div>

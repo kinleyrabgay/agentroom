@@ -12,6 +12,7 @@ import { AppSidebar } from "./app-sidebar"
 import { CommandPalette } from "./command-palette"
 import { AutomationEditors } from "@/features/automation/components/automation-editors"
 import { RouteSync } from "./route-sync"
+import { AppearanceEffects } from "@/features/appearance/components/appearance-effects"
 import { TokenGate } from "./token-gate"
 import { TopBar } from "./top-bar"
 import { Workspace } from "./workspace"
@@ -43,6 +44,7 @@ export function AppShell() {
         <CommandPalette />
         <AutomationEditors />
         <RouteSync />
+        <AppearanceEffects />
       </SidebarProvider>
     </TokenGate>
   )

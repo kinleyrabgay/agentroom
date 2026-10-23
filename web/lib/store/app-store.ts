@@ -11,6 +11,7 @@ import {
   type PickedElement,
   type PreviewState,
   type ProjectInfo,
+  type QueueMap,
   type ProviderModels,
   type SecurityFinding,
   type McpSnapshot,
@@ -46,6 +47,8 @@ export interface AppState {
   previews: Record<string, PreviewState>
   consoles: Record<string, ConsoleLine[]>
   live: Record<string, LiveReply>
+  /** Messages waiting per bot, its hold and steers in flight (only bots with any). */
+  queues: QueueMap
   /** Security findings across goals (StateType.Findings push, or the initial fetch). */
   findings: SecurityFinding[]
   /** External MCP servers and their status (StateType.Mcp push); null until the server sends it. */
@@ -144,6 +147,7 @@ const initialState: AppState = {
   previews: {},
   consoles: {},
   live: {},
+  queues: {},
   findings: NO_FINDINGS,
   mcp: null,
   automation: null,

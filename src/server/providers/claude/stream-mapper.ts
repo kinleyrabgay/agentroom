@@ -16,6 +16,8 @@ export class ClaudeStreamMapper {
   result: RunResult = { ok: false, result: 'Run ended without a result.' };
   /** Prompt size on the latest top-level turn = how full the context window is. */
   private contextUsed: number | undefined;
+  /** Latest result: a steered run has one per turn, each carrying the running totals. */
+  private last: SdkResult | undefined;
 
   constructor(
     private readonly botId: string,
@@ -105,6 +107,7 @@ export class ClaudeStreamMapper {
     if (!r.rateLimitType) return;
     this.emit({
       type: AgentEventType.RateLimit,
+      botId: this.botId,
       provider: ProviderId.Claude,
       window: r.rateLimitType,
       status: r.status,
@@ -120,12 +123,23 @@ export class ClaudeStreamMapper {
       ? msg.result
       : `Run failed: ${msg.subtype}${'errors' in msg && msg.errors?.length ? ` — ${msg.errors.join('; ')}` : ''}`;
     this.result = { ok, result: text, sessionId: this.sessionId };
+    this.last = msg;
+  }
+
+  /**
+   * Report the run once it's over: usage and the done line from the latest result. Steered runs have
+   * a result per turn with running totals, so reporting each would count earlier turns again.
+   */
+  finish() {
+    const msg = this.last;
+    if (!msg) return;
+    this.last = undefined;
     this.emitUsage(msg);
     this.emit({
       type: AgentEventType.RunDone,
       botId: this.botId,
-      ok,
-      result: text,
+      ok: this.result.ok,
+      result: this.result.result,
       costUsd: msg.total_cost_usd ?? 0,
       durationMs: msg.duration_ms ?? 0,
       turns: msg.num_turns ?? 0,

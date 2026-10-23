@@ -7,7 +7,9 @@ import type {
   AgentEvent,
   ConsoleLine,
   Notification,
+  BotQueue,
   PreviewState,
+  QueueMap,
   ServerMessage,
   StampedEvent,
   StateEvent,
@@ -52,6 +54,7 @@ export class Hub {
   private readonly logFile: string;
   private consoles: Record<string, ConsoleLine[]> = {};
   private notifications: () => Notification[] = () => [];
+  private queues: () => QueueMap = () => ({});
   /** Current run context per bot (set by the Team for the duration of a run). */
   private contexts = new Map<string, RunContext>();
 
@@ -81,6 +84,7 @@ export class Hub {
       previews: this.previews,
       consoles: this.consoles,
       notifications: this.notifications(),
+      queues: this.queues(),
     });
   }
 
@@ -176,6 +180,16 @@ export class Hub {
   /** Where the hello message gets the inbox from. */
   useNotifications(source: () => Notification[]) {
     this.notifications = source;
+  }
+
+  /** Where the hello message gets bots' message queues from. */
+  useQueues(source: () => QueueMap) {
+    this.queues = source;
+  }
+
+  /** A bot's queue, hold or steers changed. */
+  queue(botId: string, queue: BotQueue) {
+    this.broadcast({ kind: ServerMessageKind.Queue, botId, queue });
   }
 
   /** Broadcast a new or updated notification; listeners hear only new ones. */
